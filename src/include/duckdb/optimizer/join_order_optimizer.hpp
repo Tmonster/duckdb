@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include <map>
 
 #include <functional>
 
@@ -30,10 +31,13 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
+		std::map<unsigned long long, double> multiplicities;
 
 		//! Create a leaf node in the join tree
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
+			auto a = (unsigned long long)*set->relations.get();
+			multiplicities[a] = 1;
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
@@ -48,6 +52,8 @@ public:
 
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+
+
 
 private:
 	ClientContext &context;
