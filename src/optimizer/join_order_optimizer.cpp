@@ -744,7 +744,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	}
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
-	std::cout << join_tree.second->ToString() << std::endl;
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters) {
 		// check if the filter has already been extracted
