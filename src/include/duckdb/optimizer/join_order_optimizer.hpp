@@ -31,14 +31,14 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
-		std::map<unsigned long long, double> multiplicities;
-		std::map<unsigned long long, double> selectivities;
+		std::unordered_map<idx_t, double> multiplicities;
+		std::unordered_map<idx_t, double> selectivities;
 
 		//! Create a leaf node in the join tree
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 			for (idx_t it = 0; it < set->count; it++) {
-				auto relation_id = (unsigned long long)set->relations[it];
+				auto relation_id = set->relations[it];
 				multiplicities[relation_id] = 1;
 				selectivities[relation_id] = 1;
 			}
@@ -58,7 +58,7 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, bool switched=false);
 
 private:
 	ClientContext &context;
