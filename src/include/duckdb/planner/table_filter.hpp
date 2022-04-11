@@ -74,6 +74,9 @@ public:
 		}
 		return left->Equals(*right);
 	}
+	bool has_filters() {
+		return false;
+	}
 };
 
 } // namespace duckdb

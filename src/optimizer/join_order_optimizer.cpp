@@ -266,8 +266,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		left_relation_id = left->set->relations[it];
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
-			if (!logical_get->table_filters.filters.empty()) {
-				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
+			if (!logical_get->table_filters.has_filters()) {
+//				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
 	}
@@ -277,67 +277,85 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		right_relation_id = right->set->relations[it];
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
-			if (!logical_get->table_filters.filters.empty()) {
-				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
+			if (!logical_get->table_filters.has_filters()) {
+//				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
 	}
-
-//	std::cout << "left join relations " << left_join_relations->ToString() << std::endl;
-//	std::cout << "right join relations " << right_join_relations->ToString() << std::endl;
-//	std::cout << "join relation set " << set->ToString() << std::endl;
-//	std::cout << "left multiplicities " << PrintMultiplicities(left) << std::endl;
-//	std::cout << "right multiplicities " << PrintMultiplicities(right) << std::endl;
-//	std::cout << "left filters = " << info->filters[0]->left_set->ToString() << std::endl;
-//	std::cout << "right filters = " << info->filters[0]->right_set->ToString() << std::endl;
-
-
-//	std::cout << "filters are: " << printFilters(info) << std::endl;
-	// $|LSW|$ = $|W|*W[w].sel*LS[s].sel*LS[s].mult$
-
-	auto left_multiplicity = std::numeric_limits<double>::max();
-	auto left_selectivity = std::numeric_limits<double>::max();
 
 	auto right_multiplicity = std::numeric_limits<double>::max();
 	auto right_selectivity = std::numeric_limits<double>::max();
 
-	// consider the min values for multiplicity and selectivity as usually join conditions and and values.
-	for(idx_t it = 0; it < info->filters.size(); it++) {
-		// currently finding in multiplicities because the syntax is easier for me.
-		if (!switched) {
-			if (JoinRelationSet::IsSubset(left->set, info->filters[it]->left_set)) {
+	auto left_multiplicity = std::numeric_limits<double>::max();
+	auto left_selectivity = std::numeric_limits<double>::max();
+	// consider the min values for multiplicity and selectivity as usually join conditions and values.
+	std::cout << "set relation multiplicities: " << std::endl;
+	idx_t most_restrictive_filter_id;
+	double min_left_mult, min_right_mult = std::numeric_limits<double>::max();
+	double min_left_sel, min_right_sel = std::numeric_limits<double>::max();
+	double min_cardinality_multiplier = std::numeric_limits<double>::max();
+	idx_t relation_id_min_left, relation_id_min_right;
+
+	if (switched) {
+		for(idx_t it = 0; it < info->filters.size(); it++) {
+			if (JoinRelationSet::IsSubset(right->set, info->filters[it]->left_set)){
+				if (info->filters[it]->left_set->count > 1) {
+					std::cout << "something is wrong here. left set filter count should be 1" << std::endl;
+				}
 				for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
-					left_multiplicity = MinValue(left->multiplicities[info->filters[it]->left_set->relations[it3]], left_multiplicity);
-					left_selectivity = MinValue(left->selectivities[info->filters[it]->left_set->relations[it3]], left_selectivity);
+					right_multiplicity = MinValue(right->multiplicities[info->filters[it]->left_set->relations[it3]], right_multiplicity);
+					right_selectivity = MinValue(right->selectivities[info->filters[it]->left_set->relations[it3]], right_selectivity);
+					right_relation_id = info->filters[it]->left_set->relations[it3];
 				}
 			}
-			if (JoinRelationSet::IsSubset(right->set, info->filters[it]->right_set)){
+			if (JoinRelationSet::IsSubset(left->set, info->filters[it]->right_set)) {
+				if (info->filters[it]->right_set->count > 1) {
+					std::cout << "something is wrong here. right set filter count should be 1" << std::endl;
+				}
 				for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
-					right_multiplicity = MinValue(right->multiplicities[info->filters[it]->right_set->relations[it3]], right_multiplicity);
-					right_selectivity = MinValue(right->selectivities[info->filters[it]->right_set->relations[it3]], right_selectivity);
+					left_multiplicity = MinValue(left->multiplicities[info->filters[it]->right_set->relations[it3]], left_multiplicity);
+					left_selectivity = MinValue(left->selectivities[info->filters[it]->right_set->relations[it3]], left_selectivity);
+					left_relation_id = info->filters[it]->right_set->relations[it3];
+					if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
+						min_left_mult = left_multiplicity;
+						min_left_sel = left_selectivity;
+						min_right_mult = right_multiplicity;
+						min_right_sel = right_selectivity;
+						relation_id_min_left = left_relation_id;
+						relation_id_min_right = right_relation_id;
+						most_restrictive_filter_id = it;
+					}
 				}
 			}
 		}
-		else {
-			if (JoinRelationSet::IsSubset(left->set, info->filters[it]->right_set)) {
+	} else {
+		for(idx_t it = 0; it < info->filters.size(); it++) {
+				// currently finding in multiplicities because the syntax is easier for me.
+			if (JoinRelationSet::IsSubset(left->set, info->filters[it]->left_set)) {
 				for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
-					left_multiplicity = MinValue(left->multiplicities[info->filters[it]->left_set->relations[it3]], left_multiplicity);
-					left_selectivity = MinValue(left->selectivities[info->filters[it]->left_set->relations[it3]], left_selectivity);
-				}
-			}
-			if (JoinRelationSet::IsSubset(right->set, info->filters[it]->left_set)){
-				for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
 					right_multiplicity = MinValue(right->multiplicities[info->filters[it]->right_set->relations[it3]], right_multiplicity);
 					right_selectivity = MinValue(right->selectivities[info->filters[it]->right_set->relations[it3]], right_selectivity);
+					right_relation_id = info->filters[it]->right_set->relations[it3];
+				}
+			}
+			if (JoinRelationSet::IsSubset(right->set, info->filters[it]->right_set)){
+				for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
+					left_multiplicity = MinValue(left->multiplicities[info->filters[it]->left_set->relations[it3]], left_multiplicity);
+					left_selectivity = MinValue(left->selectivities[info->filters[it]->left_set->relations[it3]], left_selectivity);
+					left_relation_id = info->filters[it]->left_set->relations[it3];
+					if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
+						min_left_mult = left_multiplicity;
+						min_left_sel = left_selectivity;
+						min_right_mult = right_multiplicity;
+						min_right_sel = right_selectivity;
+						relation_id_min_left = left_relation_id;
+						relation_id_min_right = right_relation_id;
+						most_restrictive_filter_id = it;
+					}
 				}
 			}
 		}
 	}
-
-	// I think the above is wrong, I think you should take all relations in a condition, multiply their multiplicities,
-	// then take the minimum multiplicities of all of those possibilities.
-
-	// for selectivities, Take every filter condition and multiply them together, then take the smallest.
 
 	// this technically should never happen as the right and left multiplicities should decrease
 	// when iterating through the filters.
@@ -348,39 +366,43 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	// TODO: check this, make sure this is ideal
 	// Left cardinality is always the largest. Then take max multiplicity of left and right.
-	expected_cardinality = left->cardinality * MaxValue(left_multiplicity,right_multiplicity) * MinValue(left_selectivity, right_selectivity);
+	// 1) new cardinality estimation
+	expected_cardinality = left->cardinality * min_right_mult * min_right_sel;
 
-	std::cout << "left_multiplicity = " << std::to_string(left_multiplicity) << std::endl;
-	std::cout << "right_multiplicity = " << std::to_string(right_multiplicity) << std::endl;
-	std::cout << "left cardinality = " << left->cardinality << std::endl;
-	std::cout << "right cardinality = " << right->cardinality << std::endl;
-	std::cout << "expected cardinality = " << expected_cardinality << std::endl;
 	// cost is expected_cardinality plus the cost of the previous plans
 	idx_t cost = expected_cardinality;
 	// create result and add multiplicities
 	auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
 
-	auto relation_multiplicity_left = expected_cardinality / left->cardinality;
-	auto relation_multiplicity_right = expected_cardinality / right->cardinality;
-
-	std::cout << "relation_multiplicity_left = " << std::to_string(relation_multiplicity_left) << std::endl;
-	std::cout << "relation_multiplicity_right = " << std::to_string(relation_multiplicity_right) << std::endl;
-
-
-	// add multiplicities and selectivities of right
-	// get lowest selectivity of right, will be used to determine new selectivities of left
-	auto lowest_right_selectivity = std::numeric_limits<double>::max();
-	for(idx_t i = 0; i < right->set->count; i++) {
-		lowest_right_selectivity = MinValue(result.selectivities[right->set->relations[i]], lowest_right_selectivity);
+	// 2) update result mult for right relation.
+	if (left->multiplicities[relation_id_min_left] == 1) {
+		result.multiplicities[relation_id_min_right] = MaxValue(1.0, right->multiplicities[relation_id_min_right] * (left->cardinality / right->cardinality));
+	} else {
+		result.multiplicities[relation_id_min_right] = MaxValue(1.0, right->multiplicities[relation_id_min_right] * left->multiplicities[relation_id_min_left]);
 	}
+
+
+	// 3) update the rest of the right relations
+
 	for(idx_t i = 0; i < right->set->count; i++) {
-		result.multiplicities[right->set->relations[i]] = relation_multiplicity_right * right->multiplicities[right->set->relations[i]];
-		result.selectivities[right->set->relations[i]] = lowest_right_selectivity * result.selectivities[right->set->relations[i]];
+		result.selectivities[right->set->relations[i]] = right->selectivities[right->set->relations[i]];
+		if (right->set->relations[i] == relation_id_min_right) {
+			continue;
+		}
+		result.multiplicities[right->set->relations[i]] = min_left_mult * right->multiplicities[right->set->relations[i]];
 	}
-	// add multiplicities and selectivies of left
+
+	// 4) update the left multiplicities
+
+	result.multiplicities[relation_id_min_left] = result.multiplicities[relation_id_min_right];
+
+	// 5) update on right multiplicities.
 	for(idx_t i = 0; i < left->set->count; i++) {
-		result.multiplicities[left->set->relations[i]] = relation_multiplicity_left * left->multiplicities[left->set->relations[i]] * lowest_right_selectivity;
-		result.selectivities[left->set->relations[i]] = lowest_right_selectivity * left->selectivities[left->set->relations[i]];
+		result.selectivities[left->set->relations[i]] = left->selectivities[left->set->relations[i]] * min_right_sel;
+		if (left->set->relations[i] == relation_id_min_left) {
+			continue;
+		}
+		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
 	}
 
 
