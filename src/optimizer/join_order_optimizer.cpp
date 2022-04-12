@@ -858,7 +858,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 		op = op->children[0].get();
 	}
 	// have to replace at this node
-	std::cout << join_tree.second->ToString() << std::endl;
+//	std::cout << join_tree.second->ToString() << std::endl;
 	parent->children[0] = move(join_tree.second);
 	return plan;
 }
