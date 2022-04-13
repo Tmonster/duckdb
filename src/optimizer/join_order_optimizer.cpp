@@ -267,7 +267,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
 			if (!logical_get->table_filters.has_filters()) {
-//				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
+				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
 	}
@@ -278,7 +278,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
 			if (!logical_get->table_filters.has_filters()) {
-//				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
+				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
 	}
@@ -289,7 +289,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	auto left_multiplicity = std::numeric_limits<double>::max();
 	auto left_selectivity = std::numeric_limits<double>::max();
 	// consider the min values for multiplicity and selectivity as usually join conditions and values.
-	std::cout << "set relation multiplicities: " << std::endl;
+//	std::cout << "set relation multiplicities: " << std::endl;
 	idx_t most_restrictive_filter_id;
 	double min_left_mult, min_right_mult = std::numeric_limits<double>::max();
 	double min_left_sel, min_right_sel = std::numeric_limits<double>::max();
@@ -405,14 +405,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
 	}
 
-
-	std::cout << "new multiplicities" << std::endl;
-	std::cout << PrintMultiplicities(&result) << std::endl;
-	std::cout << "new selectivities" << std::endl;
-	std::cout << PrintSelectivities(&result) << std::endl;
-	std::cout << "-------------------------------------------------------------------" << std::endl;
-//	result->multiplicities[a] = relation_multiplicity_left;
-//	result->multiplicities[b] = relation_multiplicity_right;
 	return make_unique<JoinNode>(result);
 }
 
