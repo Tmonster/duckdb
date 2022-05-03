@@ -1,0 +1,8 @@
+# name: benchmark/imdb_parquet/q16b.benchmark
+# description: Run query 16b from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+
+template benchmark/imdb_parquet/imdb_parquet.benchmark.in
+QUERY_NUMBER=16b
+QUERY_NUMBER_PADDED=16b

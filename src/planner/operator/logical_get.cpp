@@ -35,7 +35,9 @@ string LogicalGet::ParamsToString() const {
 	if (!function.to_string) {
 		return string();
 	}
-	return function.to_string(bind_data.get());
+	result += function.to_string(bind_data.get());
+	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
+	return result;
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {

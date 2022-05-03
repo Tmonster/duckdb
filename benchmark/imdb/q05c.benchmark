@@ -1,0 +1,8 @@
+# name: benchmark/imdb/q05c.benchmark
+# description: Run query 05c from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=05c
+QUERY_NUMBER_PADDED=05c

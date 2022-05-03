@@ -1,0 +1,42 @@
+SELECT MIN(n.name) AS voicing_actress,
+       MIN(t.title) AS voiced_movie
+FROM 'benchmark/imdb_parquet/data/aka_name.parquet' AS an,
+     'benchmark/imdb_parquet/data/char_name.parquet' AS chn,
+     'benchmark/imdb_parquet/data/cast_info.parquet' AS ci,
+     'benchmark/imdb_parquet/data/company_name.parquet' AS cn,
+     'benchmark/imdb_parquet/data/info_type.parquet' AS it,
+     'benchmark/imdb_parquet/data/movie_companies.parquet' AS mc,
+     'benchmark/imdb_parquet/data/movie_info.parquet' AS mi,
+     'benchmark/imdb_parquet/data/name.parquet' AS n,
+     'benchmark/imdb_parquet/data/role_type.parquet' AS rt,
+     'benchmark/imdb_parquet/data/title.parquet' AS t
+WHERE ci.note IN ('(voice)',
+    '(voice: Japanese version)',
+    '(voice) (uncredited)',
+    '(voice: English version)')
+     AND cn.country_code ='[us]'
+     AND it.info = 'release dates'
+     AND mc.note IS NOT NULL
+     AND (mc.note LIKE '%(USA)%'
+OR mc.note LIKE '%(worldwide)%')
+     AND mi.info IS NOT NULL
+     AND (mi.info LIKE 'Japan:%200%'
+OR mi.info LIKE 'USA:%200%')
+     AND n.gender ='f'
+     AND n.name LIKE '%Ang%'
+     AND rt.role ='actress'
+     AND t.production_year BETWEEN 2005 AND 2009
+     AND t.id = mi.movie_id
+     AND t.id = mc.movie_id
+     AND t.id = ci.movie_id
+     AND mc.movie_id = ci.movie_id
+     AND mc.movie_id = mi.movie_id
+     AND mi.movie_id = ci.movie_id
+     AND cn.id = mc.company_id
+     AND it.id = mi.info_type_id
+     AND n.id = ci.person_id
+     AND rt.id = ci.role_id
+     AND n.id = an.person_id
+     AND ci.person_id = an.person_id
+     AND chn.id = ci.person_role_id;
+  

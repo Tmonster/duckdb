@@ -1,0 +1,9 @@
+# name: benchmark/imdb/q01b.benchmark
+# description: Run query 01b from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+require parquet
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=01b
+QUERY_NUMBER_PADDED=01b
