@@ -1,0 +1,8 @@
+# name: benchmark/imdb_parquet/q30c.benchmark
+# description: Run query 30c from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+
+template benchmark/imdb_parquet/imdb_parquet.benchmark.in
+QUERY_NUMBER=30c
+QUERY_NUMBER_PADDED=30c

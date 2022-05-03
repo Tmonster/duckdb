@@ -15,6 +15,7 @@
 */extension/icu/*
 */extension/tpcds/*
 */extension/tpch/*
+*/extension/imdb/*
 */extension/visualizer/*
 */extension/json/yyjson/*
 src/main/extension_helper.cpp

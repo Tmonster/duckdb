@@ -47,7 +47,8 @@ autoconf/autom4te.cache
 projects/*
 !projects/*.*
 !projects/Makefile
-
+benchmark/imdb/data
+benchmark/imdb_parquet/data
 
 #==============================================================================#
 # Autotools artifacts

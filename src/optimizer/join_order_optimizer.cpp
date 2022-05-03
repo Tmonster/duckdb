@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
+#include <iostream>
 
 namespace duckdb {
 
@@ -544,6 +545,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_relation = node->set;
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
+
+	result_operator->estimated_cardinality = node->cardinality;
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
@@ -643,6 +646,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// find the first join in the relation to know where to place this node
 	if (root_is_join) {
 		// first node is the join, return it immediately
+//		std::cout << join_tree.second->ToString() << std::endl;
 		return move(join_tree.second);
 	}
 	D_ASSERT(plan->children.size() == 1);
@@ -656,6 +660,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 		op = op->children[0].get();
 	}
 	// have to replace at this node
+//	std::cout << join_tree.second->ToString() << std::endl;
 	parent->children[0] = move(join_tree.second);
 	return plan;
 }

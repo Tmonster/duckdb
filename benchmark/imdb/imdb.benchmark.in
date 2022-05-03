@@ -1,0 +1,14 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [imdb]
+
+name Q${QUERY_NUMBER_PADDED}
+group imdb
+
+require parquet
+
+load benchmark/imdb/load.sql
+
+run extension/imdb/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result extension/imdb/answers/q${QUERY_NUMBER_PADDED}.csv
