@@ -1,0 +1,8 @@
+# name: benchmark/imdb_parquet/q06c.benchmark
+# description: Run query 06c from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+
+template benchmark/imdb_parquet/imdb_parquet.benchmark.in
+QUERY_NUMBER=06c
+QUERY_NUMBER_PADDED=06c
