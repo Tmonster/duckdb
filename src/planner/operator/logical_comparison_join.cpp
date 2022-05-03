@@ -2,6 +2,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
+#include <unordered_map>
+
 namespace duckdb {
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
