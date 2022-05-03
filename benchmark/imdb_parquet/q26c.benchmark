@@ -1,6 +1,7 @@
 # name: benchmark/imdb_parquet/q26c.benchmark
 # description: Run query 26c from the IMDB benchmark (single-threaded)
-# group: [imdb_parquet]
+# group: [imdb]
+
 
 template benchmark/imdb_parquet/imdb_parquet.benchmark.in
 QUERY_NUMBER=26c
