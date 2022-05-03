@@ -13,8 +13,7 @@ FROM 'benchmark/imdb_parquet/data/aka_name.parquet' AS an,
 WHERE ci.note = '(voice)'
      AND cn.country_code ='[us]'
      AND mc.note LIKE '%(200%)%'
-     AND (mc.note LIKE '%(USA)%'
-OR mc.note LIKE '%(worldwide)%')
+     AND (mc.note LIKE '%(USA)%' OR mc.note LIKE '%(worldwide)%')
      AND n.gender ='f'
      AND n.name LIKE '%Angel%'
      AND rt.role ='actress'
@@ -28,4 +27,3 @@ OR mc.note LIKE '%(worldwide)%')
      AND chn.id = ci.person_role_id
      AND an.person_id = n.id
      AND an.person_id = ci.person_id;
-  
