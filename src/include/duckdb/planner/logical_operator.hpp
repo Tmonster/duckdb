@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <algorithm>
+#include <unordered_map>
 
 namespace duckdb {
 
@@ -24,9 +25,13 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type);
-	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
-	virtual ~LogicalOperator();
+	explicit LogicalOperator(LogicalOperatorType type) : type(type) {
+	}
+	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
+	    : type(type), expressions(move(expressions)), estimated_cardinality(0) {
+	}
+	virtual ~LogicalOperator() {
+	}
 
 	//! The type of the logical operator
 	LogicalOperatorType type;
@@ -37,7 +42,10 @@ public:
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<LogicalType> types;
 	//! Estimated Cardinality
-	idx_t estimated_cardinality = 0;
+	idx_t estimated_cardinality;
+	idx_t max_mult;
+	double min_sel;
+	double cost;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();

@@ -44,8 +44,8 @@ void Connection::Interrupt() {
 	context->Interrupt();
 }
 
-void Connection::EnableProfiling() {
-	context->EnableProfiling();
+void Connection::EnableProfiling(ProfilerPrintFormat printer_format) {
+	context->EnableProfiling(printer_format);
 }
 
 void Connection::DisableProfiling() {

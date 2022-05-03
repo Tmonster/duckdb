@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include <map>
 
 #include <functional>
 
@@ -30,10 +31,20 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
+		std::unordered_map<idx_t, double> multiplicities;
+		std::unordered_map<idx_t, double> selectivities;
 
 		//! Create a leaf node in the join tree
+		//! set cost to 0 because leaf nodes/base table already exist
+		//! cost will be the cost to *produce* an intermediate table
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
+		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr) {
+			for (idx_t it = 0; it < set->count; it++) {
+				auto relation_id = set->relations[it];
+				multiplicities[relation_id] = 1;
+				selectivities[relation_id] = 1;
+			}
+
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
@@ -48,6 +59,8 @@ public:
 
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, bool switched=false);
 
 private:
 	ClientContext &context;
