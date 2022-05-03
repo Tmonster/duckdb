@@ -8,10 +8,13 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 
 namespace duckdb {
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
+
+double DEFAULT_SELECTIVITY = 0.2;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
@@ -192,29 +195,237 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
+static std::string PrintMultiplicities(JoinNode *node) {
+	std::string res="[";
+	unordered_map<idx_t, double>::iterator it;
+	for(it = node->multiplicities.begin(); it != node->multiplicities.end(); it++) {
+		res += "{" + std::to_string(it->first) + ":" + std::to_string(it->second) + "},";
+	}
+	res += "]";
+	return res;
+}
+
+static std::string PrintSelectivities(JoinNode *node) {
+	std::string res="[";
+	unordered_map<idx_t, double>::iterator it;
+	for(it = node->selectivities.begin(); it != node->selectivities.end(); it++) {
+		res += "{" + std::to_string(it->first) + ":" + std::to_string(it->second) + "},";
+	}
+	res += "]";
+	return res;
+}
+
+static std::string printFilters(NeighborInfo *info) {
+	std::string res = "";
+	vector<FilterInfo *>::iterator it;
+	for (idx_t it = 0; it < info->filters.size(); it++) {
+		res += "filter info " + std::to_string(it) + "\n";
+		res += "filter_index = " + std::to_string(info->filters[it]->filter_index) + "\n";
+		res += "filter set = " + info->filters[it]->set->ToString() + "\n";
+		res += "left set = " + info->filters[it]->left_set->ToString() + "\n";
+		res += "right set = " + info->filters[it]->right_set->ToString() + "\n";
+	}
+	return res;
+}
+
+static std::string printJoinRelationSet(JoinRelationSet *set) {
+	std::string res = "[";
+	for (idx_t it = 0; it < set->count; it++) {
+		res += std::to_string(set->relations[it]) + ", ";
+	}
+	res += "]";
+	return res;
+}
+
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
-static unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right) {
+unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, bool switched) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	if (left->cardinality < right->cardinality) {
-		return CreateJoinTree(set, info, right, left);
+		return CreateJoinTree(set, info, right, left, true);
 	}
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
 	// but for now we just assume foreign key joins only
 	idx_t expected_cardinality;
+	// TODO: determine left filters and right filers.
 	if (info->filters.empty()) {
 		// cross product
 		expected_cardinality = left->cardinality * right->cardinality;
-	} else {
-		// normal join, expect foreign key join
-		expected_cardinality = MaxValue(left->cardinality, right->cardinality);
+		auto cost = expected_cardinality + left->cost + right->cost;
+
+		auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
+		for(idx_t i = 0; i < left->set->count; i++) {
+			result.multiplicities[left->set->relations[i]] =  left->multiplicities[left->set->relations[i]] * right->cardinality;
+		}
+		for(idx_t i = 0; i < right->set->count; i++) {
+			result.multiplicities[right->set->relations[i]] =  right->multiplicities[right->set->relations[i]] * left->cardinality;
+		}
+		return make_unique<JoinNode>(result);
 	}
+
+	// normal join, expect foreign key join
+	JoinRelationSet *left_join_relations = left->set;
+	JoinRelationSet *right_join_relations = right->set;
+
+	// Get underlying operators and initialize selectivities
+	idx_t left_relation_id;
+	for (idx_t it = 0; it < left_join_relations->count; it++) {
+		left_relation_id = left_join_relations->relations[it];
+		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
+			// make sure you don't check each realtion more than once. That could be causing unnecessary overhead.
+			if (logical_get->table_filters.has_filters()) {
+				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
+			}
+		}
+	}
+
+	idx_t right_relation_id;
+	for (idx_t it = 0; it < right_join_relations->count; it++) {
+		right_relation_id = right_join_relations->relations[it];
+		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
+			if (logical_get->table_filters.has_filters()) {
+				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
+			}
+		}
+	}
+
+	auto right_multiplicity = std::numeric_limits<double>::max();
+	auto right_selectivity = std::numeric_limits<double>::max();
+
+	auto left_multiplicity = std::numeric_limits<double>::max();
+	auto left_selectivity = std::numeric_limits<double>::max();
+	// consider the min values for multiplicity and selectivity as usually join conditions and values.
+
+	double min_left_mult, min_right_mult = std::numeric_limits<double>::max();
+	double min_left_sel, min_right_sel = std::numeric_limits<double>::max();
+	double min_cardinality_multiplier = std::numeric_limits<double>::max();
+	idx_t relation_id_min_left, relation_id_min_right = -1;
+
+	for(idx_t it = 0; it < info->filters.size(); it++) {
+		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
+		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)){
+			//TODO! add check that there is only one value per filter in a set
+			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
+				right_multiplicity = MinValue(right->multiplicities[info->filters[it]->left_set->relations[it3]], right_multiplicity);
+				right_selectivity = MinValue(right->selectivities[info->filters[it]->left_set->relations[it3]], right_selectivity);
+				right_relation_id = info->filters[it]->left_set->relations[it3];
+			}
+			assert(info->filters[it]->right_set->count > 0);
+			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
+				left_multiplicity = MinValue(left->multiplicities[info->filters[it]->right_set->relations[it3]], left_multiplicity);
+				left_selectivity = MinValue(left->selectivities[info->filters[it]->right_set->relations[it3]], left_selectivity);
+				left_relation_id = info->filters[it]->right_set->relations[it3];
+				if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
+					min_left_mult = left_multiplicity;
+					min_left_sel = left_selectivity;
+					min_right_mult = right_multiplicity;
+					min_right_sel = right_selectivity;
+					relation_id_min_left = left_relation_id;
+					relation_id_min_right = right_relation_id;
+				}
+			}
+		}
+		// currently finding in multiplicities because the syntax is easier for me.
+		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
+		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
+			assert(info->filters[it]->right_set->count > 0);
+			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
+				right_multiplicity =
+				    MinValue(right->multiplicities[info->filters[it]->right_set->relations[it3]], right_multiplicity);
+				right_selectivity =
+				    MinValue(right->selectivities[info->filters[it]->right_set->relations[it3]], right_selectivity);
+				right_relation_id = info->filters[it]->right_set->relations[it3];
+			}
+			assert(info->filters[it]->left_set->count > 0);
+			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
+				left_multiplicity =
+					MinValue(left->multiplicities[info->filters[it]->left_set->relations[it3]], left_multiplicity);
+				left_selectivity =
+					MinValue(left->selectivities[info->filters[it]->left_set->relations[it3]], left_selectivity);
+				left_relation_id = info->filters[it]->left_set->relations[it3];
+				if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
+					min_left_mult = left_multiplicity;
+					min_left_sel = left_selectivity;
+					min_right_mult = right_multiplicity;
+					min_right_sel = right_selectivity;
+					relation_id_min_left = left_relation_id;
+					relation_id_min_right = right_relation_id;
+				}
+			}
+		} else {
+			std::cout << "left filters are not subset of left join relations, and right filters are not subset of right join relations" << std::endl;
+			std::cout << "OR" << std::endl;
+			std::cout << "left filters are subset of right join relations, and right filters are not subset of left join relations" << std::endl;
+			std::cout << "right join relations = " << printJoinRelationSet(right_join_relations) << std::endl;
+			std::cout << "left join relations = " << printJoinRelationSet(left_join_relations) << std::endl;
+			std::cout << printFilters(info) << std::endl;
+		}
+	}
+
+//	// this technically should never happen as the right and left multiplicities should decrease
+//	// when iterating through the filters.
+	if (left_multiplicity == std::numeric_limits<double>::max()) left_multiplicity = 1;
+	if (right_multiplicity == std::numeric_limits<double>::max()) right_multiplicity = 1;
+	if (left_selectivity == std::numeric_limits<double>::max()) left_selectivity = 1;
+	if (right_selectivity == std::numeric_limits<double>::max()) right_multiplicity = 1;
+	if (min_right_mult == std::numeric_limits<double>::max()) min_right_mult = 1;
+	if (min_right_sel == std::numeric_limits<double>::max()) min_right_sel = 1;
+	if (min_left_mult == std::numeric_limits<double>::max()) min_left_mult = 1;
+	if (min_left_sel == std::numeric_limits<double>::max()) min_left_sel = 1;
+
+
+	// TODO: check this, make sure this is ideal
+	// Left cardinality is always the largest. Then take max multiplicity of left and right.
+	//! 1) new cardinality estimation
+//	if (min_right_sel < 1) {
+//		std::cout << "min_right_sel = " << min_right_sel << std::endl;
+//	}
+	expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
+
 	// cost is expected_cardinality plus the cost of the previous plans
-	idx_t cost = expected_cardinality;
-	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+	auto cost = expected_cardinality + left->cost + right->cost;
+	// create result and add multiplicities
+	auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
+
+	//! 2) update result mult for right relation.
+	if (left->multiplicities[relation_id_min_left] == 1) {
+		result.multiplicities[relation_id_min_right] =
+			MaxValue(1.0, right->multiplicities[relation_id_min_right] * (left->cardinality / right->cardinality));
+	} else {
+		result.multiplicities[relation_id_min_right] = MaxValue(
+			1.0, right->multiplicities[relation_id_min_right] * left->multiplicities[relation_id_min_left]);
+	}
+
+	//! 3) update the rest of the right relations
+	auto right_default_mult = left->cardinality / right->cardinality;
+	for(idx_t i = 0; i < right->set->count; i++) {
+		result.selectivities[right->set->relations[i]] = right->selectivities[right->set->relations[i]];
+		if (left->multiplicities[relation_id_min_left] == 1) {
+			result.multiplicities[right->set->relations[i]] = right_default_mult;
+		} else {
+			result.multiplicities[right->set->relations[i]] =
+			    min_left_mult * right->multiplicities[right->set->relations[i]];
+		}
+	}
+
+	//! 4) update the left multiplicities
+	result.multiplicities[relation_id_min_left] = result.multiplicities[relation_id_min_right];
+
+    //! 5) update on left multiplicities.
+	for(idx_t i = 0; i < left->set->count; i++) {
+		result.selectivities[left->set->relations[i]] = left->selectivities[left->set->relations[i]] * min_right_sel;
+		if (left->set->relations[i] == relation_id_min_left) {
+			continue;
+		}
+		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
+	}
+
+	return make_unique<JoinNode>(result);
 }
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
@@ -550,6 +761,26 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 	}
 
 	result_operator->estimated_cardinality = node->cardinality;
+
+	/* START */
+	/* used when printing out join trees, can later be removed */
+	result_operator->cost = node->cost;
+	result_operator->max_mult = 0;
+	std::unordered_map<idx_t, double>::const_iterator it = node->multiplicities.begin();
+	for(; it != node->multiplicities.end(); it++) {
+		if (result_operator->max_mult < node->multiplicities[it->first]) {
+			result_operator->max_mult = node->multiplicities[it->first];
+		};
+	}
+	result_operator->min_sel = 1000000000;
+	std::unordered_map<idx_t, double>::const_iterator it2 = node->selectivities.begin();
+	for(; it2 != node->multiplicities.end(); it2++) {
+		if (result_operator->min_sel > node->selectivities[it2->first]) {
+			result_operator->min_sel = node->selectivities[it2->first];
+		};
+	}
+	/* END */
+
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
