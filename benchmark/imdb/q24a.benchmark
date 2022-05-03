@@ -1,0 +1,8 @@
+# name: benchmark/imdb/q24a.benchmark
+# description: Run query 24a from the IMDB benchmark (single-threaded)
+# group: [imdb]
+
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=24a
+QUERY_NUMBER_PADDED=24a
