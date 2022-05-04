@@ -27,7 +27,3 @@ WHERE ci.note = '(voice)'
      AND chn.id = ci.person_role_id
      AND an.person_id = n.id
      AND an.person_id = ci.person_id;
-<<<<<<< HEAD
-=======
-  
->>>>>>> 475b79e21 (add benchmark to query direct from query files)

@@ -84,7 +84,7 @@ public:
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
 	//! Enable query profiling
-	DUCKDB_API void EnableProfiling(ProfilerPrintFormat print_format = ProfilerPrintFormat::QUERY_TREE);
+	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
 
