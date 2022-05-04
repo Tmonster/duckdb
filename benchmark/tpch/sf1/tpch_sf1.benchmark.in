@@ -12,6 +12,10 @@ cache tpch_sf1
 
 load benchmark/tpch/sf1/load.sql
 
+init
+PRAGMA enable_profiling='json';
+PRAGMA profile_output='tpch_benchmark_results/json_output_q${QUERY_NUMBER_PADDED}.json';
+
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
 result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv
