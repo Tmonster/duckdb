@@ -274,9 +274,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	for (idx_t it = 0; it < left_join_relations->count; it++) {
 		left_relation_id = left_join_relations->relations[it];
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
-			// make sure you don't check each realtion more than once. That could be causing unnecessary overhead.
-			if (logical_get->table_filters.has_filters()) {
+			auto tmp = relations.at(left_relation_id)->op;
+			auto& get = (LogicalGet&)*tmp;
+			if (!get.table_filters.filters.empty()) {
 				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
@@ -285,9 +285,10 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t right_relation_id;
 	for (idx_t it = 0; it < right_join_relations->count; it++) {
 		right_relation_id = right_join_relations->relations[it];
-		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto logical_get = (LogicalGet*)&relations.at(left_relation_id)->op;
-			if (logical_get->table_filters.has_filters()) {
+		if (relations.at(right_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto tmp = relations.at(right_relation_id)->op;
+			auto& get = (LogicalGet&)*tmp;
+			if (!get.table_filters.filters.empty()) {
 				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
 			}
 		}
@@ -300,10 +301,10 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	auto left_selectivity = std::numeric_limits<double>::max();
 	// consider the min values for multiplicity and selectivity as usually join conditions and values.
 
-	double min_left_mult, min_right_mult = std::numeric_limits<double>::max();
-	double min_left_sel, min_right_sel = std::numeric_limits<double>::max();
-	double min_cardinality_multiplier = std::numeric_limits<double>::max();
-	idx_t relation_id_min_left, relation_id_min_right = -1;
+	double min_left_mult = 1, min_right_mult = 1;
+	double min_left_sel = 1, min_right_sel = 1;
+	double min_cardinality_multiplier = 1;
+	idx_t relation_id_min_left = 1, relation_id_min_right = -1;
 
 	for(idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -319,7 +320,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				left_multiplicity = MinValue(left->multiplicities[info->filters[it]->right_set->relations[it3]], left_multiplicity);
 				left_selectivity = MinValue(left->selectivities[info->filters[it]->right_set->relations[it3]], left_selectivity);
 				left_relation_id = info->filters[it]->right_set->relations[it3];
+<<<<<<< HEAD
 				if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
+=======
+				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
+				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
+
+				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
+>>>>>>> 2fd7b7212 (fix bugs in join ordering code)
 					min_left_mult = left_multiplicity;
 					min_left_sel = left_selectivity;
 					min_right_mult = right_multiplicity;
@@ -365,6 +373,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			std::cout << printFilters(info) << std::endl;
 		}
 	}
+	if (info->filters.size() == 0){
+		std::cout << "NO FILTERS!" << std::endl;
+	}
 
 //	// this technically should never happen as the right and left multiplicities should decrease
 //	// when iterating through the filters.
@@ -384,6 +395,18 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 //	if (min_right_sel < 1) {
 //		std::cout << "min_right_sel = " << min_right_sel << std::endl;
 //	}
+//	std::cout << "relation id min left = " << relation_id_min_left << std::endl;
+//	std::cout << "relation id min right = " << relation_id_min_right << std::endl;
+//	std::cout << "right->mult.size() = " << right->multiplicities.size() << std::endl;
+//	std::cout << "left->mult.size()= " << left->multiplicities.size() << std::endl;
+//	relation_id_min_left = 0;
+//	relation_id_min_right = 0;
+//	min_left_mult = 1;
+//	min_right_mult = 1;
+//	min_left_sel = 1;
+//	min_right_sel = 1;
+
+
 	expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
 
 	// cost is expected_cardinality plus the cost of the previous plans
@@ -985,10 +1008,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+//	for (idx_t i = 0; i < relations.size(); i++) {
+//		std::cout << set_manager.GetJoinRelation(i) << std::endl;
+//	}
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
 		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
+//		std::cout << node->relations->ta
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
