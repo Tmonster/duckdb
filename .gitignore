@@ -49,6 +49,18 @@ projects/*
 !projects/Makefile
 benchmark/imdb/data
 benchmark/imdb_parquet/data
+src/**/CMakefiles/
+tools/sqlite3_api_wrapper/CMakeFiles/
+tools/sqlite3_api_wrapper/Makefile
+third_party/**/CMakeFiles
+third_party/**/CMakeFile
+test/sql/**/CMakeFiles
+test/sql/**/CMakFile
+**/CMakeFiles
+**/CMakeFile
+**/Makefile
+
+
 
 #==============================================================================#
 # Autotools artifacts
