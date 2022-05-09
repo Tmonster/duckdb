@@ -44,12 +44,13 @@ public:
 				multiplicities[relation_id] = 1;
 				selectivities[relation_id] = 1;
 			}
-
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
 		         idx_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
+			multiplicities.clear();
+			selectivities.clear();
 		}
 	};
 
@@ -117,7 +118,7 @@ private:
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
-	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
+	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node, std::string log);
 };
 
 } // namespace duckdb
