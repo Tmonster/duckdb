@@ -316,18 +316,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				right_relation_id = info->filters[it]->left_set->relations[it3];
 			}
 			assert(info->filters[it]->right_set->count > 0);
+			auto left_multiplicites = left->multiplicities;
+			auto left_selectivities = left->selectivities;
 			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
-				left_multiplicity = MinValue(left->multiplicities[info->filters[it]->right_set->relations[it3]], left_multiplicity);
-				left_selectivity = MinValue(left->selectivities[info->filters[it]->right_set->relations[it3]], left_selectivity);
 				left_relation_id = info->filters[it]->right_set->relations[it3];
-<<<<<<< HEAD
-				if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
-=======
 				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
 				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
 
 				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
->>>>>>> 2fd7b7212 (fix bugs in join ordering code)
 					min_left_mult = left_multiplicity;
 					min_left_sel = left_selectivity;
 					min_right_mult = right_multiplicity;
@@ -349,12 +345,13 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				right_relation_id = info->filters[it]->right_set->relations[it3];
 			}
 			assert(info->filters[it]->left_set->count > 0);
+			auto left_multiplicites = left->multiplicities;
+			auto left_selectivities = left->selectivities;
 			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
-				left_multiplicity =
-					MinValue(left->multiplicities[info->filters[it]->left_set->relations[it3]], left_multiplicity);
-				left_selectivity =
-					MinValue(left->selectivities[info->filters[it]->left_set->relations[it3]], left_selectivity);
 				left_relation_id = info->filters[it]->left_set->relations[it3];
+				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
+				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
+
 				if (right_multiplicity * right_selectivity < min_cardinality_multiplier) {
 					min_left_mult = left_multiplicity;
 					min_left_sel = left_selectivity;
