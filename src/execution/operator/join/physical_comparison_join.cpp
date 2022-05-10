@@ -29,7 +29,7 @@ string PhysicalComparisonJoin::ParamsToString() const {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
-//	extra_info += "EC=" + std::to_string(estimated_cardinality) + "\n";
+	//	extra_info += "EC=" + std::to_string(estimated_cardinality) + "\n";
 	return extra_info;
 }
 
