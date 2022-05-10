@@ -19,6 +19,7 @@ string LogicalComparisonJoin::ParamsToString() const {
 		result += expr->ToString();
 	}
 	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
+
 	return result;
 }
 

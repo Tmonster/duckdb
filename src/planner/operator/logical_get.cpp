@@ -39,8 +39,8 @@ string LogicalGet::ParamsToString() const {
 	result += function.to_string(bind_data.get());
 	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
 
-	result+="max_mult="+ std::to_string(max_mult)+"\n";
-	result+="min_sel=" + std::to_string(min_sel)+"\n";
+	result += "max_mult=" + std::to_string(max_mult) + "\n";
+	result += "min_sel=" + std::to_string(min_sel) + "\n";
 
 	return result;
 }
