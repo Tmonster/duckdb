@@ -119,7 +119,7 @@ private:
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
-	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node, std::string log);
+	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 };
 
 } // namespace duckdb
