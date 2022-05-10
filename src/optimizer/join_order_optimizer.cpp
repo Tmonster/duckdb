@@ -649,7 +649,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// find the first join in the relation to know where to place this node
 	if (root_is_join) {
 		// first node is the join, return it immediately
-//		std::cout << join_tree.second->ToString() << std::endl;
+		//		std::cout << join_tree.second->ToString() << std::endl;
 		return move(join_tree.second);
 	}
 	D_ASSERT(plan->children.size() == 1);
@@ -663,7 +663,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 		op = op->children[0].get();
 	}
 	// have to replace at this node
-//	std::cout << join_tree.second->ToString() << std::endl;
+	//	std::cout << join_tree.second->ToString() << std::endl;
 	parent->children[0] = move(join_tree.second);
 	return plan;
 }
