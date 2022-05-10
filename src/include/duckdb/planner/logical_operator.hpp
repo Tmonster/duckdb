@@ -19,7 +19,6 @@
 #include <functional>
 #include <algorithm>
 
-
 namespace duckdb {
 
 //! LogicalOperator is the base class of the logical operators present in the
