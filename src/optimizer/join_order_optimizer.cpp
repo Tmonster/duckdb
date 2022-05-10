@@ -259,7 +259,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			relation_2_base_table[right_relation_id] = catalog_table->oid;
-			if (!get.table_filters.filters.empty() &&) {
+			if (!get.table_filters.filters.empty()) {
 				right->selectivities[right_relation_id] = default_selectivity;
 			}
 		}
@@ -279,7 +279,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
-		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)){
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
 			auto right_multiplicities = right->multiplicities;
 			auto right_selectivities = right->selectivities;
@@ -701,8 +700,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 }
 
 pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
-JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node,
-                                  std::string log) {
+JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node) {
 	JoinRelationSet *left_node = nullptr, *right_node = nullptr;
 	JoinRelationSet *result_relation;
 	unique_ptr<LogicalOperator> result_operator;
