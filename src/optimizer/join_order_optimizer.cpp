@@ -271,6 +271,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
 
+
+	std::unordered_map<idx_t, idx_t> relation_2_base_table;
+
 	// Get underlying operators and initialize selectivities
 	idx_t left_relation_id;
 	for (idx_t it = 0; it < left_join_relations->count; it++) {
@@ -278,6 +281,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(left_relation_id)->op;
 			auto& get = (LogicalGet&)*tmp;
+			auto catalog_table = get.GetTable();
+			relation_2_base_table[left_relation_id] = catalog_table->oid;
 			if (!get.table_filters.filters.empty() && left->selectivities[left_relation_id] == 1) {
 				left->selectivities[left_relation_id] = default_selectivity;
 			}
@@ -290,6 +295,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(right_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(right_relation_id)->op;
 			auto& get = (LogicalGet&)*tmp;
+			auto catalog_table = get.GetTable();
+			relation_2_base_table[right_relation_id] = catalog_table->oid;
 			if (!get.table_filters.filters.empty() && right->selectivities[right_relation_id] == 1) {
 				right->selectivities[right_relation_id] = default_selectivity;
 			}
@@ -366,18 +373,26 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
-<<<<<<< HEAD
-//	// this technically should never happen as the right and left multiplicities should decrease
-//	// when iterating through the filters.
-=======
 #ifdef DEBUG
-	assert(relation_id_min_left < left_join_relations.size());
-	assert(relation_id_min_right < right_join_relations.size());
+	bool left_found = false;
+	for (idx_t it = 0; it < left_join_relations->count; it++) {
+		if (left_join_relations->relations[it] == relation_id_min_left) {
+			left_found = true;
+			break;
+		}
+	}
+	assert(left_found);
+	bool right_found = false;
+	for (idx_t it = 0; it < right_join_relations->count; it++) {
+		if (right_join_relations->relations[it] == relation_id_min_right) {
+			right_found = true;
+			break;
+		}
+	}
 #endif
 
 	// this technically should never happen as the right and left multiplicities should decrease
 	// when iterating through the filters.
->>>>>>> d5f242f63 (fix tpcds query error, but now there is one that times out)
 	if (left_multiplicity == std::numeric_limits<double>::max()) left_multiplicity = 1;
 	if (right_multiplicity == std::numeric_limits<double>::max()) right_multiplicity = 1;
 	if (left_selectivity == std::numeric_limits<double>::max()) left_selectivity = 1;
@@ -390,28 +405,38 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	// Left cardinality is always the largest. Then take max multiplicity of left and right.
 	//! 1) new cardinality estimation
-	expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
+	if (relation_2_base_table[relation_id_min_left] == relation_2_base_table[relation_id_min_right]) {
+		// the base tables are the same, assume cross product cardinality.
+		expected_cardinality = left->cardinality * right->cardinality;
+	} else {
+		expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
+	}
 
 	// cost is expected_cardinality plus the cost of the previous plans
 	auto cost = expected_cardinality + left->cost + right->cost;
 	// create result and add multiplicities
 	auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
 
+	idx_t cardinality_ratio;
+	if (right->cardinality == 0) {
+		cardinality_ratio = 1;
+	} else {
+		cardinality_ratio = left->cardinality / right->cardinality;
+	}
 	//! 2) update result mult for right relation.
 	if (left->multiplicities[relation_id_min_left] == 1) {
 		result.multiplicities[relation_id_min_right] =
-			MaxValue(1.0, right->multiplicities[relation_id_min_right] * (left->cardinality / right->cardinality));
+			MaxValue(1.0, right->multiplicities[relation_id_min_right] * cardinality_ratio);
 	} else {
 		result.multiplicities[relation_id_min_right] = MaxValue(
 			1.0, right->multiplicities[relation_id_min_right] * left->multiplicities[relation_id_min_left]);
 	}
 
 	//! 3) update the rest of the right relations
-	auto right_default_mult = left->cardinality / right->cardinality;
 	for(idx_t i = 0; i < right->set->count; i++) {
 		result.selectivities[right->set->relations[i]] = right->selectivities[right->set->relations[i]];
 		if (left->multiplicities[relation_id_min_left] == 1) {
-			result.multiplicities[right->set->relations[i]] = right_default_mult;
+			result.multiplicities[right->set->relations[i]] = cardinality_ratio;
 		} else {
 			result.multiplicities[right->set->relations[i]] =
 			    min_left_mult * right->multiplicities[right->set->relations[i]];
