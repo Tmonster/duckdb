@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -266,16 +267,16 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
-	idx_t right_multiplicity = std::numeric_limits<idx_t>::max();
-	idx_t right_selectivity = std::numeric_limits<idx_t>::max();
+	idx_t right_multiplicity = NumericLimits<idx_t>::Maximum();
+	idx_t right_selectivity = NumericLimits<idx_t>::Maximum();
 
-	idx_t left_multiplicity = std::numeric_limits<idx_t>::max();
-	idx_t left_selectivity = std::numeric_limits<idx_t>::max();
+	idx_t left_multiplicity = NumericLimits<idx_t>::Maximum();
+	idx_t left_selectivity = NumericLimits<idx_t>::Maximum());
 	// consider the min values for multiplicity and selectivity as usually join conditions and values.
 
 	idx_t min_left_mult = 1, min_right_mult = 1;
 	idx_t min_left_sel = 1, min_right_sel = 1;
-	idx_t min_cardinality_multiplier = std::numeric_limits<idx_t>::max();
+	idx_t min_cardinality_multiplier = NumericLimits<idx_t>::Maximum();
 	bool min_relations_set = false;
 	idx_t relation_id_min_left = 0, relation_id_min_right = 0;
 
@@ -290,11 +291,11 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				right_selectivity = MinValue(right_selectivities[right_relation_id], right_selectivity);
 			}
 			assert(info->filters[it]->right_set->count > 0);
-			auto left_multiplicites = left->multiplicities;
+			auto left_multiplicities = left->multiplicities;
 			auto left_selectivities = left->selectivities;
 			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
 				left_relation_id = info->filters[it]->right_set->relations[it3];
-				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
+				left_multiplicity = MinValue(left_multiplicities[left_relation_id], left_multiplicity);
 				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
 
 				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
@@ -318,18 +319,18 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		// currently finding in multiplicities because the syntax is easier for me.
 		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
 		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
-			assert(info->filters[it]->right_set->count > 0);
+			D_ASSERT(info->filters[it]->right_set->count > 0);
 			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
 				right_relation_id = info->filters[it]->right_set->relations[it3];
 				right_multiplicity = MinValue(right->multiplicities[right_relation_id], right_multiplicity);
 				right_selectivity = MinValue(right->selectivities[right_relation_id], right_selectivity);
 			}
-			assert(info->filters[it]->left_set->count > 0);
-			auto left_multiplicites = left->multiplicities;
+			D_ASSERT(info->filters[it]->left_set->count > 0);
+			auto left_multiplicities = left->multiplicities;
 			auto left_selectivities = left->selectivities;
 			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
 				left_relation_id = info->filters[it]->left_set->relations[it3];
-				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
+				left_multiplicity = MinValue(left_multiplicities[left_relation_id], left_multiplicity);
 				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
 
 				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
@@ -360,7 +361,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			break;
 		}
 	}
-	assert(left_found);
+	D_ASSERT(left_found);
 	bool right_found = false;
 	for (idx_t it = 0; it < right_join_relations->count; it++) {
 		if (right_join_relations->relations[it] == relation_id_min_right) {
@@ -368,26 +369,26 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			break;
 		}
 	}
-	assert(right_found);
+	D_ASSERT(right_found);
 
 	// this technically should never happen as the right and left multiplicities should decrease
 	// when iterating through the filters.
-	if (left_multiplicity == std::numeric_limits<double>::max())
+	if (left_multiplicity == NumericLimits<idx_t>::Maximum())
 		left_multiplicity = 1;
-	if (right_multiplicity == std::numeric_limits<double>::max())
+	if (right_multiplicity == NumericLimits<idx_t>::Maximum())
 		right_multiplicity = 1;
-	if (left_selectivity == std::numeric_limits<double>::max())
+	if (left_selectivity == NumericLimits<idx_t>::Maximum())
 		left_selectivity = 1;
-	if (right_selectivity == std::numeric_limits<double>::max())
+	if (right_selectivity == NumericLimits<idx_t>::Maximum())
 		right_multiplicity = 1;
-	if (min_right_mult == std::numeric_limits<double>::max()) {
+	if (min_right_mult == NumericLimits<idx_t>::Maximum()) {
 		min_right_mult = 1;
 	}
-	if (min_right_sel == std::numeric_limits<double>::max())
+	if (min_right_sel == NumericLimits<idx_t>::Maximum())
 		min_right_sel = 1;
-	if (min_left_mult == std::numeric_limits<double>::max())
+	if (min_left_mult == NumericLimits<idx_t>::Maximum())
 		min_left_mult = 1;
-	if (min_left_sel == std::numeric_limits<double>::max())
+	if (min_left_sel == NumericLimits<idx_t>::Maximum())
 		min_left_sel = 1;
 
 	// Left cardinality is always the largest. Then take max multiplicity of left and right.
@@ -400,8 +401,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	if (same_base_table) {
 		// the base tables are the same, assume cross product cardinality.
 		expected_cardinality = (left->cardinality * right->cardinality);
-		assert(expected_cardinality != left->cardinality);
-		assert(expected_cardinality != right->cardinality);
+		D_ASSERT(expected_cardinality != left->cardinality);
+		D_ASSERT(expected_cardinality != right->cardinality);
 	} else {
 		expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
 	}
@@ -488,7 +489,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			}
 		}
 	}
-	assert(found);
+	D_ASSERT(found);
 	found = false;
 	for (it = result.selectivities.begin(); it !=  result.selectivities.end(); it++) {
 		found = false;
@@ -506,9 +507,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			}
 		}
 	}
-	assert(found);
-	assert(result.multiplicities.size() == (left_join_relations->count + right_join_relations->count));
-	assert(result.selectivities.size() == (left_join_relations->count + right_join_relations->count));
+	D_ASSERT(found);
+	D_ASSERT(result.multiplicities.size() == (left_join_relations->count + right_join_relations->count));
+	D_ASSERT(result.selectivities.size() == (left_join_relations->count + right_join_relations->count));
 
 	return make_unique<JoinNode>(result);
 }
