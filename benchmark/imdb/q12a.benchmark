@@ -2,7 +2,6 @@
 # description: Run query 12a from the IMDB benchmark (single-threaded)
 # group: [imdb]
 
-
 template benchmark/imdb/imdb.benchmark.in
 QUERY_NUMBER=12a
 QUERY_NUMBER_PADDED=12a
