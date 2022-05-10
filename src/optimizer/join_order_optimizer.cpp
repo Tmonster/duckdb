@@ -274,7 +274,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t right_selectivity = NumericLimits<idx_t>::Maximum();
 
 	idx_t left_multiplicity = NumericLimits<idx_t>::Maximum();
-	idx_t left_selectivity = NumericLimits<idx_t>::Maximum());
+	idx_t left_selectivity = NumericLimits<idx_t>::Maximum();
 	// consider the min values for multiplicity and selectivity as usually join conditions and values.
 
 	idx_t min_left_mult = 1, min_right_mult = 1;
