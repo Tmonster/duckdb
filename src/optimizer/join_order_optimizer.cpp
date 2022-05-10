@@ -274,7 +274,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	double min_left_mult = 1, min_right_mult = 1;
 	double min_left_sel = 1, min_right_sel = 1;
-	double min_cardinality_multiplier = 1;
+	double min_cardinality_multiplier = std::numeric_limits<double>::max();
+	bool min_relations_set = false;
 	idx_t relation_id_min_left = 0, relation_id_min_right = 0;
 
 	for (idx_t it = 0; it < info->filters.size(); it++) {
@@ -295,13 +296,21 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				left_multiplicity = MinValue(left_multiplicites[left_relation_id], left_multiplicity);
 				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
 
-				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
+				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier || !min_relations_set) {
 					min_left_mult = left_multiplicity;
 					min_left_sel = left_selectivity;
 					min_right_mult = right_multiplicity;
 					min_right_sel = right_selectivity;
 					relation_id_min_left = left_relation_id;
 					relation_id_min_right = right_relation_id;
+					min_cardinality_multiplier = min_right_sel * min_right_mult;
+					min_relations_set = true;
+				}
+				if (!min_relations_set) {
+					relation_id_min_right = right_relation_id;
+					relation_id_min_left = left_relation_id;
+					min_cardinality_multiplier = right_multiplicity * right_selectivity;
+					min_relations_set = true;
 				}
 			}
 		}
@@ -329,12 +338,20 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 					min_right_sel = right_selectivity;
 					relation_id_min_left = left_relation_id;
 					relation_id_min_right = right_relation_id;
+					min_cardinality_multiplier = min_right_mult * min_right_sel;
+					min_relations_set = true;
+				}
+				if (!min_relations_set) {
+					relation_id_min_right = right_relation_id;
+					relation_id_min_left = left_relation_id;
+					min_cardinality_multiplier = right_multiplicity * right_selectivity;
+					min_relations_set = true;
 				}
 			}
 		}
 	}
 
-#ifdef DEBUG
+
 	bool left_found = false;
 	for (idx_t it = 0; it < left_join_relations->count; it++) {
 		if (left_join_relations->relations[it] == relation_id_min_left) {
@@ -351,7 +368,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 	assert(right_found);
-#endif
+//	assert(relation_2_base_table.find(relation_id_min_left) != relation_2_base_table.end());
+//	assert(relation_2_base_table.find(relation_id_min_right) != relation_2_base_table.end());
+
 
 	// this technically should never happen as the right and left multiplicities should decrease
 	// when iterating through the filters.
@@ -373,8 +392,13 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		min_left_sel = 1;
 
 	// Left cardinality is always the largest. Then take max multiplicity of left and right.
+	bool same_base_table = false;
+	if (relation_2_base_table.find(relation_id_min_left) != relation_2_base_table.end() &&
+	    relation_2_base_table.find(relation_id_min_right) != relation_2_base_table.end()) {
+		same_base_table = relation_2_base_table[relation_id_min_left] == relation_2_base_table[relation_id_min_right];
+	}
 	//! 1) new cardinality estimation
-	if (relation_2_base_table[relation_id_min_left] == relation_2_base_table[relation_id_min_right]) {
+	if (same_base_table) {
 		// the base tables are the same, assume cross product cardinality.
 		expected_cardinality = left->cardinality * right->cardinality;
 	} else {
@@ -389,6 +413,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t cardinality_ratio;
 	if (right->cardinality == 0) {
 		cardinality_ratio = 1;
+	} else if (same_base_table) {
+		cardinality_ratio = right->cardinality;
 	} else {
 		cardinality_ratio = left->cardinality / right->cardinality;
 	}
