@@ -31,8 +31,8 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
-		std::unordered_map<idx_t, double> multiplicities;
-		std::unordered_map<idx_t, double> selectivities;
+		std::unordered_map<idx_t, idx_t> multiplicities;
+		std::unordered_map<idx_t, idx_t> selectivities;
 
 		//! Create a leaf node in the join tree
 		//! set cost to 0 because leaf nodes/base table already exist
