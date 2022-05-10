@@ -13,7 +13,7 @@ namespace duckdb {
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
 
-double DEFAULT_SELECTIVITY = 0.2;
+double default_selectivity = 0.2;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
@@ -256,6 +256,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		auto cost = expected_cardinality + left->cost + right->cost;
 
 		auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
+		// TODO: make sure there isn't a weird switch between right relations and left relations
 		for(idx_t i = 0; i < left->set->count; i++) {
 			result.multiplicities[left->set->relations[i]] =  left->multiplicities[left->set->relations[i]] * right->cardinality;
 		}
@@ -276,8 +277,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(left_relation_id)->op;
 			auto& get = (LogicalGet&)*tmp;
-			if (!get.table_filters.filters.empty()) {
-				left->selectivities[left_relation_id] = DEFAULT_SELECTIVITY;
+			if (!get.table_filters.filters.empty() && left->selectivities[left_relation_id] == 1) {
+				left->selectivities[left_relation_id] = default_selectivity;
 			}
 		}
 	}
@@ -288,8 +289,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (relations.at(right_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(right_relation_id)->op;
 			auto& get = (LogicalGet&)*tmp;
-			if (!get.table_filters.filters.empty()) {
-				right->selectivities[right_relation_id] = DEFAULT_SELECTIVITY;
+			if (!get.table_filters.filters.empty() && right->selectivities[right_relation_id] == 1) {
+				right->selectivities[right_relation_id] = default_selectivity;
 			}
 		}
 	}
@@ -304,7 +305,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double min_left_mult = 1, min_right_mult = 1;
 	double min_left_sel = 1, min_right_sel = 1;
 	double min_cardinality_multiplier = 1;
-	idx_t relation_id_min_left = 1, relation_id_min_right = -1;
+	idx_t relation_id_min_left = 0, relation_id_min_right = 0;
 
 	for(idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -364,8 +365,18 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
+<<<<<<< HEAD
 //	// this technically should never happen as the right and left multiplicities should decrease
 //	// when iterating through the filters.
+=======
+#ifdef DEBUG
+	assert(relation_id_min_left < left_join_relations.size());
+	assert(relation_id_min_right < right_join_relations.size());
+#endif
+
+	// this technically should never happen as the right and left multiplicities should decrease
+	// when iterating through the filters.
+>>>>>>> d5f242f63 (fix tpcds query error, but now there is one that times out)
 	if (left_multiplicity == std::numeric_limits<double>::max()) left_multiplicity = 1;
 	if (right_multiplicity == std::numeric_limits<double>::max()) right_multiplicity = 1;
 	if (left_selectivity == std::numeric_limits<double>::max()) left_selectivity = 1;
