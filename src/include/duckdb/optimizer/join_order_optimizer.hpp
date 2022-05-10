@@ -61,7 +61,8 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, bool switched=false);
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right,
+	                                    bool switched = false);
 
 private:
 	ClientContext &context;
