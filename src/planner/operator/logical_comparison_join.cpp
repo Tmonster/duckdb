@@ -2,8 +2,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
-#include <unordered_map>
-
 namespace duckdb {
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
@@ -18,7 +16,7 @@ string LogicalComparisonJoin::ParamsToString() const {
 		                                                   condition.right->Copy());
 		result += expr->ToString();
 	}
-	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
+	result+="\nEC="+std::to_string(estimated_cardinality)+"\n";
 
 	return result;
 }

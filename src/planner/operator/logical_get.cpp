@@ -6,8 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 
-#include <unordered_map>
-
 namespace duckdb {
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
@@ -39,10 +37,6 @@ string LogicalGet::ParamsToString() const {
 	}
 	result += function.to_string(bind_data.get());
 	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
-
-	result += "max_mult=" + std::to_string(max_mult) + "\n";
-	result += "min_sel=" + std::to_string(min_sel) + "\n";
-
 	return result;
 }
 
