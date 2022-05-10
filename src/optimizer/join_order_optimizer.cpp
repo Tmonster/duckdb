@@ -292,7 +292,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				right_multiplicity = MinValue(right_multiplicities[right_relation_id], right_multiplicity);
 				right_selectivity = MinValue(right_selectivities[right_relation_id], right_selectivity);
 			}
-			assert(info->filters[it]->right_set->count > 0);
+			D_ASSERT(info->filters[it]->right_set->count > 0);
 			auto left_multiplicities = left->multiplicities;
 			auto left_selectivities = left->selectivities;
 			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
