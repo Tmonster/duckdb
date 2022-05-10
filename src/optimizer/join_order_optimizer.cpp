@@ -245,7 +245,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			// we might be querying directly on files, so no catalog entry in that case
-			if (catalog_table) relation_2_base_table[left_relation_id] = catalog_table->oid;
+			if (catalog_table)
+				relation_2_base_table[left_relation_id] = catalog_table->oid;
 			if (!get.table_filters.filters.empty()) {
 				left->selectivities[left_relation_id] = default_selectivity;
 			}
@@ -261,7 +262,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			// we might be querying directly on files, so no catalog entry in that case
-			if (catalog_table) relation_2_base_table[right_relation_id] = catalog_table->oid;
+			if (catalog_table)
+				relation_2_base_table[right_relation_id] = catalog_table->oid;
 			if (!get.table_filters.filters.empty()) {
 				right->selectivities[right_relation_id] = default_selectivity;
 			}
@@ -353,7 +355,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			}
 		}
 	}
-
 
 	bool left_found = false;
 	for (idx_t it = 0; it < left_join_relations->count; it++) {
@@ -455,7 +456,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
 	}
 
-
 	for (idx_t it = 0; it < right_join_relations->count; it++) {
 		if (result.multiplicities.find(right_join_relations->relations[it]) == result.multiplicities.end()) {
 			std::cout << "uh oh problem here" << std::endl;
@@ -472,9 +472,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			std::cout << "uh oh problem here" << std::endl;
 		}
 	}
-	std::unordered_map<idx_t,idx_t>::iterator it;
+	std::unordered_map<idx_t, idx_t>::iterator it;
 	bool found = false;
-	for (it = result.multiplicities.begin(); it !=  result.multiplicities.end(); it++) {
+	for (it = result.multiplicities.begin(); it != result.multiplicities.end(); it++) {
 		found = false;
 		for (idx_t j = 0; j < right_join_relations->count; j++) {
 			if (it->first == right_join_relations->relations[j]) {
@@ -482,7 +482,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				break;
 			}
 		}
-		if (found) continue;
+		if (found)
+			continue;
 		for (idx_t j = 0; j < left_join_relations->count; j++) {
 			if (it->first == left_join_relations->relations[j]) {
 				found = true;
@@ -492,7 +493,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	}
 	D_ASSERT(found);
 	found = false;
-	for (it = result.selectivities.begin(); it !=  result.selectivities.end(); it++) {
+	for (it = result.selectivities.begin(); it != result.selectivities.end(); it++) {
 		found = false;
 		for (idx_t j = 0; j < right_join_relations->count; j++) {
 			if (it->first == right_join_relations->relations[j]) {
@@ -500,7 +501,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 				break;
 			}
 		}
-		if (found) continue;
+		if (found)
+			continue;
 		for (idx_t j = 0; j < left_join_relations->count; j++) {
 			if (it->first == left_join_relations->relations[j]) {
 				found = true;
