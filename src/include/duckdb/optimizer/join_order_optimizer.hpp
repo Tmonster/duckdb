@@ -10,12 +10,14 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include <map>
+
 
 #include <functional>
 
@@ -31,8 +33,15 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
-		std::unordered_map<idx_t, idx_t> multiplicities;
-		std::unordered_map<idx_t, idx_t> selectivities;
+		unordered_map<idx_t, idx_t> multiplicities;
+		unordered_map<idx_t, idx_t> selectivities;
+
+
+//		unordered_map<idx_t, idx_t, idx_t> tab_col_mult;
+//		unordered_map<idx_t, idx_t, idx_t> tab_col_sel;
+
+
+
 
 		//! Create a leaf node in the join tree
 		//! set cost to 0 because leaf nodes/base table already exist
@@ -72,6 +81,10 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
+	//! A mapping of base table index -> all columns used to determine the join order
+	unordered_map<idx_t, idx_t[]> relation_to_columns;
+	
+
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
@@ -89,6 +102,10 @@ private:
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+
+	//! Get column bindings from a filter
+	void GetColumnBindings(Expression &expression, unordered_set<pair<idx_t, idx_t>> *left_bindings, unordered_set<pair<idx_t, idx_t>> *right_bindings);
+
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
