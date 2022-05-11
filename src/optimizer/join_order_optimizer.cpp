@@ -54,6 +54,20 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
+void JoinOrderOptimizer::GetColumnBindings(Expression &expression, unordered_set<pair<idx_t, idx_t>> *left_bindings, unordered_set<pair<idx_t, idx_t>> *right_bindings) {
+	if (expression.type == ExpressionType::COMPARE_EQUAL) {
+		auto &colref = (BoundComparisonExpression &)expression;
+		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF && colref.left->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &right = (BoundColumnRefExpression &)*colref.right;
+			auto &left = (BoundColumnRefExpression &)*colref.left;
+			D_ASSERT(relation_mapping.find(left.binding.table_index) != relation_mapping.end());
+			D_ASSERT(relation_mapping.find(right.binding.table_index) != relation_mapping.end());
+			left_bindings->insert(std::make_pair(relation_mapping[left.binding.table_index], left.binding.column_index));
+			right_bindings->insert(std::make_pair(relation_mapping[right.binding.table_index], right.binding.column_index));
+		}
+	}
+}
+
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
 	// first check if we have any filter to push it into
@@ -250,6 +264,13 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			if (!get.table_filters.filters.empty()) {
 				left->selectivities[left_relation_id] = default_selectivity;
 			}
+			vector<ColumnDefinition>::iterator it;
+			if (catalog_table) {
+				for (it = catalog_table->columns.begin(); it < catalog_table->columns.end(); it++) {
+//					left->tab_col_sel[left_relation_id][it->oid] = 1;
+//					left->tab_col_mult[left_relation_id][it->oid] = 1;
+				}
+			}
 		}
 	}
 
@@ -262,10 +283,18 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			// we might be querying directly on files, so no catalog entry in that case
-			if (catalog_table)
+			if (catalog_table) {
 				relation_2_base_table[right_relation_id] = catalog_table->oid;
+			}
 			if (!get.table_filters.filters.empty()) {
 				right->selectivities[right_relation_id] = default_selectivity;
+			}
+			vector<ColumnDefinition>::iterator it;
+			if (catalog_table) {
+				for (it = catalog_table->columns.begin(); it < catalog_table->columns.end(); it++) {
+					//				left->tab_col_sel[right_relation_id][it->oid] = 1;
+					//				left->tab_col_mult[right_relation_id][it->oid] = 1;
+				}
 			}
 		}
 	}
@@ -401,6 +430,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	    relation_2_base_table.find(relation_id_min_right) != relation_2_base_table.end()) {
 		same_base_table = (relation_2_base_table[relation_id_min_left] == relation_2_base_table[relation_id_min_right]);
 	}
+
+//	info->filters[0]->filter_index
+
 	//! 1) new cardinality estimation
 	if (same_base_table) {
 		// the base tables are the same, assume cross product cardinality.
@@ -1031,6 +1063,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
+		GetColumnBindings(*filter, &filter_info->left_bindings, &filter_info->right_bindings);
 		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate

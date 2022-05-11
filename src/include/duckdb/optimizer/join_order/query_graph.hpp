@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -24,6 +25,8 @@ struct FilterInfo {
 	idx_t filter_index;
 	JoinRelationSet *left_set = nullptr;
 	JoinRelationSet *right_set = nullptr;
+	unordered_set<pair<idx_t, idx_t>> left_bindings;
+	unordered_set<pair<idx_t, idx_t>> right_bindings;
 	JoinRelationSet *set = nullptr;
 };
 
