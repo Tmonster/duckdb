@@ -355,6 +355,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
+#ifdef DEBUG
 	bool left_found = false;
 	for (idx_t it = 0; it < left_join_relations->count; it++) {
 		if (left_join_relations->relations[it] == relation_id_min_left) {
@@ -371,6 +372,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 	D_ASSERT(right_found);
+#endif
 
 	// this technically should never happen as the right and left multiplicities should decrease
 	// when iterating through the filters.
@@ -455,6 +457,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
 	}
 
+
+#ifdef DEBUG
 	for (idx_t it = 0; it < right_join_relations->count; it++) {
 		if (result.multiplicities.find(right_join_relations->relations[it]) == result.multiplicities.end()) {
 			std::cout << "uh oh problem here" << std::endl;
@@ -512,6 +516,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	D_ASSERT(found);
 	D_ASSERT(result.multiplicities.size() == (left_join_relations->count + right_join_relations->count));
 	D_ASSERT(result.selectivities.size() == (left_join_relations->count + right_join_relations->count));
+#endif
 
 	return make_unique<JoinNode>(result);
 }
