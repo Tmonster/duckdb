@@ -25,8 +25,8 @@ struct FilterInfo {
 	idx_t filter_index;
 	JoinRelationSet *left_set = nullptr;
 	JoinRelationSet *right_set = nullptr;
-	unordered_set<pair<idx_t, idx_t>> left_bindings;
-	unordered_set<pair<idx_t, idx_t>> right_bindings;
+	pair<idx_t, idx_t> left_binding;
+	pair<idx_t, idx_t> right_binding;
 	JoinRelationSet *set = nullptr;
 };
 

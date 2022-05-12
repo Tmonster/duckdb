@@ -33,12 +33,18 @@ public:
 		idx_t cost;
 		JoinNode *left;
 		JoinNode *right;
-		unordered_map<idx_t, idx_t> multiplicities;
-		unordered_map<idx_t, idx_t> selectivities;
 
+		//! have the multiplicity and selectivity stats been initialized?
+		bool init_stats;
+		bool created_as_intermediate;
 
-//		unordered_map<idx_t, idx_t, idx_t> tab_col_mult;
-//		unordered_map<idx_t, idx_t, idx_t> tab_col_sel;
+		// first idx is a 32 bits for table id
+		//                32 bits for column id
+		// you need to use some bit manipulation to get he numbers
+		unordered_map<idx_t, unordered_set<idx_t>> tab_cols;
+
+		unordered_map<idx_t, idx_t> table_col_mults;
+		unordered_map<idx_t, idx_t> table_col_sels;
 
 
 
@@ -47,19 +53,13 @@ public:
 		//! set cost to 0 because leaf nodes/base table already exist
 		//! cost will be the cost to *produce* an intermediate table
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr) {
-			for (idx_t it = 0; it < set->count; it++) {
-				auto relation_id = set->relations[it];
-				multiplicities[relation_id] = 1;
-				selectivities[relation_id] = 1;
-			}
+		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr),
+		      init_stats(false), created_as_intermediate(false) {
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
 		         idx_t cost)
-		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
-			multiplicities.clear();
-			selectivities.clear();
+		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false), created_as_intermediate(true) {
 		}
 	};
 
@@ -82,8 +82,7 @@ private:
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A mapping of base table index -> all columns used to determine the join order
-	unordered_map<idx_t, idx_t[]> relation_to_columns;
-	
+	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
 
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
@@ -104,7 +103,11 @@ private:
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 
 	//! Get column bindings from a filter
-	void GetColumnBindings(Expression &expression, unordered_set<pair<idx_t, idx_t>> *left_bindings, unordered_set<pair<idx_t, idx_t>> *right_bindings);
+	void GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding);
+
+	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this function
+	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
+	void InitColumnStats(JoinNode *node);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
