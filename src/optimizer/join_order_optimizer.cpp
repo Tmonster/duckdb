@@ -213,11 +213,6 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 
 void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 	if (node->init_stats) {
-		for (idx_t rel_it = 0; rel_it < node->set->count; rel_it++) {
-			if (node->tab_cols.find(node->set->relations[rel_it]) == node->tab_cols.end()) {
-				std::cout << "gotta break here" << std::endl;
-			}
-		}
 		return;
 	}
 	JoinRelationSet *join_relations = node->set;
@@ -231,31 +226,54 @@ void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 		bool found_table_index = false;
 		for (relation_map_it = relation_mapping.begin(); relation_map_it != relation_mapping.end(); relation_map_it++) {
 			if (relation_map_it->second == relation_id) {
-				//					table_index = relation_map_it->first;
+				//	table_index = relation_map_it->first;
 				found_table_index = true;
 			}
 		}
 		D_ASSERT(found_table_index);
-
+		auto key_spies = vector<idx_t>();
 		if (relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(relation_id)->op;
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			// can use catalog_table to get table stats and also update the mult for each column
 			// we might be querying directly on files, so no catalog entry in that case
+			std::string look_for_me = "n_nationkey";
+			unordered_set<idx_t>::iterator rc_it;
+			std::vector<duckdb::ColumnDefinition>::iterator co_it;
+			int col_num;
+			for(rc_it = relation_to_columns[relation_id].begin(); rc_it != relation_to_columns[relation_id].end(); rc_it++) {
+				col_num = 0;
+				for (co_it = catalog_table->columns.begin(); co_it != catalog_table->columns.end(); co_it++) {
+					if (look_for_me.compare(co_it->name) == 0) {
+						idx_t tmp_key = (relation_id << 32) + col_num;
+						key_spies.push_back(tmp_key);
+					}
+					col_num+=1;
+				}
+			}
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
 			}
 		}
 
 		unordered_set<idx_t>::iterator ite;
+		if (!node->tab_cols) {
+			node->tab_cols = make_unique<unordered_map<idx_t, unordered_set<idx_t>>>();
+		}
+		if (!node->table_col_mults) {
+			node->table_col_mults = make_unique<unordered_map<idx_t, double>>();
+		}
+		if (!node->table_col_sels) {
+			node->table_col_sels = make_unique<unordered_map<idx_t, double>>();
+		}
 		for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
 			// this is where hyperloglog stats can be inserted
-			node->tab_cols[relation_id].insert(*ite);
+			(*node->tab_cols)[relation_id].insert(*ite);
 			auto index = (relation_id << 32) + *ite;
-			node->table_col_mults[index] = 1;
-			if (has_filter) node->table_col_sels[index] = default_selectivity;
-			else node->table_col_sels[index] = 1;
+			(*node->table_col_mults)[index] = 1;
+			if (has_filter) (*node->table_col_sels)[index] = default_selectivity;
+			else (*node->table_col_sels)[index] = 1;
 		}
 	}
 	node->init_stats = true;
@@ -293,12 +311,17 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 //			result.multiplicities[right->set->relations[i]] =
 //			    right->multiplicities[right->set->relations[i]] * left->cardinality;
 //		}
-		return make_unique<JoinNode>(result);
+		return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 	}
 
 	// normal join, expect foreign key join
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
+
+	// create result and add multiplicities
+	auto result_tab_cols = make_unique<std::unordered_map<idx_t, unordered_set<idx_t>>>();
+	auto result_table_col_mults = make_unique<unordered_map<idx_t, double>>();
+	auto result_table_col_sels = make_unique<unordered_map<idx_t, double>>();
 
 	// Get underlying operators and initialize selectivities
 	InitColumnStats(left);
@@ -347,17 +370,17 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			right_col = info->filters[it]->right_binding.second;
 			right_pair_key = (right_table << 32) + right_col;
 		}
-		D_ASSERT(right->table_col_mults.find(right_pair_key) != right->table_col_mults.end());
-		D_ASSERT(right->table_col_sels.find(right_pair_key) != right->table_col_sels.end());
-		D_ASSERT(left->table_col_mults.find(left_pair_key) != left->table_col_mults.end());
-		D_ASSERT(left->table_col_sels.find(left_pair_key) != left->table_col_sels.end());
+		D_ASSERT(right->table_col_mults->find(right_pair_key) != right->table_col_mults->end());
+		D_ASSERT(right->table_col_sels->find(right_pair_key) != right->table_col_sels->end());
+		D_ASSERT(left->table_col_mults->find(left_pair_key) != left->table_col_mults->end());
+		D_ASSERT(left->table_col_sels->find(left_pair_key) != left->table_col_sels->end());
 
 		if (left_table == right_table) same_base_table = true;
 
-		right_mult = right->table_col_mults[right_pair_key];
-		right_sel = right->table_col_sels[right_pair_key];
-		left_mult = left->table_col_mults[left_pair_key];
-		left_sel = left->table_col_sels[left_pair_key];
+		right_mult = (*right->table_col_mults)[right_pair_key];
+		right_sel = (*right->table_col_sels)[right_pair_key];
+		left_mult = (*left->table_col_mults)[left_pair_key];
+		left_sel = (*left->table_col_sels)[left_pair_key];
 
 		if (right_mult * right_sel < cur_scale_factor) {
 			right_mult_winner = right_mult;
@@ -391,8 +414,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	// cost is expected_cardinality plus the cost of the previous plans
 	auto cost = expected_cardinality + left->cost + right->cost;
-	// create result and add multiplicities
-	auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
+
 
 	double cardinality_ratio;
 	if (right->cardinality == 0) {
@@ -405,12 +427,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	double one = 1;
 	//! 2) update result mult for right relation.
-	if (left->table_col_mults[left_pair_key] == 1) {
-		result.table_col_mults[right_pair_key] =
-		    MaxValue(one, right->table_col_mults[right_pair_key] * cardinality_ratio);
+	if ((*left->table_col_mults)[left_pair_key] == 1) {
+		(*result_table_col_mults)[right_pair_key] =
+		    MaxValue(one, (*right->table_col_mults)[right_pair_key] * cardinality_ratio);
 	} else {
-		result.table_col_mults[right_pair_key] =
-		    MaxValue(one, right->table_col_mults[right_pair_key] * left->table_col_mults[left_pair_key]);
+		(*result_table_col_mults)[right_pair_key] =
+		    MaxValue(one, (*right->table_col_mults)[right_pair_key] * (*left->table_col_mults)[left_pair_key]);
 	}
 
 	// iterate over a tables columns
@@ -420,72 +442,76 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	for(idx_t table_it = 0; table_it < right->set->count; table_it++) {
 		cur_right_table = right->set->relations[table_it];
 		//! loop to get all future joined columns that are joined under some condition
-		for (col_it = right->tab_cols[cur_right_table].begin(); col_it != right->tab_cols[cur_right_table].end(); col_it++) {
+		for (col_it = (*right->tab_cols)[cur_right_table].begin(); col_it != (*right->tab_cols)[cur_right_table].end(); col_it++) {
 			// always insert the table column entry
 			// update selectivities too
-			result.tab_cols[cur_right_table].insert(*col_it);
+			(*result_tab_cols)[cur_right_table].insert(*col_it);
 
 			auto tmp_right_pair_key = (cur_right_table << 32) + *col_it;
-			D_ASSERT(right->table_col_mults.find(tmp_right_pair_key) != right->table_col_mults.end());
-			D_ASSERT(right->table_col_sels.find(tmp_right_pair_key) != right->table_col_sels.end());
-			result.table_col_sels[tmp_right_pair_key] = right->table_col_sels[tmp_right_pair_key];
+			D_ASSERT(right->table_col_mults->find(tmp_right_pair_key) != right->table_col_mults->end());
+			D_ASSERT(right->table_col_sels->find(tmp_right_pair_key) != right->table_col_sels->end());
+			(*result_table_col_sels)[tmp_right_pair_key] = (*right->table_col_sels)[tmp_right_pair_key];
 
 			//! have already set this in step 2 for mults
 			if (cur_right_table == right_table && *col_it == right_col) continue;
-			result.table_col_mults[tmp_right_pair_key] =
-			    right->table_col_mults[tmp_right_pair_key] * left->table_col_mults[left_pair_key];
+			(*result_table_col_mults)[tmp_right_pair_key] =
+			    (*right->table_col_mults)[tmp_right_pair_key] * (*left->table_col_mults)[left_pair_key];
 		}
 	}
 
 	//! 4) update the left multiplicities of the column in the equi-join
-	result.table_col_mults[left_pair_key] = left->table_col_mults[left_pair_key] *
-	                                        right->table_col_mults[right_pair_key];
+	(*result_table_col_mults)[left_pair_key] = (*left->table_col_mults)[left_pair_key] *
+	                                        (*right->table_col_mults)[right_pair_key];
 
 	idx_t cur_left_table;
 	//! 5) update all other left multiplicities of columns in the joined table(s)
 	for(idx_t table_it = 0; table_it < left->set->count; table_it++) {
 		cur_left_table = left->set->relations[table_it];
-		for (col_it = left->tab_cols[cur_left_table].begin(); col_it != left->tab_cols[cur_left_table].end(); col_it++) {
+		for (col_it = (*left->tab_cols)[cur_left_table].begin(); col_it != (*left->tab_cols)[cur_left_table].end(); col_it++) {
 
-			result.tab_cols[cur_left_table].insert(*col_it);
+			(*result_tab_cols)[cur_left_table].insert(*col_it);
 
 			auto tmp_left_pair_key = (cur_left_table << 32) + *col_it;
-			D_ASSERT(left->table_col_mults.find(tmp_left_pair_key) != left->table_col_mults.end());
-			D_ASSERT(left->table_col_sels.find(tmp_left_pair_key) != left->table_col_sels.end());
-			result.table_col_sels[tmp_left_pair_key] = left->table_col_sels[tmp_left_pair_key] * right_sel;
-			D_ASSERT(result.table_col_sels[tmp_left_pair_key] > 0 && result.table_col_sels[tmp_left_pair_key] <= 1);
+			D_ASSERT(left->table_col_mults->find(tmp_left_pair_key) != left->table_col_mults->end());
+			D_ASSERT(left->table_col_sels->find(tmp_left_pair_key) != left->table_col_sels->end());
+			(*result_table_col_sels)[tmp_left_pair_key] = (*left->table_col_sels)[tmp_left_pair_key] * right_sel;
+			D_ASSERT((*result_table_col_sels)[tmp_left_pair_key] > 0 && (*result_table_col_sels)[tmp_left_pair_key] <= 1);
 
 			//! already set the mult in step 4
 			if (cur_left_table == left_table && *col_it == left_col) continue;
-			result.table_col_mults[tmp_left_pair_key] =
-			    left->table_col_mults[tmp_left_pair_key] * right->table_col_mults[right_pair_key];
+			(*result_table_col_mults)[tmp_left_pair_key] =
+			    (*left->table_col_mults)[tmp_left_pair_key] * (*right->table_col_mults)[right_pair_key];
 		}
 	}
 
 	idx_t rights_column_count = 0;
 	unordered_map<idx_t, unordered_set<idx_t>>::iterator tab_col_iterator;
-	for(tab_col_iterator = right->tab_cols.begin(); tab_col_iterator != right->tab_cols.end(); tab_col_iterator++) {
+	for(tab_col_iterator = right->tab_cols->begin(); tab_col_iterator != right->tab_cols->end(); tab_col_iterator++) {
 		rights_column_count += tab_col_iterator->second.size();
 	}
-	D_ASSERT(rights_column_count == right->table_col_mults.size());
-	D_ASSERT(rights_column_count == right->table_col_sels.size());
-	D_ASSERT(right->table_col_mults.size() == right->table_col_sels.size());
+	D_ASSERT(rights_column_count == right->table_col_mults->size());
+	D_ASSERT(rights_column_count == right->table_col_sels->size());
+	D_ASSERT(right->table_col_mults->size() == right->table_col_sels->size());
 
 
 	idx_t lefts_column_count = 0;
-	for(tab_col_iterator = left->tab_cols.begin(); tab_col_iterator != left->tab_cols.end(); tab_col_iterator++) {
+	for(tab_col_iterator = left->tab_cols->begin(); tab_col_iterator != left->tab_cols->end(); tab_col_iterator++) {
 		lefts_column_count += tab_col_iterator->second.size();
 	}
-	D_ASSERT(lefts_column_count == left->table_col_mults.size());
-	D_ASSERT(lefts_column_count == left->table_col_sels.size());
-	D_ASSERT(left->table_col_mults.size() == left->table_col_sels.size());
+	D_ASSERT(lefts_column_count == left->table_col_mults->size());
+	D_ASSERT(lefts_column_count == left->table_col_sels->size());
+	D_ASSERT(left->table_col_mults->size() == left->table_col_sels->size());
 
-	D_ASSERT(result.table_col_mults.size() == (right->table_col_mults.size() + left->table_col_mults.size()));
-	D_ASSERT(result.table_col_sels.size() == (right->table_col_sels.size() + left->table_col_sels.size()));
+	D_ASSERT(result_table_col_mults->size() == (right->table_col_mults->size() + left->table_col_mults->size()));
+	D_ASSERT(result_table_col_sels->size() == (right->table_col_sels->size() + left->table_col_sels->size()));
 
 	// init stats is true, this is an intermediate node now.
-	result.init_stats = true;
-	return make_unique<JoinNode>(result);
+	//	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+	result->tab_cols = move(result_tab_cols);
+	result->table_col_mults = move(result_table_col_mults);
+	result->table_col_sels = move(result_table_col_sels);
+	return result;
 }
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
@@ -664,6 +690,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					auto node = EmitPair(left, right, connection);
 					if (!best_connection || node->cost < best_connection->cost) {
 						// best pair found so far
+						best_connection = node;
 						best_connection = node;
 						best_left = i;
 						best_right = j;
