@@ -312,15 +312,18 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t right_col;
 	idx_t right_pair_key;
 
-	idx_t right_sel = 1;
-	idx_t right_mult = 1;
-	idx_t left_sel = 1;
-	idx_t left_mult = 1;
+	double right_sel = 1;
+	double right_mult = 1;
+	double left_sel = 1;
+	double left_mult = 1;
 
 	bool same_base_table = false;
-	if (info->filters.size() > 1) {
-		throw NotImplementedException("there is more than one filter, watch out buddy");
-	}
+
+	double cur_scale_factor = NumericLimits<double>::Maximum();
+	double right_mult_winner = 0;
+	double right_sel_winner = 0;
+	double left_mult_winner = 0;
+	double left_sel_winner = 0;
 
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -357,26 +360,42 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		left_mult = left->table_col_mults[left_pair_key];
 		left_sel = left->table_col_sels[left_pair_key];
 
+		if (right_mult * right_sel < cur_scale_factor) {
+			right_mult_winner = right_mult;
+			right_sel_winner = right_sel;
+			left_mult_winner = left_mult;
+			left_sel_winner = left_sel;
+		}
+
 		D_ASSERT(left_mult >= 1);
 		D_ASSERT(right_mult >= 1);
-		D_ASSERT(left_sel <= 1);
-		D_ASSERT(right_sel <= 1);
+		D_ASSERT(left_sel <= 1 && left_sel > 0);
+		D_ASSERT(right_sel <= 1 && right_sel > 0);
 	}
+
+	//! switch the variables around again.
+	right_mult = right_mult_winner;
+	right_sel = right_sel_winner;
+	left_mult = left_mult_winner;
+	left_sel = left_sel_winner;
 
 	//! 1) new cardinality estimation
 	if (same_base_table) {
 		// the base tables are the same, assume cross product cardinality.
 		expected_cardinality = (left->cardinality * right->cardinality);
 	} else {
+		D_ASSERT(right_sel > 0 && right_sel <= 1);
+		D_ASSERT(right_mult >= 1);
 		expected_cardinality = left->cardinality * right_sel * right_mult;
 	}
+
 
 	// cost is expected_cardinality plus the cost of the previous plans
 	auto cost = expected_cardinality + left->cost + right->cost;
 	// create result and add multiplicities
 	auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
 
-	idx_t cardinality_ratio;
+	double cardinality_ratio;
 	if (right->cardinality == 0) {
 		cardinality_ratio = 1;
 	} else if (same_base_table) {
@@ -385,7 +404,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		cardinality_ratio = (double)left->cardinality / (double)right->cardinality;
 	}
 
-	idx_t one = 1;
+	double one = 1;
 	//! 2) update result mult for right relation.
 	if (left->table_col_mults[left_pair_key] == 1) {
 		result.table_col_mults[right_pair_key] =
@@ -394,7 +413,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		result.table_col_mults[right_pair_key] =
 		    MaxValue(one, right->table_col_mults[right_pair_key] * left->table_col_mults[left_pair_key]);
 	}
-
 
 	// iterate over a tables columns
 	unordered_set<idx_t>::iterator col_it;
@@ -436,9 +454,10 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			D_ASSERT(left->table_col_mults.find(tmp_left_pair_key) != left->table_col_mults.end());
 			D_ASSERT(left->table_col_sels.find(tmp_left_pair_key) != left->table_col_sels.end());
 			result.table_col_sels[tmp_left_pair_key] = left->table_col_sels[tmp_left_pair_key] * right_sel;
+			D_ASSERT(result.table_col_sels[tmp_left_pair_key] > 0 && result.table_col_sels[tmp_left_pair_key] <= 1);
 
 			//! already set the mult in step 4
-			if (*col_it == left_col) continue;
+			if (cur_left_table == left_table && *col_it == left_col) continue;
 			result.table_col_mults[tmp_left_pair_key] =
 			    left->table_col_mults[tmp_left_pair_key] * right->table_col_mults[right_pair_key];
 		}
@@ -453,6 +472,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	D_ASSERT(rights_column_count == right->table_col_sels.size());
 	D_ASSERT(right->table_col_mults.size() == right->table_col_sels.size());
 
+
 	idx_t lefts_column_count = 0;
 	for(tab_col_iterator = left->tab_cols.begin(); tab_col_iterator != left->tab_cols.end(); tab_col_iterator++) {
 		lefts_column_count += tab_col_iterator->second.size();
@@ -460,6 +480,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	D_ASSERT(lefts_column_count == left->table_col_mults.size());
 	D_ASSERT(lefts_column_count == left->table_col_sels.size());
 	D_ASSERT(left->table_col_mults.size() == left->table_col_sels.size());
+
+	D_ASSERT(result.table_col_mults.size() == (right->table_col_mults.size() + left->table_col_mults.size()));
+	D_ASSERT(result.table_col_sels.size() == (right->table_col_sels.size() + left->table_col_sels.size()));
 
 	// init stats is true, this is an intermediate node now.
 	result.init_stats = true;

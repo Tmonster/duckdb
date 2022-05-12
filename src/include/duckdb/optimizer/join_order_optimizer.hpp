@@ -43,8 +43,8 @@ public:
 		// you need to use some bit manipulation to get he numbers
 		unordered_map<idx_t, unordered_set<idx_t>> tab_cols;
 
-		unordered_map<idx_t, idx_t> table_col_mults;
-		unordered_map<idx_t, idx_t> table_col_sels;
+		unordered_map<idx_t, double> table_col_mults;
+		unordered_map<idx_t, double> table_col_sels;
 
 
 
@@ -53,7 +53,7 @@ public:
 		//! set cost to 0 because leaf nodes/base table already exist
 		//! cost will be the cost to *produce* an intermediate table
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr),
+		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr),
 		      init_stats(false), created_as_intermediate(false) {
 		}
 		//! Create an intermediate node in the join tree
