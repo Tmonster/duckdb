@@ -41,10 +41,10 @@ public:
 		// first idx is a 32 bits for table id
 		//                32 bits for column id
 		// you need to use some bit manipulation to get he numbers
-		unordered_map<idx_t, unordered_set<idx_t>> tab_cols;
+		unique_ptr<unordered_map<idx_t, unordered_set<idx_t>>> tab_cols;
 
-		unordered_map<idx_t, double> table_col_mults;
-		unordered_map<idx_t, double> table_col_sels;
+		unique_ptr<unordered_map<idx_t, double>> table_col_mults;
+		unique_ptr<unordered_map<idx_t, double>> table_col_sels;
 
 
 
@@ -59,7 +59,8 @@ public:
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
 		         idx_t cost)
-		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false), created_as_intermediate(true) {
+		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
+		      created_as_intermediate(true) {
 		}
 	};
 
