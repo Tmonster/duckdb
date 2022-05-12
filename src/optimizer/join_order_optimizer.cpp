@@ -36,6 +36,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+		relation_to_columns[relation_mapping[colref.binding.table_index]].insert(colref.binding.column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -54,7 +55,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-void JoinOrderOptimizer::GetColumnBindings(Expression &expression, unordered_set<pair<idx_t, idx_t>> *left_bindings, unordered_set<pair<idx_t, idx_t>> *right_bindings) {
+void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding) {
 	if (expression.type == ExpressionType::COMPARE_EQUAL) {
 		auto &colref = (BoundComparisonExpression &)expression;
 		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF && colref.left->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -62,8 +63,8 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, unordered_set
 			auto &left = (BoundColumnRefExpression &)*colref.left;
 			D_ASSERT(relation_mapping.find(left.binding.table_index) != relation_mapping.end());
 			D_ASSERT(relation_mapping.find(right.binding.table_index) != relation_mapping.end());
-			left_bindings->insert(std::make_pair(relation_mapping[left.binding.table_index], left.binding.column_index));
-			right_bindings->insert(std::make_pair(relation_mapping[right.binding.table_index], right.binding.column_index));
+			*left_binding = std::make_pair(relation_mapping[left.binding.table_index], left.binding.column_index);
+			*right_binding = std::make_pair(relation_mapping[right.binding.table_index], right.binding.column_index);
 		}
 	}
 }
@@ -210,6 +211,58 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
+
+void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
+	if (node->init_stats) {
+		for (idx_t rel_it = 0; rel_it < node->set->count; rel_it++) {
+			if (node->tab_cols.find(node->set->relations[rel_it]) == node->tab_cols.end()) {
+				std::cout << "gotta break here" << std::endl;
+			}
+		}
+		return;
+	}
+	JoinRelationSet *join_relations = node->set;
+	idx_t relation_id;
+	bool has_filter = false;
+	for (idx_t it = 0; it < join_relations->count; it++) {
+		relation_id = join_relations->relations[it];
+
+		unordered_map<idx_t, idx_t>::iterator relation_map_it;
+//		idx_t table_index;
+		bool found_table_index = false;
+		for (relation_map_it = relation_mapping.begin(); relation_map_it != relation_mapping.end(); relation_map_it++) {
+			if (relation_map_it->second == relation_id) {
+				//					table_index = relation_map_it->first;
+				found_table_index = true;
+			}
+		}
+		D_ASSERT(found_table_index);
+
+		if (relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto tmp = relations.at(relation_id)->op;
+			auto &get = (LogicalGet &)*tmp;
+			auto catalog_table = get.GetTable();
+			// can use catalog_table to get table stats and also update the mult for each column
+			// we might be querying directly on files, so no catalog entry in that case
+			if (!get.table_filters.filters.empty()) {
+				has_filter = true;
+			}
+		}
+
+		unordered_set<idx_t>::iterator ite;
+		for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
+			// this is where hyperloglog stats can be inserted
+			node->tab_cols[relation_id].insert(*ite);
+			auto index = (relation_id << 32) + *ite;
+			node->table_col_mults[index] = 1;
+			if (has_filter) node->table_col_sels[index] = default_selectivity;
+			else node->table_col_sels[index] = 1;
+		}
+	}
+	node->init_stats = true;
+}
+
+
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
                                                         JoinNode *right, bool switched) {
@@ -231,15 +284,16 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		auto cost = expected_cardinality + left->cost + right->cost;
 
 		auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
+		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
-		for (idx_t i = 0; i < left->set->count; i++) {
-			result.multiplicities[left->set->relations[i]] =
-			    left->multiplicities[left->set->relations[i]] * right->cardinality;
-		}
-		for (idx_t i = 0; i < right->set->count; i++) {
-			result.multiplicities[right->set->relations[i]] =
-			    right->multiplicities[right->set->relations[i]] * left->cardinality;
-		}
+//		for (idx_t i = 0; i < left->set->count; i++) {
+//			result.multiplicities[left->set->relations[i]] =
+//			    left->multiplicities[left->set->relations[i]] * right->cardinality;
+//		}
+//		for (idx_t i = 0; i < right->set->count; i++) {
+//			result.multiplicities[right->set->relations[i]] =
+//			    right->multiplicities[right->set->relations[i]] * left->cardinality;
+//		}
 		return make_unique<JoinNode>(result);
 	}
 
@@ -247,200 +301,74 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
 
-	std::unordered_map<idx_t, idx_t> relation_2_base_table;
-
 	// Get underlying operators and initialize selectivities
-	idx_t left_relation_id;
-	for (idx_t it = 0; it < left_join_relations->count; it++) {
-		left_relation_id = left_join_relations->relations[it];
-		if (relations.at(left_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET &&
-		    left->selectivities[left_relation_id] == 1) {
-			auto tmp = relations.at(left_relation_id)->op;
-			auto &get = (LogicalGet &)*tmp;
-			auto catalog_table = get.GetTable();
-			// we might be querying directly on files, so no catalog entry in that case
-			if (catalog_table)
-				relation_2_base_table[left_relation_id] = catalog_table->oid;
-			if (!get.table_filters.filters.empty()) {
-				left->selectivities[left_relation_id] = default_selectivity;
-			}
-			vector<ColumnDefinition>::iterator it;
-			if (catalog_table) {
-				for (it = catalog_table->columns.begin(); it < catalog_table->columns.end(); it++) {
-//					left->tab_col_sel[left_relation_id][it->oid] = 1;
-//					left->tab_col_mult[left_relation_id][it->oid] = 1;
-				}
-			}
-		}
+	InitColumnStats(left);
+	InitColumnStats(right);
+
+	idx_t left_table;
+	idx_t left_col;
+	idx_t left_pair_key;
+	idx_t right_table;
+	idx_t right_col;
+	idx_t right_pair_key;
+
+	idx_t right_sel = 1;
+	idx_t right_mult = 1;
+	idx_t left_sel = 1;
+	idx_t left_mult = 1;
+
+	bool same_base_table = false;
+	if (info->filters.size() > 1) {
+		throw NotImplementedException("there is more than one filter, watch out buddy");
 	}
-
-	idx_t right_relation_id;
-	for (idx_t it = 0; it < right_join_relations->count; it++) {
-		right_relation_id = right_join_relations->relations[it];
-		if (relations.at(right_relation_id)->op->type == LogicalOperatorType::LOGICAL_GET &&
-		    right->selectivities[right_relation_id] == 1) {
-			auto tmp = relations.at(right_relation_id)->op;
-			auto &get = (LogicalGet &)*tmp;
-			auto catalog_table = get.GetTable();
-			// we might be querying directly on files, so no catalog entry in that case
-			if (catalog_table) {
-				relation_2_base_table[right_relation_id] = catalog_table->oid;
-			}
-			if (!get.table_filters.filters.empty()) {
-				right->selectivities[right_relation_id] = default_selectivity;
-			}
-			vector<ColumnDefinition>::iterator it;
-			if (catalog_table) {
-				for (it = catalog_table->columns.begin(); it < catalog_table->columns.end(); it++) {
-					//				left->tab_col_sel[right_relation_id][it->oid] = 1;
-					//				left->tab_col_mult[right_relation_id][it->oid] = 1;
-				}
-			}
-		}
-	}
-
-	idx_t right_multiplicity = NumericLimits<idx_t>::Maximum();
-	idx_t right_selectivity = NumericLimits<idx_t>::Maximum();
-
-	idx_t left_multiplicity = NumericLimits<idx_t>::Maximum();
-	idx_t left_selectivity = NumericLimits<idx_t>::Maximum();
-	// consider the min values for multiplicity and selectivity as usually join conditions and values.
-
-	idx_t min_left_mult = 1, min_right_mult = 1;
-	idx_t min_left_sel = 1, min_right_sel = 1;
-	idx_t min_cardinality_multiplier = NumericLimits<idx_t>::Maximum();
-	bool min_relations_set = false;
-	idx_t relation_id_min_left = 0, relation_id_min_right = 0;
 
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
-			auto right_multiplicities = right->multiplicities;
-			auto right_selectivities = right->selectivities;
-			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
-				right_relation_id = info->filters[it]->left_set->relations[it3];
-				right_multiplicity = MinValue(right_multiplicities[right_relation_id], right_multiplicity);
-				right_selectivity = MinValue(right_selectivities[right_relation_id], right_selectivity);
-			}
-			D_ASSERT(info->filters[it]->right_set->count > 0);
-			auto left_multiplicities = left->multiplicities;
-			auto left_selectivities = left->selectivities;
-			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
-				left_relation_id = info->filters[it]->right_set->relations[it3];
-				left_multiplicity = MinValue(left_multiplicities[left_relation_id], left_multiplicity);
-				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
 
-				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
-					min_left_mult = left_multiplicity;
-					min_left_sel = left_selectivity;
-					min_right_mult = right_multiplicity;
-					min_right_sel = right_selectivity;
-					relation_id_min_left = left_relation_id;
-					relation_id_min_right = right_relation_id;
-					min_cardinality_multiplier = min_right_sel * min_right_mult;
-					min_relations_set = true;
-				}
-				if (!min_relations_set) {
-					relation_id_min_right = right_relation_id;
-					relation_id_min_left = left_relation_id;
-					min_cardinality_multiplier = right_multiplicity * right_selectivity;
-					min_relations_set = true;
-				}
-			}
+			right_table = info->filters[it]->left_binding.first;
+			right_col = info->filters[it]->left_binding.second;
+			right_pair_key = (right_table << 32) + right_col;
+
+			left_table = info->filters[it]->right_binding.first;
+			left_col = info->filters[it]->right_binding.second;
+			left_pair_key = (left_table << 32) + left_col;
 		}
 		// currently finding in multiplicities because the syntax is easier for me.
 		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
 		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
-			D_ASSERT(info->filters[it]->right_set->count > 0);
-			for (idx_t it3 = 0; it3 < info->filters[it]->right_set->count; it3++) {
-				right_relation_id = info->filters[it]->right_set->relations[it3];
-				right_multiplicity = MinValue(right->multiplicities[right_relation_id], right_multiplicity);
-				right_selectivity = MinValue(right->selectivities[right_relation_id], right_selectivity);
-			}
-			D_ASSERT(info->filters[it]->left_set->count > 0);
-			auto left_multiplicities = left->multiplicities;
-			auto left_selectivities = left->selectivities;
-			for (idx_t it3 = 0; it3 < info->filters[it]->left_set->count; it3++) {
-				left_relation_id = info->filters[it]->left_set->relations[it3];
-				left_multiplicity = MinValue(left_multiplicities[left_relation_id], left_multiplicity);
-				left_selectivity = MinValue(left_selectivities[left_relation_id], left_selectivity);
+			left_table = info->filters[it]->left_binding.first;
+			left_col = info->filters[it]->left_binding.second;
+			left_pair_key = (left_table << 32) + left_col;
 
-				if (right_multiplicity * right_selectivity <= min_cardinality_multiplier) {
-					min_left_mult = left_multiplicity;
-					min_left_sel = left_selectivity;
-					min_right_mult = right_multiplicity;
-					min_right_sel = right_selectivity;
-					relation_id_min_left = left_relation_id;
-					relation_id_min_right = right_relation_id;
-					min_cardinality_multiplier = min_right_mult * min_right_sel;
-					min_relations_set = true;
-				}
-				if (!min_relations_set) {
-					relation_id_min_right = right_relation_id;
-					relation_id_min_left = left_relation_id;
-					min_cardinality_multiplier = right_multiplicity * right_selectivity;
-					min_relations_set = true;
-				}
-			}
+			right_table = info->filters[it]->right_binding.first;
+			right_col = info->filters[it]->right_binding.second;
+			right_pair_key = (right_table << 32) + right_col;
 		}
-	}
+		D_ASSERT(right->table_col_mults.find(right_pair_key) != right->table_col_mults.end());
+		D_ASSERT(right->table_col_sels.find(right_pair_key) != right->table_col_sels.end());
+		D_ASSERT(left->table_col_mults.find(left_pair_key) != left->table_col_mults.end());
+		D_ASSERT(left->table_col_sels.find(left_pair_key) != left->table_col_sels.end());
 
-#ifdef DEBUG
-	bool left_found = false;
-	for (idx_t it = 0; it < left_join_relations->count; it++) {
-		if (left_join_relations->relations[it] == relation_id_min_left) {
-			left_found = true;
-			break;
-		}
-	}
-	D_ASSERT(left_found);
-	bool right_found = false;
-	for (idx_t it = 0; it < right_join_relations->count; it++) {
-		if (right_join_relations->relations[it] == relation_id_min_right) {
-			right_found = true;
-			break;
-		}
-	}
-	D_ASSERT(right_found);
-#endif
+		if (left_table == right_table) same_base_table = true;
 
-	// this technically should never happen as the right and left multiplicities should decrease
-	// when iterating through the filters.
-	if (left_multiplicity == NumericLimits<idx_t>::Maximum())
-		left_multiplicity = 1;
-	if (right_multiplicity == NumericLimits<idx_t>::Maximum())
-		right_multiplicity = 1;
-	if (left_selectivity == NumericLimits<idx_t>::Maximum())
-		left_selectivity = 1;
-	if (right_selectivity == NumericLimits<idx_t>::Maximum())
-		right_multiplicity = 1;
-	if (min_right_mult == NumericLimits<idx_t>::Maximum()) {
-		min_right_mult = 1;
-	}
-	if (min_right_sel == NumericLimits<idx_t>::Maximum())
-		min_right_sel = 1;
-	if (min_left_mult == NumericLimits<idx_t>::Maximum())
-		min_left_mult = 1;
-	if (min_left_sel == NumericLimits<idx_t>::Maximum())
-		min_left_sel = 1;
+		right_mult = right->table_col_mults[right_pair_key];
+		right_sel = right->table_col_sels[right_pair_key];
+		left_mult = left->table_col_mults[left_pair_key];
+		left_sel = left->table_col_sels[left_pair_key];
 
-	// Left cardinality is always the largest. Then take max multiplicity of left and right.
-	bool same_base_table = false;
-	if (relation_2_base_table.find(relation_id_min_left) != relation_2_base_table.end() &&
-	    relation_2_base_table.find(relation_id_min_right) != relation_2_base_table.end()) {
-		same_base_table = (relation_2_base_table[relation_id_min_left] == relation_2_base_table[relation_id_min_right]);
+		D_ASSERT(left_mult >= 1);
+		D_ASSERT(right_mult >= 1);
+		D_ASSERT(left_sel <= 1);
+		D_ASSERT(right_sel <= 1);
 	}
-
-//	info->filters[0]->filter_index
 
 	//! 1) new cardinality estimation
 	if (same_base_table) {
 		// the base tables are the same, assume cross product cardinality.
 		expected_cardinality = (left->cardinality * right->cardinality);
-		D_ASSERT(expected_cardinality != left->cardinality);
-		D_ASSERT(expected_cardinality != right->cardinality);
 	} else {
-		expected_cardinality = left->cardinality * min_right_sel * min_right_mult;
+		expected_cardinality = left->cardinality * right_sel * right_mult;
 	}
 
 	// cost is expected_cardinality plus the cost of the previous plans
@@ -454,103 +382,87 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	} else if (same_base_table) {
 		cardinality_ratio = right->cardinality;
 	} else {
-		cardinality_ratio = left->cardinality / right->cardinality;
+		cardinality_ratio = (double)left->cardinality / (double)right->cardinality;
 	}
 
 	idx_t one = 1;
 	//! 2) update result mult for right relation.
-	if (left->multiplicities[relation_id_min_left] == 1) {
-		result.multiplicities[relation_id_min_right] =
-		    MaxValue(one, right->multiplicities[relation_id_min_right] * cardinality_ratio);
+	if (left->table_col_mults[left_pair_key] == 1) {
+		result.table_col_mults[right_pair_key] =
+		    MaxValue(one, right->table_col_mults[right_pair_key] * cardinality_ratio);
 	} else {
-		result.multiplicities[relation_id_min_right] =
-		    MaxValue(one, right->multiplicities[relation_id_min_right] * left->multiplicities[relation_id_min_left]);
+		result.table_col_mults[right_pair_key] =
+		    MaxValue(one, right->table_col_mults[right_pair_key] * left->table_col_mults[left_pair_key]);
 	}
 
+
+	// iterate over a tables columns
+	unordered_set<idx_t>::iterator col_it;
+	idx_t cur_right_table;
 	//! 3) update the rest of the right relations
-	for (idx_t i = 0; i < right->set->count; i++) {
-		result.selectivities[right->set->relations[i]] = right->selectivities[right->set->relations[i]];
-		if (left->multiplicities[relation_id_min_left] == 1) {
-			result.multiplicities[right->set->relations[i]] = cardinality_ratio;
-		} else {
-			result.multiplicities[right->set->relations[i]] =
-			    min_left_mult * right->multiplicities[right->set->relations[i]];
+	for(idx_t table_it = 0; table_it < right->set->count; table_it++) {
+		cur_right_table = right->set->relations[table_it];
+		//! loop to get all future joined columns that are joined under some condition
+		for (col_it = right->tab_cols[cur_right_table].begin(); col_it != right->tab_cols[cur_right_table].end(); col_it++) {
+			// always insert the table column entry
+			// update selectivities too
+			result.tab_cols[cur_right_table].insert(*col_it);
+
+			auto tmp_right_pair_key = (cur_right_table << 32) + *col_it;
+			D_ASSERT(right->table_col_mults.find(tmp_right_pair_key) != right->table_col_mults.end());
+			D_ASSERT(right->table_col_sels.find(tmp_right_pair_key) != right->table_col_sels.end());
+			result.table_col_sels[tmp_right_pair_key] = right->table_col_sels[tmp_right_pair_key];
+
+			//! have already set this in step 2 for mults
+			if (cur_right_table == right_table && *col_it == right_col) continue;
+			result.table_col_mults[tmp_right_pair_key] =
+			    right->table_col_mults[tmp_right_pair_key] * left->table_col_mults[left_pair_key];
 		}
 	}
 
-	//! 4) update the left multiplicities
-	result.multiplicities[relation_id_min_left] = result.multiplicities[relation_id_min_right];
+	//! 4) update the left multiplicities of the column in the equi-join
+	result.table_col_mults[left_pair_key] = left->table_col_mults[left_pair_key] *
+	                                        right->table_col_mults[right_pair_key];
 
-	//! 5) update on left multiplicities.
-	for (idx_t i = 0; i < left->set->count; i++) {
-		result.selectivities[left->set->relations[i]] = left->selectivities[left->set->relations[i]] * min_right_sel;
-		if (left->set->relations[i] == relation_id_min_left) {
-			continue;
+	idx_t cur_left_table;
+	//! 5) update all other left multiplicities of columns in the joined table(s)
+	for(idx_t table_it = 0; table_it < left->set->count; table_it++) {
+		cur_left_table = left->set->relations[table_it];
+		for (col_it = left->tab_cols[cur_left_table].begin(); col_it != left->tab_cols[cur_left_table].end(); col_it++) {
+
+			result.tab_cols[cur_left_table].insert(*col_it);
+
+			auto tmp_left_pair_key = (cur_left_table << 32) + *col_it;
+			D_ASSERT(left->table_col_mults.find(tmp_left_pair_key) != left->table_col_mults.end());
+			D_ASSERT(left->table_col_sels.find(tmp_left_pair_key) != left->table_col_sels.end());
+			result.table_col_sels[tmp_left_pair_key] = left->table_col_sels[tmp_left_pair_key] * right_sel;
+
+			//! already set the mult in step 4
+			if (*col_it == left_col) continue;
+			result.table_col_mults[tmp_left_pair_key] =
+			    left->table_col_mults[tmp_left_pair_key] * right->table_col_mults[right_pair_key];
 		}
-		result.multiplicities[left->set->relations[i]] = min_right_mult * left->multiplicities[left->set->relations[i]];
 	}
 
+	idx_t rights_column_count = 0;
+	unordered_map<idx_t, unordered_set<idx_t>>::iterator tab_col_iterator;
+	for(tab_col_iterator = right->tab_cols.begin(); tab_col_iterator != right->tab_cols.end(); tab_col_iterator++) {
+		rights_column_count += tab_col_iterator->second.size();
+	}
+	D_ASSERT(rights_column_count == right->table_col_mults.size());
+	D_ASSERT(rights_column_count == right->table_col_sels.size());
+	D_ASSERT(right->table_col_mults.size() == right->table_col_sels.size());
 
-#ifdef DEBUG
-	for (idx_t it = 0; it < right_join_relations->count; it++) {
-		if (result.multiplicities.find(right_join_relations->relations[it]) == result.multiplicities.end()) {
-			std::cout << "uh oh problem here" << std::endl;
-		}
-		if (result.selectivities.find(right_join_relations->relations[it]) == result.selectivities.end()) {
-			std::cout << "uh oh problem here" << std::endl;
-		}
+	idx_t lefts_column_count = 0;
+	for(tab_col_iterator = left->tab_cols.begin(); tab_col_iterator != left->tab_cols.end(); tab_col_iterator++) {
+		lefts_column_count += tab_col_iterator->second.size();
 	}
-	for (idx_t it = 0; it < left_join_relations->count; it++) {
-		if (result.multiplicities.find(left_join_relations->relations[it]) == result.multiplicities.end()) {
-			std::cout << "uh oh problem here" << std::endl;
-		}
-		if (result.selectivities.find(left_join_relations->relations[it]) == result.selectivities.end()) {
-			std::cout << "uh oh problem here" << std::endl;
-		}
-	}
-	std::unordered_map<idx_t, idx_t>::iterator it;
-	bool found = false;
-	for (it = result.multiplicities.begin(); it != result.multiplicities.end(); it++) {
-		found = false;
-		for (idx_t j = 0; j < right_join_relations->count; j++) {
-			if (it->first == right_join_relations->relations[j]) {
-				found = true;
-				break;
-			}
-		}
-		if (found)
-			continue;
-		for (idx_t j = 0; j < left_join_relations->count; j++) {
-			if (it->first == left_join_relations->relations[j]) {
-				found = true;
-				break;
-			}
-		}
-	}
-	D_ASSERT(found);
-	found = false;
-	for (it = result.selectivities.begin(); it != result.selectivities.end(); it++) {
-		found = false;
-		for (idx_t j = 0; j < right_join_relations->count; j++) {
-			if (it->first == right_join_relations->relations[j]) {
-				found = true;
-				break;
-			}
-		}
-		if (found)
-			continue;
-		for (idx_t j = 0; j < left_join_relations->count; j++) {
-			if (it->first == left_join_relations->relations[j]) {
-				found = true;
-				break;
-			}
-		}
-	}
-	D_ASSERT(found);
-	D_ASSERT(result.multiplicities.size() == (left_join_relations->count + right_join_relations->count));
-	D_ASSERT(result.selectivities.size() == (left_join_relations->count + right_join_relations->count));
-#endif
+	D_ASSERT(lefts_column_count == left->table_col_mults.size());
+	D_ASSERT(lefts_column_count == left->table_col_sels.size());
+	D_ASSERT(left->table_col_mults.size() == left->table_col_sels.size());
 
+	// init stats is true, this is an intermediate node now.
+	result.init_stats = true;
 	return make_unique<JoinNode>(result);
 }
 
@@ -1063,7 +975,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
-		GetColumnBindings(*filter, &filter_info->left_bindings, &filter_info->right_bindings);
+		GetColumnBindings(*filter, &filter_info->left_binding, &filter_info->right_binding);
 		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
