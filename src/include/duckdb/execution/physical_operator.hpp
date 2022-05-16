@@ -74,8 +74,9 @@ public:
 class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
-	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
+	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality){
 	}
+
 	virtual ~PhysicalOperator() {
 	}
 
@@ -87,6 +88,11 @@ public:
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
+	//! the sel and mults of the joins conditions
+	double left_col_sel;
+	double left_col_mult;
+	double right_col_sel;
+	double right_col_mult;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator

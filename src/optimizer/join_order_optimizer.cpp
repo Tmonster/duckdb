@@ -210,11 +210,26 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
+//auto key_spies = unordered_set<idx_t>();
+
+void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_to_table_name) {
+	std::string res = "";
+	unordered_map<idx_t, std::string>::iterator it;
+	for (it =relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
+		res += "{ " + std::to_string(it->first) + ": " + it->second + "}," + "\n";
+	}
+	res += "-----------\n";
+	std::cout << res << std::endl;
+}
 
 void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 	if (node->init_stats) {
 		return;
 	}
+	node->right_col_sel = 1;
+	node->right_col_mult = 1;
+	node->left_col_sel = 1;
+	node->left_col_mult = 1;
 	JoinRelationSet *join_relations = node->set;
 	idx_t relation_id;
 	bool has_filter = false;
@@ -231,27 +246,34 @@ void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 			}
 		}
 		D_ASSERT(found_table_index);
-		auto key_spies = vector<idx_t>();
+
 		if (relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = relations.at(relation_id)->op;
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
+			relation_to_table_name[relation_id] = catalog_table->name;
 			// can use catalog_table to get table stats and also update the mult for each column
 			// we might be querying directly on files, so no catalog entry in that case
-			std::string look_for_me = "n_nationkey";
+			std::vector<const char*> look_for_me = {"r_regionkey", "o_orderdate", "r_name", "n_regionkey", "n_nationkey", "l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"};
 			unordered_set<idx_t>::iterator rc_it;
 			std::vector<duckdb::ColumnDefinition>::iterator co_it;
 			int col_num;
-			for(rc_it = relation_to_columns[relation_id].begin(); rc_it != relation_to_columns[relation_id].end(); rc_it++) {
-				col_num = 0;
-				for (co_it = catalog_table->columns.begin(); co_it != catalog_table->columns.end(); co_it++) {
-					if (look_for_me.compare(co_it->name) == 0) {
-						idx_t tmp_key = (relation_id << 32) + col_num;
-						key_spies.push_back(tmp_key);
-					}
-					col_num+=1;
-				}
-			}
+//			for(rc_it = relation_to_columns[relation_id].begin(); rc_it != relation_to_columns[relation_id].end(); rc_it++) {
+//				col_num = 0;
+//				for (co_it = catalog_table->columns.begin(); co_it != catalog_table->columns.end(); co_it++) {
+//					for (idx_t m = 0; m < 5; m++) {
+//						const char *watever = reinterpret_cast<const char *>(&(co_it->name));
+//						if (std::strcmp(look_for_me[m], watever) == 0) {
+////							if (!get.table_filters.filters.empty()) {
+////								std::cout << "column " << co_it->name << " has a filter"<< std::endl;
+////							}
+//							idx_t tmp_key = (relation_id << 32) + col_num;
+////							key_spies.insert(tmp_key);
+//						}
+//						col_num += 1;
+//					}
+//				}
+//			}
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
 			}
@@ -277,6 +299,64 @@ void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 		}
 	}
 	node->init_stats = true;
+}
+
+bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set) {
+	for (idx_t it = 0; it < relation_set->count; it++) {
+		if (o_set.find(relation_set->relations[it]) == o_set.end()) {
+			return false;
+		}
+	}
+	return relation_set->count == o_set.size();
+}
+
+bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left, unordered_set<idx_t> desired_right) {
+	bool left_is_left =  desired_relation_set(left, desired_left) && desired_relation_set(right, desired_right);
+	bool right_is_left = desired_relation_set(right, desired_left) && desired_relation_set(left, desired_right);
+	return left_is_left || right_is_left;
+
+}
+
+void PrintNodeSelMulStats(JoinNode *node) {
+	if (!node) return;
+	unordered_map<idx_t, unordered_set<idx_t>>::iterator it;
+	unordered_set<idx_t>::iterator col_it;
+	idx_t table;
+	idx_t col;
+	idx_t key;
+	std::string relations = "";
+	for (idx_t rel_it = 0; rel_it < node->set->count; rel_it++) {
+		relations += std::to_string(node->set->relations[rel_it]) + ", ";
+	}
+	std::cout << "relations = [" << relations << "] " << std::endl;
+	std::cout << "Expected cardinality = " << std::to_string(node->cardinality) << std::endl;
+	std::cout << "cost = " << node->cost << std::endl;
+	for (it = node->tab_cols->begin(); it != node->tab_cols->end(); it++) {
+		table = it->first;
+		for (col_it = it->second.begin(); col_it != it->second.end(); col_it++) {
+			col = *col_it;
+			key = (table << 32) + col;
+			std::cout << "node table_col_sel[" << table << "][" << col << "] = " << (*node->table_col_sels)[key] << std::endl;
+			std::cout << "node table_col_mult[" << table << "][" << col << "] = " << (*node->table_col_mults)[key] << std::endl;
+		}
+	}
+	std::cout << "node right_col_sel = " << node->right_col_sel << std::endl;
+	std::cout << "node right_col_mult = " << node->right_col_mult << std::endl;
+	std::cout << "node left_col_sel = " << node->left_col_sel << std::endl;
+	std::cout << "node left_col_mult = " << node->left_col_mult << std::endl;
+	if (node->set->count > 1) {
+		std::cout << "join on [" << node->base_table_left << "][" << node->base_column_left;
+		std::cout << "] = [" << node->base_table_right << "][" << node->base_column_right << "]" << std::endl;
+	}
+	std::cout << "----------------------------------" << std::endl;
+}
+
+
+void printWholeNode(JoinNode *node) {
+	if (!node) return;
+    PrintNodeSelMulStats(node);
+	printWholeNode(node->left);
+	printWholeNode(node->right);
 }
 
 
@@ -317,6 +397,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// normal join, expect foreign key join
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
+
 
 	// create result and add multiplicities
 	auto result_tab_cols = make_unique<std::unordered_map<idx_t, unordered_set<idx_t>>>();
@@ -382,11 +463,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		left_mult = (*left->table_col_mults)[left_pair_key];
 		left_sel = (*left->table_col_sels)[left_pair_key];
 
-		if (right_mult * right_sel < cur_scale_factor) {
+		if (left_sel * right_mult * right_sel < cur_scale_factor) {
 			right_mult_winner = right_mult;
 			right_sel_winner = right_sel;
 			left_mult_winner = left_mult;
 			left_sel_winner = left_sel;
+			cur_scale_factor = right_mult * right_sel;
 		}
 
 		D_ASSERT(left_mult >= 1);
@@ -408,7 +490,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	} else {
 		D_ASSERT(right_sel > 0 && right_sel <= 1);
 		D_ASSERT(right_mult >= 1);
-		expected_cardinality = left->cardinality * right_sel * right_mult;
+		expected_cardinality = left->cardinality * left_sel * right_sel * right_mult;
+
 	}
 
 
@@ -426,7 +509,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	}
 
 	double one = 1;
-	//! 2) update result mult for right relation.
+	//! 2) update result mult for the column in the RESULT table originating from the RIGHT table
 	if ((*left->table_col_mults)[left_pair_key] == 1) {
 		(*result_table_col_mults)[right_pair_key] =
 		    MaxValue(one, (*right->table_col_mults)[right_pair_key] * cardinality_ratio);
@@ -453,15 +536,16 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			(*result_table_col_sels)[tmp_right_pair_key] = (*right->table_col_sels)[tmp_right_pair_key];
 
 			//! have already set this in step 2 for mults
-			if (cur_right_table == right_table && *col_it == right_col) continue;
+			if (tmp_right_pair_key == right_pair_key) continue;
 			(*result_table_col_mults)[tmp_right_pair_key] =
-			    (*right->table_col_mults)[tmp_right_pair_key] * (*left->table_col_mults)[left_pair_key];
+			    (*right->table_col_mults)[tmp_right_pair_key] * MaxValue(cardinality_ratio, (*left->table_col_mults)[left_pair_key]);
 		}
 	}
 
 	//! 4) update the left multiplicities of the column in the equi-join
+	//! result_table_col_mults[right_pair_key] is updated in step 1
 	(*result_table_col_mults)[left_pair_key] = (*left->table_col_mults)[left_pair_key] *
-	                                        (*right->table_col_mults)[right_pair_key];
+	                                           (*result_table_col_mults)[right_pair_key];
 
 	idx_t cur_left_table;
 	//! 5) update all other left multiplicities of columns in the joined table(s)
@@ -474,15 +558,25 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			auto tmp_left_pair_key = (cur_left_table << 32) + *col_it;
 			D_ASSERT(left->table_col_mults->find(tmp_left_pair_key) != left->table_col_mults->end());
 			D_ASSERT(left->table_col_sels->find(tmp_left_pair_key) != left->table_col_sels->end());
-			(*result_table_col_sels)[tmp_left_pair_key] = (*left->table_col_sels)[tmp_left_pair_key] * right_sel;
+			D_ASSERT(left->table_col_sels->find(tmp_left_pair_key)->second <= 1);
+
+			(*result_table_col_sels)[tmp_left_pair_key] = (*left->table_col_sels)[tmp_left_pair_key];
+
 			D_ASSERT((*result_table_col_sels)[tmp_left_pair_key] > 0 && (*result_table_col_sels)[tmp_left_pair_key] <= 1);
 
 			//! already set the mult in step 4
-			if (cur_left_table == left_table && *col_it == left_col) continue;
-			(*result_table_col_mults)[tmp_left_pair_key] =
-			    (*left->table_col_mults)[tmp_left_pair_key] * (*right->table_col_mults)[right_pair_key];
+			if (tmp_left_pair_key == left_pair_key) continue;
+			(*result_table_col_mults)[tmp_left_pair_key] = (*left->table_col_mults)[tmp_left_pair_key];
+//			if (cur_left_table == left_table) {
+//				(*result_table_col_mults)[tmp_left_pair_key] =
+//				    (*left->table_col_mults)[tmp_left_pair_key] * right_mult;
+//			} else {
+//				(*result_table_col_mults)[tmp_left_pair_key] =
+//				    (*left->table_col_mults)[tmp_left_pair_key];
+//			}
 		}
 	}
+	(*result_table_col_sels)[left_pair_key] = (*right->table_col_sels)[right_pair_key];
 
 	idx_t rights_column_count = 0;
 	unordered_map<idx_t, unordered_set<idx_t>>::iterator tab_col_iterator;
@@ -505,12 +599,29 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	D_ASSERT(result_table_col_mults->size() == (right->table_col_mults->size() + left->table_col_mults->size()));
 	D_ASSERT(result_table_col_sels->size() == (right->table_col_sels->size() + left->table_col_sels->size()));
 
-	// init stats is true, this is an intermediate node now.
-	//	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+
+//	auto yea = unordered_set<idx_t>({0, 1, 2, 3, 4, 5});
+//	if (cost == 9347554 && !printed_join_node) {
+//		printWholeNode(left);
+//		printWholeNode(right);
+//		printed_join_node = true;
+//	}
+
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+	result->init_stats = true;
+	result->cardinality_ratio = move(cardinality_ratio);
+	result->table_col_mults = result_table_col_mults.get();
 	result->tab_cols = move(result_tab_cols);
-	result->table_col_mults = move(result_table_col_mults);
 	result->table_col_sels = move(result_table_col_sels);
+	result->right_col_mult = move(right_mult);
+	result->right_col_sel = move(right_sel);
+	result->left_col_mult = move(left_mult);
+	result->left_col_sel = move(left_sel);
+	result->base_table_left = left_table;
+	result->base_table_right = right_table;
+	result->base_column_left = left_col;
+	result->base_column_right = right_col;
+
 	return result;
 }
 
@@ -751,6 +862,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
+		std::cout << "solving approc" << std::endl;
 		// otherwise, if that times out we resort to a greedy algorithm
 		SolveJoinOrderApproximately();
 	}
@@ -845,6 +957,10 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 	}
 
 	result_operator->estimated_cardinality = node->cardinality;
+	result_operator->right_col_sel = node->right_col_sel;
+	result_operator->right_col_mult = node->right_col_mult;
+	result_operator->left_col_sel = node->left_col_sel;
+	result_operator->left_col_mult = node->left_col_mult;
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
@@ -1070,6 +1186,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	auto total_relation = set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
+	//! Here is where I should do some debugging on the produced plan.
 	if (final_plan == plans.end()) {
 		// could not find the final plan
 		// this should only happen in case the sets are actually disjunct
@@ -1082,7 +1199,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		D_ASSERT(final_plan != plans.end());
 	}
 	// now perform the actual reordering
-	return RewritePlan(move(plan), final_plan->second.get());
+	auto final_plan_get = final_plan->second.get();
+	printWholeNode(final_plan_get);
+	return RewritePlan(move(plan), final_plan_get);
 }
 
 } // namespace duckdb
