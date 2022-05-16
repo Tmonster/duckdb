@@ -29,8 +29,9 @@ public:
 	struct JoinNode {
 		JoinRelationSet *set;
 		NeighborInfo *info;
-		idx_t cardinality;
+		idx_t cardinality_2;
 		idx_t cost;
+		idx_t cardinality;
 		JoinNode *left;
 		JoinNode *right;
 
@@ -72,12 +73,23 @@ public:
 			base_table_right = 0;
 			base_column_left = 0;
 			base_column_right = 0;
+			cardinality_2 = cardinality;
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
 		         idx_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
 		      created_as_intermediate(true) {
+			init_stats = true;
+//			right_col_mult = 0;
+//			right_col_mult = 0;
+//			right_col_sel = 0;
+//			left_col_mult = 0;
+//			left_col_sel = 0;
+//			base_table_left = 0;
+//			base_table_right = 0;
+//			base_column_left = 0;
+//			base_column_right = 0;
 		}
 	};
 
@@ -110,6 +122,8 @@ private:
 	QueryGraph query_graph;
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
+
+	unordered_set<idx_t> full_plans;
 	//! The set of filters extracted from the query graph
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
