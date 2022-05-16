@@ -67,7 +67,7 @@ public:
 		//! to 0 because leaf nodes/base table already exist
 		//! cost will be the cost to *produce* an intermediate table
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr),
+		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr),
 		      init_stats(false), created_as_intermediate(false) {
 			base_table_left = 0;
 			base_table_right = 0;
@@ -81,15 +81,6 @@ public:
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
 		      created_as_intermediate(true) {
 			init_stats = true;
-//			right_col_mult = 0;
-//			right_col_mult = 0;
-//			right_col_sel = 0;
-//			left_col_mult = 0;
-//			left_col_sel = 0;
-//			base_table_left = 0;
-//			base_table_right = 0;
-//			base_column_left = 0;
-//			base_column_right = 0;
 		}
 	};
 
@@ -143,7 +134,7 @@ private:
 
 	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this function
 	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
-	void InitColumnStats(JoinNode *node);
+	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
