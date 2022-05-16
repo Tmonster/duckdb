@@ -34,6 +34,13 @@ public:
 		JoinNode *left;
 		JoinNode *right;
 
+		idx_t base_table_left;
+		idx_t base_table_right;
+		idx_t base_column_left;
+		idx_t base_column_right;
+
+
+
 		//! have the multiplicity and selectivity stats been initialized?
 		bool init_stats;
 		bool created_as_intermediate;
@@ -45,16 +52,26 @@ public:
 
 		unique_ptr<unordered_map<idx_t, double>> table_col_mults;
 		unique_ptr<unordered_map<idx_t, double>> table_col_sels;
+		double cardinality_ratio;
+		double left_col_sel;
+		double left_col_mult;
+		double right_col_sel;
+		double right_col_mult;
 
 
 
 
 		//! Create a leaf node in the join tree
-		//! set cost to 0 because leaf nodes/base table already exist
+		//! set cost
+		//! to 0 because leaf nodes/base table already exist
 		//! cost will be the cost to *produce* an intermediate table
 		JoinNode(JoinRelationSet *set, idx_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr),
 		      init_stats(false), created_as_intermediate(false) {
+			base_table_left = 0;
+			base_table_right = 0;
+			base_column_left = 0;
+			base_column_right = 0;
 		}
 		//! Create an intermediate node in the join tree
 		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
@@ -85,6 +102,8 @@ private:
 	//! A mapping of base table index -> all columns used to determine the join order
 	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
 
+	bool printed_join_node = false;
+
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
@@ -99,6 +118,8 @@ private:
 	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A <->
 	//! C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
+
+	unordered_map<idx_t, std::string> relation_to_table_name;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
