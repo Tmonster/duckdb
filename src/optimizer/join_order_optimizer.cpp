@@ -223,7 +223,7 @@ void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_t
 	std::cout << res << std::endl;
 }
 
-void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
+void JoinOrderOptimizer::InitColumnStats(JoinNode *node, vector<FilterInfo *> filters) {
 	if (node->init_stats) {
 		return;
 	}
@@ -290,12 +290,24 @@ void JoinOrderOptimizer::InitColumnStats(JoinNode *node) {
 		if (!node->table_col_sels) {
 			node->table_col_sels = make_unique<unordered_map<idx_t, double>>();
 		}
+		vector<FilterInfo *>::iterator filter_it;
+		idx_t right_table, right_column, left_table, left_column;
+		for (filter_it = filters.begin(); filter_it != filters.end(); filter_it++) {
+			right_table = (*filter_it)->right_binding.first;
+			right_column = (*filter_it)->right_binding.second;
+			left_table = (*filter_it)->left_binding.first;
+			left_column = (*filter_it)->left_binding.second;
+		}
 		for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
 			// this is where hyperloglog stats can be inserted
 			(*node->tab_cols)[relation_id].insert(*ite);
 			auto index = (relation_id << 32) + *ite;
 			(*node->table_col_mults)[index] = 1;
-			if (has_filter) (*node->table_col_sels)[index] = default_selectivity;
+			if (has_filter && (
+			    (right_table == relation_id && *ite == right_column) ||
+			    (left_table == relation_id && *ite == left_column))) {
+				(*node->table_col_sels)[index] = default_selectivity;
+			}
 			else (*node->table_col_sels)[index] = 1;
 		}
 	}
@@ -406,8 +418,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 //	auto result_table_col_sels= make_unique<unordered_map<idx_t, double>>();
 
 	// Get underlying operators and initialize selectivities
-	InitColumnStats(left);
-	InitColumnStats(right);
+	InitColumnStats(left, info->filters);
+	InitColumnStats(right,info->filters);
 
 
 	auto cost = 0;
@@ -1213,7 +1225,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now perform the actual reordering
 	auto final_plan_get = final_plan->second.get();
-//	printWholeNode(final_plan_get);
+	printWholeNode(final_plan_get);
 	return RewritePlan(move(plan), final_plan_get);
 }
 
