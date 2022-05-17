@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
+
 
 namespace duckdb {
 class Event;
@@ -89,10 +91,8 @@ public:
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
 	//! the sel and mults of the joins conditions
-	double left_col_sel;
-	double left_col_mult;
-	double right_col_sel;
-	double right_col_mult;
+
+	struct JoinStats join_stats;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
