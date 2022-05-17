@@ -30,17 +30,17 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 	JoinRelationSet *join_relations = set;
 	idx_t relation_id;
 	bool has_filter = false;
+	bool found_table_index = false;
 	for (idx_t it = 0; it < join_relations->count; it++) {
 		relation_id = join_relations->relations[it];
 
 		unordered_map<idx_t, idx_t>::iterator relation_map_it;
-		//		idx_t table_index;
-		bool found_table_index = false;
+		found_table_index = false;
 		for (relation_map_it = optimizer->relation_mapping.begin();
 		     relation_map_it != optimizer->relation_mapping.end(); relation_map_it++) {
 			if (relation_map_it->second == relation_id) {
-				//	table_index = relation_map_it->first;
 				found_table_index = true;
+				break;
 			}
 		}
 		D_ASSERT(found_table_index);
@@ -79,7 +79,12 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			// this is where hyperloglog stats can be inserted
 			join_stats.table_cols[relation_id].insert(*ite);
 			auto index = hash_table_col(relation_id, *ite);
+
+			// Here you can use HLL to give a more accurate reading.
 			join_stats.table_col_mults[index] = 1;
+
+			// We only add selectivity for the one column. It can easiliy be the case that other
+			// columns still have their full domain even after a table is filtered on just on column
 			if (has_filter && ((right_table == relation_id && *ite == right_column) ||
 			                   (left_table == relation_id && *ite == left_column))) {
 				join_stats.table_col_sels[index] = default_selectivity;
@@ -181,8 +186,8 @@ void JoinNode::update_stats_from_right_table(idx_t left_pair_key, idx_t right_pa
 			D_ASSERT(join_stats.table_col_mults[tmp_right_pair_key] >= 1);
 		}
 	}
-	double one = 1;
 
+	double one = 1;
 	//! update result mult for the column in the RESULT table originating from the RIGHT table
 	if (left->join_stats.table_col_mults[left_pair_key] == 1) {
 		join_stats.table_col_mults[right_pair_key] =
@@ -194,6 +199,8 @@ void JoinNode::update_stats_from_right_table(idx_t left_pair_key, idx_t right_pa
 	D_ASSERT(join_stats.table_col_mults[right_pair_key] >= 1);
 }
 
+
+//! Check to make sure all columns have mult and sel values in the resulting Join Node
 void JoinNode::check_all_table_keys_forwarded() {
 	idx_t rights_column_count = 0;
 	idx_t key;
@@ -245,7 +252,9 @@ idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
 	return (table << 32) + col;
 }
 
-//! START OF DEBUGGING FUNCTIONS
+//! ******************************************************
+//! *          START OF DEBUGGING FUNCTIONS              *
+//! ******************************************************
 bool JoinNode::desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set) {
 	for (idx_t it = 0; it < relation_set->count; it++) {
 		if (o_set.find(relation_set->relations[it]) == o_set.end()) {

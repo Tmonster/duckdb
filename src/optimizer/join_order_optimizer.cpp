@@ -297,7 +297,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 			left_table = info->filters[it]->right_binding.first;
 			left_col = info->filters[it]->right_binding.second;
-			left_pair_key = (left_table << 32) + left_col;
+			left_pair_key = JoinNode::hash_table_col(left_table, left_col);
 		}
 		// currently finding in multiplicities because the syntax is easier for me.
 		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
@@ -308,7 +308,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 			right_table = info->filters[it]->right_binding.first;
 			right_col = info->filters[it]->right_binding.second;
-			right_pair_key = (right_table << 32) + right_col;
+			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
 		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_mults));
 		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_sels));
@@ -351,9 +351,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	result->update_cardinality_ratio(same_base_table);
 
 	result->update_stats_from_left_table(left_pair_key, right_pair_key);
+
 	result->update_stats_from_right_table(left_pair_key, right_pair_key);
 
+#ifdef DEBUG
 	result->check_all_table_keys_forwarded();
+#endif
 
 	return result;
 }
