@@ -30,10 +30,10 @@ string PhysicalComparisonJoin::ParamsToString() const {
 		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
 	extra_info += "\nEC = " + std::to_string(estimated_cardinality) + "\n";
-//	extra_info += "\nleft sel = " + std::to_string(left_col_sel) + "\n";
-//	extra_info += "\nleft mul = " + std::to_string(left_col_mult) + "\n";
-//	extra_info += "\nright sel = " + std::to_string(right_col_sel) + "\n";
-//	extra_info += "\nright mul = " + std::to_string(right_col_mult) + "\n";
+	//	extra_info += "\nleft sel = " + std::to_string(left_col_sel) + "\n";
+	//	extra_info += "\nleft mul = " + std::to_string(left_col_mult) + "\n";
+	//	extra_info += "\nright sel = " + std::to_string(right_col_sel) + "\n";
+	//	extra_info += "\nright mul = " + std::to_string(right_col_mult) + "\n";
 	return extra_info;
 }
 
