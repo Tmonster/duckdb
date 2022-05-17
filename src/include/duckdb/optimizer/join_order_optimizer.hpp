@@ -10,12 +10,13 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+
 #include <map>
 
 
@@ -24,66 +25,6 @@
 namespace duckdb {
 
 class JoinOrderOptimizer {
-public:
-	//! Represents a node in the join plan
-	struct JoinNode {
-		JoinRelationSet *set;
-		NeighborInfo *info;
-		idx_t cardinality_2;
-		idx_t cost;
-		idx_t cardinality;
-		JoinNode *left;
-		JoinNode *right;
-
-		idx_t base_table_left;
-		idx_t base_table_right;
-		idx_t base_column_left;
-		idx_t base_column_right;
-
-
-
-		//! have the multiplicity and selectivity stats been initialized?
-		bool init_stats;
-		bool created_as_intermediate;
-
-		// first idx is a 32 bits for table id
-		//                32 bits for column id
-		// you need to use some bit manipulation to get he numbers
-		unique_ptr<unordered_map<idx_t, unordered_set<idx_t>>> tab_cols;
-
-		unique_ptr<unordered_map<idx_t, double>> table_col_mults;
-		unique_ptr<unordered_map<idx_t, double>> table_col_sels;
-		double cardinality_ratio;
-		double left_col_sel;
-		double left_col_mult;
-		double right_col_sel;
-		double right_col_mult;
-
-
-
-
-		//! Create a leaf node in the join tree
-		//! set cost
-		//! to 0 because leaf nodes/base table already exist
-		//! cost will be the cost to *produce* an intermediate table
-		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr),
-		      init_stats(false), created_as_intermediate(false) {
-			base_table_left = 0;
-			base_table_right = 0;
-			base_column_left = 0;
-			base_column_right = 0;
-			cardinality_2 = cardinality;
-		}
-		//! Create an intermediate node in the join tree
-		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
-		         idx_t cost)
-		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
-		      created_as_intermediate(true) {
-			init_stats = true;
-		}
-	};
-
 public:
 	explicit JoinOrderOptimizer(ClientContext &context) : context(context) {
 	}
@@ -104,8 +45,6 @@ private:
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A mapping of base table index -> all columns used to determine the join order
 	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
-
-	bool printed_join_node = false;
 
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
@@ -132,9 +71,9 @@ private:
 	//! Get column bindings from a filter
 	void GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding);
 
-	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this function
-	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
-	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
+//	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this function
+//	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
+//	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
@@ -167,6 +106,8 @@ private:
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
+
+	friend class JoinNode;
 };
 
 } // namespace duckdb
