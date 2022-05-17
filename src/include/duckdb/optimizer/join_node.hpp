@@ -20,16 +20,9 @@
 
 #include <functional>
 
-
-
 namespace duckdb {
 
-enum class mult_sel : uint8_t {
-	left_table_mults,
-	right_table_mults,
-	left_table_sels,
-	right_table_sels
-};
+enum class mult_sel : uint8_t { left_table_mults, right_table_mults, left_table_sels, right_table_sels };
 
 class JoinOrderOptimizer;
 
@@ -42,7 +35,6 @@ public:
 	idx_t cost;
 	JoinNode *left;
 	JoinNode *right;
-
 
 	struct JoinStats {
 		idx_t base_table_left;
@@ -77,18 +69,17 @@ public:
 	//! to 0 because leaf nodes/base table already exist
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, idx_t cardinality)
-		: set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr),
-		  init_stats(false), created_as_intermediate(false) {
+	    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr), init_stats(false),
+	      created_as_intermediate(false) {
 		join_stats.base_table_left = 0;
 		join_stats.base_table_right = 0;
 		join_stats.base_column_left = 0;
 		join_stats.base_column_right = 0;
 	}
 	//! Create an intermediate node in the join tree
-	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
-			 idx_t cost)
-		: set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
-		  created_as_intermediate(true) {
+	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
+	    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
+	      created_as_intermediate(true) {
 		init_stats = true;
 		join_stats.table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		join_stats.table_col_mults = unordered_map<idx_t, double>();
@@ -124,7 +115,8 @@ public:
 	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
-	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left, unordered_set<idx_t> desired_right);
+	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
+	                         unordered_set<idx_t> desired_right);
 	static void printWholeNode(JoinNode *node);
 	static void PrintNodeSelMulStats(JoinNode *node);
 };

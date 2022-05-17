@@ -52,10 +52,12 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding) {
+void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding,
+                                           pair<idx_t, idx_t> *right_binding) {
 	if (expression.type == ExpressionType::COMPARE_EQUAL) {
 		auto &colref = (BoundComparisonExpression &)expression;
-		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF && colref.left->type == ExpressionType::BOUND_COLUMN_REF) {
+		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF &&
+		    colref.left->type == ExpressionType::BOUND_COLUMN_REF) {
 			auto &right = (BoundColumnRefExpression &)*colref.right;
 			auto &left = (BoundColumnRefExpression &)*colref.left;
 			D_ASSERT(relation_mapping.find(left.binding.table_index) != relation_mapping.end());
@@ -208,17 +210,15 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
-
 void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_to_table_name) {
 	std::string res = "";
 	unordered_map<idx_t, std::string>::iterator it;
-	for (it =relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
+	for (it = relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
 		res += "{ " + std::to_string(it->first) + ": " + it->second + "}," + "\n";
 	}
 	res += "-----------\n";
 	std::cout << res << std::endl;
 }
-
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
@@ -243,21 +243,20 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
 		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
-//		for (idx_t i = 0; i < left->set->count; i++) {
-//			result.multiplicities[left->set->relations[i]] =
-//			    left->multiplicities[left->set->relations[i]] * right->cardinality;
-//		}
-//		for (idx_t i = 0; i < right->set->count; i++) {
-//			result.multiplicities[right->set->relations[i]] =
-//			    right->multiplicities[right->set->relations[i]] * left->cardinality;
-//		}
+		//		for (idx_t i = 0; i < left->set->count; i++) {
+		//			result.multiplicities[left->set->relations[i]] =
+		//			    left->multiplicities[left->set->relations[i]] * right->cardinality;
+		//		}
+		//		for (idx_t i = 0; i < right->set->count; i++) {
+		//			result.multiplicities[right->set->relations[i]] =
+		//			    right->multiplicities[right->set->relations[i]] * left->cardinality;
+		//		}
 		return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 	}
 
 	// normal join, expect foreign key join
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
-
 
 	// create result and add multiplicities
 
@@ -316,7 +315,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_mults));
 		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_sels));
 
-		if (left_table == right_table) same_base_table = true;
+		if (left_table == right_table)
+			same_base_table = true;
 
 		right_mult = right->join_stats.table_col_mults[right_pair_key];
 		right_sel = right->join_stats.table_col_sels[right_pair_key];
@@ -353,7 +353,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	result->update_stats_from_left_table(left_pair_key, right_pair_key);
 	result->update_stats_from_right_table(left_pair_key, right_pair_key);
 
-
 	result->check_all_table_keys_forwarded();
 
 	return result;
@@ -369,7 +368,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	if (new_plan->set->count == 6 && full_plans.find(new_plan->cost) == full_plans.end()) {
-//		printWholeNode(new_plan.get());
+		//		printWholeNode(new_plan.get());
 		full_plans.insert(new_plan->cost);
 	}
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
@@ -943,7 +942,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now perform the actual reordering
 	auto final_plan_get = final_plan->second.get();
-//	JoinNode::printWholeNode(final_plan_get);
+	//	JoinNode::printWholeNode(final_plan_get);
 	return RewritePlan(move(plan), final_plan_get);
 }
 
