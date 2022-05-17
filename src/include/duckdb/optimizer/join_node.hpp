@@ -26,6 +26,25 @@ enum class mult_sel : uint8_t { left_table_mults, right_table_mults, left_table_
 
 class JoinOrderOptimizer;
 
+
+struct JoinStats {
+	idx_t base_table_left;
+	idx_t base_table_right;
+	idx_t base_column_left;
+	idx_t base_column_right;
+
+	double cardinality_ratio;
+	double left_col_sel;
+	double left_col_mult;
+	double right_col_sel;
+	double right_col_mult;
+
+	unordered_map<idx_t, unordered_set<idx_t>> table_cols;
+
+	unordered_map<idx_t, double> table_col_mults;
+	unordered_map<idx_t, double> table_col_sels;
+};
+
 class JoinNode {
 public:
 	//! Represents a node in the join plan
@@ -35,24 +54,6 @@ public:
 	idx_t cost;
 	JoinNode *left;
 	JoinNode *right;
-
-	struct JoinStats {
-		idx_t base_table_left;
-		idx_t base_table_right;
-		idx_t base_column_left;
-		idx_t base_column_right;
-
-		double cardinality_ratio;
-		double left_col_sel;
-		double left_col_mult;
-		double right_col_sel;
-		double right_col_mult;
-
-		unordered_map<idx_t, unordered_set<idx_t>> table_cols;
-
-		unordered_map<idx_t, double> table_col_mults;
-		unordered_map<idx_t, double> table_col_sels;
-	};
 
 	struct JoinStats join_stats;
 
