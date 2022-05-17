@@ -50,29 +50,13 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
 			if (catalog_table) {
+				// keep track of relation to table names
+				// using catalog table, we can insert HLL stats
 				optimizer->relation_to_table_name[relation_id] = catalog_table->name;
 				// can use catalog_table to get table stats and also update the mult for each column
 				// we might be querying directly on files, so no catalog entry in that case
-				std::vector<const char*> look_for_me = {"r_regionkey", "o_orderdate", "r_name", "n_regionkey", "n_nationkey", "l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"};
 				unordered_set<idx_t>::iterator rc_it;
 				std::vector<duckdb::ColumnDefinition>::iterator co_it;
-				int col_num;
-	//			for(rc_it = relation_to_columns[relation_id].begin(); rc_it != relation_to_columns[relation_id].end(); rc_it++) {
-	//				col_num = 0;
-	//				for (co_it = catalog_table->columns.begin(); co_it != catalog_table->columns.end(); co_it++) {
-	//					for (idx_t m = 0; m < 5; m++) {
-	//						const char *watever = reinterpret_cast<const char *>(&(co_it->name));
-	//						if (std::strcmp(look_for_me[m], watever) == 0) {
-	////							if (!get.table_filters.filters.empty()) {
-	////								std::cout << "column " << co_it->name << " has a filter"<< std::endl;
-	////							}
-	//							idx_t tmp_key = (relation_id << 32) + col_num;
-	////							key_spies.insert(tmp_key);
-	//						}
-	//						col_num += 1;
-	//					}
-	//				}
-	//			}
 			}
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
@@ -81,6 +65,7 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 
 		vector<FilterInfo *>::iterator filter_it;
 		idx_t right_table, right_column, left_table, left_column;
+		if (filters.size() > 1) throw NotImplementedException("More than one filter on this join. Ignore this test case for now");
 		for (filter_it = filters.begin(); filter_it != filters.end(); filter_it++) {
 			right_table = (*filter_it)->right_binding.first;
 			right_column = (*filter_it)->right_binding.second;
@@ -139,8 +124,7 @@ void JoinNode::update_stats_from_left_table(idx_t left_pair_key, idx_t right_pai
 	//! result->table_col_mults[right_pair_key] is updated in step 1
 	join_stats.table_col_mults[left_pair_key] = left->join_stats.table_col_mults[left_pair_key] *
 	                                            MaxValue(right->join_stats.table_col_mults[right_pair_key], join_stats.cardinality_ratio);
-//	std::cout << left->join_stats.table_col_mults[left_pair_key] << std::endl;
-//	std::cout << join_stats.table_col_mults[right_pair_key] << std::endl;
+
 	D_ASSERT(join_stats.table_col_mults[left_pair_key] >= 1);
 
 	idx_t cur_left_table;
@@ -165,13 +149,6 @@ void JoinNode::update_stats_from_left_table(idx_t left_pair_key, idx_t right_pai
 			if (tmp_left_pair_key == left_pair_key) continue;
 			join_stats.table_col_mults[tmp_left_pair_key] = left->join_stats.table_col_mults[tmp_left_pair_key];
 			D_ASSERT(join_stats.table_col_mults[tmp_left_pair_key] >= 1);
-//			if (cur_left_table == left_table) {
-//				(*result->table_col_mults)[tmp_left_pair_key] =
-//				    (*left->table_col_mults)[tmp_left_pair_key] * right_mult;
-//			} else {
-//				(*result->table_col_mults)[tmp_left_pair_key] =
-//				    (*left->table_col_mults)[tmp_left_pair_key];
-//			}
 		}
 	}
 	join_stats.table_col_sels[left_pair_key] = right->join_stats.table_col_sels[right_pair_key];
@@ -186,8 +163,6 @@ void JoinNode::update_stats_from_right_table(idx_t left_pair_key, idx_t right_pa
 		cur_right_table = right->set->relations[table_it];
 		//! loop to get all future joined columns that are joined under some condition
 		for (col_it = right->join_stats.table_cols[cur_right_table].begin(); col_it != right->join_stats.table_cols[cur_right_table].end(); col_it++) {
-			// always insert the table column entry
-			// update selectivities too
 			join_stats.table_cols[cur_right_table].insert(*col_it);
 
 			auto tmp_right_pair_key = hash_table_col(cur_right_table, *col_it);
@@ -232,8 +207,6 @@ void JoinNode::check_all_table_keys_forwarded() {
 		D_ASSERT(key_exists(key, right->join_stats.table_col_sels));
 		D_ASSERT(join_stats.table_col_sels[key] <= 1);
 	}
-
-
 
 	idx_t lefts_column_count = 0;
 	for(tab_col_iterator = left->join_stats.table_cols.begin(); tab_col_iterator != left->join_stats.table_cols.end(); tab_col_iterator++) {
