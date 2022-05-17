@@ -19,7 +19,6 @@
 
 #include <map>
 
-
 #include <functional>
 
 namespace duckdb {
@@ -71,9 +70,10 @@ private:
 	//! Get column bindings from a filter
 	void GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding);
 
-//	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this function
-//	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
-//	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
+	//	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this
+	//function
+	//	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
+	//	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.

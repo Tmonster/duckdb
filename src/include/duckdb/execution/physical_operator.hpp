@@ -74,7 +74,7 @@ public:
 class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
-	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality){
+	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
 	}
 
 	virtual ~PhysicalOperator() {
