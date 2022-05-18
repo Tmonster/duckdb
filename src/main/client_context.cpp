@@ -294,6 +294,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler.EndPhase();
+
 #ifdef DEBUG
 	D_ASSERT(!physical_plan->ToString().empty());
 #endif
