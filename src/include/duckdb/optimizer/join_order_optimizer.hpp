@@ -31,8 +31,7 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right,
-	                                    bool switched = false);
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right);
 
 private:
 	ClientContext &context;
@@ -89,6 +88,7 @@ private:
 	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet *node);
+	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	bool EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan

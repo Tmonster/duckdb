@@ -11,7 +11,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -27,7 +26,7 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type) : type(type), has_estimated_cardinality(false) {
+	explicit LogicalOperator(LogicalOperatorType type) : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
@@ -67,6 +66,7 @@ public:
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
+	void AddJoinStats(JoinStats new_stats);
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));

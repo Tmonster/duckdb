@@ -16,11 +16,7 @@ string LogicalComparisonJoin::ParamsToString() const {
 		                                                   condition.right->Copy());
 		result += expr->ToString();
 	}
-	result += "\nEC = " + std::to_string(estimated_cardinality) + "\n";
-	//	result += "\nleft sel = " + std::to_string(left_col_sel) + "\n";
-	//	result += "\nleft mul = " + std::to_string(left_col_mult) + "\n";
-	//	result += "\nright sel = " + std::to_string(right_col_sel) + "\n";
-	//	result += "\nright mul = " + std::to_string(right_col_mult) + "\n";
+	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
 
 	return result;
 }
