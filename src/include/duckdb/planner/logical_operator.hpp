@@ -43,10 +43,7 @@ public:
 	vector<LogicalType> types;
 	//! Estimated Cardinality
 	idx_t estimated_cardinality;
-	double left_col_mult;
-	double left_col_sel;
-	double right_col_mult;
-	double right_col_sel;
+
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings() {
