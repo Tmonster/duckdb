@@ -71,8 +71,7 @@ else()
       duckdb_mbedtls)
 
   add_library(
-    duckdb SHARED ${ALL_OBJECT_FILES} include/duckdb/optimizer/join_node.hpp
-                  optimizer/join_node.cpp)
+    duckdb SHARED ${ALL_OBJECT_FILES} )
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
