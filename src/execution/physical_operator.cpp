@@ -37,15 +37,16 @@ vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
 }
 
 void PhysicalOperator::AddStats(JoinStats join_stats) {
-	ph_join_stats.base_table_left = join_stats.base_table_left;
-	ph_join_stats.base_table_right = join_stats.base_table_right;
-	ph_join_stats.base_column_left = join_stats.base_column_left;
-	ph_join_stats.base_column_right = join_stats.base_column_right;
-	ph_join_stats.cardinality_ratio = join_stats.cardinality_ratio;
-	ph_join_stats.left_col_sel = join_stats.left_col_sel;
-	ph_join_stats.left_col_mult = join_stats.left_col_mult;
-	ph_join_stats.right_col_sel = join_stats.right_col_sel;
-	ph_join_stats.right_col_mult = join_stats.right_col_mult;
+	ph_join_stats = join_stats;
+//	ph_join_stats.base_table_left = join_stats.base_table_left;
+//	ph_join_stats.base_table_right = join_stats.base_table_right;
+//	ph_join_stats.base_column_left = join_stats.base_column_left;
+//	ph_join_stats.base_column_right = join_stats.base_column_right;
+//	ph_join_stats.cardinality_ratio = join_stats.cardinality_ratio;
+//	ph_join_stats.left_col_sel = join_stats.left_col_sel;
+//	ph_join_stats.left_col_mult = join_stats.left_col_mult;
+//	ph_join_stats.right_col_sel = join_stats.right_col_sel;
+//	ph_join_stats.right_col_mult = join_stats.right_col_mult;
 }
 
 //===--------------------------------------------------------------------===//
