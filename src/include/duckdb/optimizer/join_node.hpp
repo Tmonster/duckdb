@@ -22,8 +22,6 @@
 
 namespace duckdb {
 
-enum class mult_sel : uint8_t { left_table_mults, right_table_mults, left_table_sels, right_table_sels };
-
 class JoinOrderOptimizer;
 
 
