@@ -699,10 +699,10 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 	}
 
 	result_operator->estimated_cardinality = node->cardinality;
-	result_operator->right_col_sel = node->join_stats.right_col_sel;
-	result_operator->right_col_mult = node->join_stats.right_col_mult;
-	result_operator->left_col_sel = node->join_stats.left_col_sel;
-	result_operator->left_col_mult = node->join_stats.left_col_mult;
+//	result_operator->right_col_sel = node->join_stats.right_col_sel;
+//	result_operator->right_col_mult = node->join_stats.right_col_mult;
+//	result_operator->left_col_sel = node->join_stats.left_col_sel;
+//	result_operator->left_col_mult = node->join_stats.left_col_mult;
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
