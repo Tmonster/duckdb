@@ -16,7 +16,6 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 
-
 namespace duckdb {
 class Event;
 class Executor;

@@ -222,13 +222,13 @@ void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_t
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
-                                                        JoinNode *right, bool switched) {
+                                                        JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	if (left->cardinality < right->cardinality) {
-		return CreateJoinTree(set, info, right, left, true);
+		return CreateJoinTree(set, info, right, left);
 	}
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
@@ -240,18 +240,16 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		expected_cardinality = left->cardinality * right->cardinality;
 		auto cost = expected_cardinality + left->cost + right->cost;
 
-		auto result = JoinNode(set, info, left, right, expected_cardinality, cost);
 		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
-		//		for (idx_t i = 0; i < left->set->count; i++) {
-		//			result.multiplicities[left->set->relations[i]] =
-		//			    left->multiplicities[left->set->relations[i]] * right->cardinality;
-		//		}
-		//		for (idx_t i = 0; i < right->set->count; i++) {
-		//			result.multiplicities[right->set->relations[i]] =
-		//			    right->multiplicities[right->set->relations[i]] * left->cardinality;
-		//		}
-		return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+		// for (idx_t i = 0; i < left->set->count; i++) {
+		//		result.multiplicities[left->set->relations[i]] =
+		//		 left->multiplicities[left->set->relations[i]] * right->cardinality;
+		//	}
+		//	for (idx_t i = 0; i < right->set->count; i++) {
+		//		result.multiplicities[right->set->relations[i]] =
+		//			  right->multiplicities[right->set->relations[i]] * left->cardinality;
+		//	}
 	}
 
 	// normal join, expect foreign key join
@@ -287,6 +285,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double left_mult_winner = 0;
 	double left_sel_winner = 0;
 
+	if (info->filters.size() > 1)
+		throw NotImplementedException("Join has more than one filter, skip this test case for now");
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
@@ -310,32 +310,33 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			right_col = info->filters[it]->right_binding.second;
 			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_mults));
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_sels));
-		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_mults));
-		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_sels));
-
-		if (left_table == right_table)
-			same_base_table = true;
-
-		right_mult = right->join_stats.table_col_mults[right_pair_key];
-		right_sel = right->join_stats.table_col_sels[right_pair_key];
-		left_mult = left->join_stats.table_col_mults[left_pair_key];
-		left_sel = left->join_stats.table_col_sels[left_pair_key];
-
-		if (left_sel * right_mult * right_sel < cur_scale_factor) {
-			right_mult_winner = right_mult;
-			right_sel_winner = right_sel;
-			left_mult_winner = left_mult;
-			left_sel_winner = left_sel;
-			cur_scale_factor = right_mult * right_sel;
-		}
-
-		D_ASSERT(left_mult >= 1);
-		D_ASSERT(right_mult >= 1);
-		D_ASSERT(left_sel <= 1 && left_sel > 0);
-		D_ASSERT(right_sel <= 1 && right_sel > 0);
 	}
+
+	D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_mults));
+	D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_sels));
+	D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_mults));
+	D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_sels));
+
+	if (left_table == right_table)
+		same_base_table = true;
+
+	right_mult = right->join_stats.table_col_mults[right_pair_key];
+	right_sel = right->join_stats.table_col_sels[right_pair_key];
+	left_mult = left->join_stats.table_col_mults[left_pair_key];
+	left_sel = left->join_stats.table_col_sels[left_pair_key];
+
+	if (left_sel * right_mult * right_sel < cur_scale_factor) {
+		right_mult_winner = right_mult;
+		right_sel_winner = right_sel;
+		left_mult_winner = left_mult;
+		left_sel_winner = left_sel;
+		cur_scale_factor = right_mult * right_sel;
+	}
+
+	D_ASSERT(left_mult >= 1);
+	D_ASSERT(right_mult >= 1);
+	D_ASSERT(left_sel <= 1 && left_sel > 0);
+	D_ASSERT(right_sel <= 1 && right_sel > 0);
 
 	//! switch the variables around again.
 	result->join_stats.right_col_mult = right_mult_winner;
@@ -370,10 +371,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	if (new_plan->set->count == 6 && full_plans.find(new_plan->cost) == full_plans.end()) {
-		//		printWholeNode(new_plan.get());
-		full_plans.insert(new_plan->cost);
-	}
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
@@ -545,7 +542,6 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					if (!best_connection || node->cost < best_connection->cost) {
 						// best pair found so far
 						best_connection = node;
-						best_connection = node;
 						best_left = i;
 						best_right = j;
 					}
@@ -697,11 +693,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
-	result_operator->join_stats = node->join_stats;
-//	result_operator->right_col_sel = node->join_stats.right_col_sel;
-//	result_operator->right_col_mult = node->join_stats.right_col_mult;
-//	result_operator->left_col_sel = node->join_stats.left_col_sel;
-//	result_operator->left_col_mult = node->join_stats.left_col_mult;
+	result_operator->AddJoinStats(node->join_stats);
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
@@ -927,7 +919,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	auto total_relation = set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
-	//! Here is where I should do some debugging on the produced plan.
 	if (final_plan == plans.end()) {
 		// could not find the final plan
 		// this should only happen in case the sets are actually disjunct
@@ -944,7 +935,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now perform the actual reordering
 	auto final_plan_get = final_plan->second.get();
-	//	JoinNode::printWholeNode(final_plan_get);
 	return RewritePlan(move(plan), final_plan_get);
 }
 
