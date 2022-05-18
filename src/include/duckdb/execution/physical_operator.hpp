@@ -92,7 +92,7 @@ public:
 	idx_t estimated_cardinality;
 	//! the sel and mults of the joins conditions
 
-	struct JoinStats join_stats;
+	JoinStats join_stats;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
