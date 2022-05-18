@@ -90,13 +90,14 @@ public:
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
-	//! the sel and mults of the joins conditions
+	JoinStats ph_join_stats;
 
-	JoinStats join_stats;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
 	unique_ptr<GlobalOperatorState> op_state;
+
+	void AddStats(JoinStats join_stats);
 
 public:
 	virtual string GetName() const;
