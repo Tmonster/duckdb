@@ -41,6 +41,19 @@ struct JoinStats {
 
 	unordered_map<idx_t, double> table_col_mults;
 	unordered_map<idx_t, double> table_col_sels;
+
+	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
+	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_mult(1), right_col_sel(1) {
+		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
+		table_col_mults = unordered_map<idx_t, double>();
+		table_col_sels = unordered_map<idx_t, double>();
+	}
+
+	JoinStats(JoinStats &b): base_table_left(b.base_table_left), base_table_right(b.base_table_right),
+	      base_column_left(b.base_column_left), base_column_right(b.base_column_right),
+	      cardinality_ratio(b.cardinality_ratio), left_col_sel(b.left_col_sel),
+	      left_col_mult(b.left_col_mult), right_col_mult(b.right_col_mult), right_col_sel(b.right_col_sel){
+	}
 };
 
 class JoinNode {
@@ -59,43 +72,21 @@ public:
 	bool init_stats;
 	bool created_as_intermediate;
 
-	// first idx is a 32 bits for table id
-	//                32 bits for column id
-	// you need to use some bit manipulation to get he numbers
-
 	//! Create a leaf node in the join tree
-	//! set cost
-	//! to 0 because leaf nodes/base table already exist
+	//! set cost to 0 because leaf nodes/base table already exist
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, idx_t cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), left(nullptr), right(nullptr), init_stats(false),
 	      created_as_intermediate(false) {
-		join_stats.base_table_left = 0;
-		join_stats.base_table_right = 0;
-		join_stats.base_column_left = 0;
-		join_stats.base_column_right = 0;
+		join_stats = JoinStats();
 	}
 	//! Create an intermediate node in the join tree
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
-	    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(false),
+	    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right), init_stats(true),
 	      created_as_intermediate(true) {
-		init_stats = true;
-		join_stats.table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
-		join_stats.table_col_mults = unordered_map<idx_t, double>();
-		join_stats.table_col_sels = unordered_map<idx_t, double>();
-
-		//! need to refactor these stats into another columns
-		join_stats.base_table_left = 1;
-		join_stats.base_table_right = 1;
-		join_stats.base_column_left = 1;
-		join_stats.base_column_right = 1;
-		join_stats.cardinality_ratio = 1;
-
-		join_stats.left_col_sel = 1;
-		join_stats.left_col_mult = 1;
-		join_stats.right_col_sel = 1;
-		join_stats.right_col_mult = 1;
+		join_stats = JoinStats();
 	}
+
 
 	static idx_t hash_table_col(idx_t table, idx_t col);
 
