@@ -699,6 +699,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 	}
 
 	result_operator->estimated_cardinality = node->cardinality;
+	result_operator->has_estimated_cardinality = true;
+	result_operator->join_stats = node->join_stats;
 //	result_operator->right_col_sel = node->join_stats.right_col_sel;
 //	result_operator->right_col_mult = node->join_stats.right_col_mult;
 //	result_operator->left_col_sel = node->join_stats.left_col_sel;
