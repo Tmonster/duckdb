@@ -44,7 +44,7 @@ struct JoinStats {
 	unordered_map<idx_t, double> table_col_sels;
 
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
-	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_mult(1), right_col_sel(1), cost(0) {
+	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0) {
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		table_col_mults = unordered_map<idx_t, double>();
 		table_col_sels = unordered_map<idx_t, double>();
@@ -53,7 +53,7 @@ struct JoinStats {
 	JoinStats(JoinStats &b): base_table_left(b.base_table_left), base_table_right(b.base_table_right),
 	      base_column_left(b.base_column_left), base_column_right(b.base_column_right),
 	      cardinality_ratio(b.cardinality_ratio), left_col_sel(b.left_col_sel),
-	      left_col_mult(b.left_col_mult), right_col_mult(b.right_col_mult), right_col_sel(b.right_col_sel), cost(b.cost){
+	      left_col_mult(b.left_col_mult), right_col_sel(b.right_col_mult), right_col_mult(b.right_col_sel), cost(b.cost){
 	}
 };
 
@@ -67,7 +67,7 @@ public:
 	JoinNode *left;
 	JoinNode *right;
 
-	struct JoinStats join_stats;
+	JoinStats join_stats;
 
 	//! have the multiplicity and selectivity stats been initialized?
 	bool init_stats;
@@ -104,6 +104,9 @@ public:
 
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);
+	void apply_sel_to_columns(idx_t relation_id, JoinOrderOptimizer *optimizer, idx_t right_table, idx_t right_column, idx_t left_table, idx_t left_column, bool has_filter);
+	void apply_sel_to_one_column(idx_t relation_id, idx_t index, idx_t right_table, idx_t right_column, idx_t left_table, idx_t left_column, bool has_filter, idx_t cur_col);
+	void apply_sel_to_all_columns(idx_t index, bool has_filter);
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
 	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
