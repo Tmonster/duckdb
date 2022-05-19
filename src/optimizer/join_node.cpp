@@ -49,6 +49,7 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			auto tmp = optimizer->relations.at(relation_id)->op;
 			auto &get = (LogicalGet &)*tmp;
 			auto catalog_table = get.GetTable();
+
 			if (catalog_table) {
 				// keep track of relation to table names
 				// using catalog table, we can insert HLL stats
@@ -62,7 +63,25 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 				has_filter = true;
 			}
 		}
+		else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
+//			auto tmp = optimizer->relations.at(relation_id)->op;
+//			auto &get = (LogicalFilter &)*tmp;
+			// here you have to go a logical operator down and get the table.
+//			auto catalog_table = get.GetTable();
 
+//			if (catalog_table) {
+//				// keep track of relation to table names
+//				// using catalog table, we can insert HLL stats
+//				optimizer->relation_to_table_name[relation_id] = catalog_table->name;
+//				// can use catalog_table to get table stats and also update the mult for each column
+//				// we might be querying directly on files, so no catalog entry in that case
+//				unordered_set<idx_t>::iterator rc_it;
+//				std::vector<duckdb::ColumnDefinition>::iterator co_it;
+//			}
+//			if (!get.table_filters.filters.empty()) {
+				has_filter = true;
+//			}
+		}
 		vector<FilterInfo *>::iterator filter_it;
 		idx_t right_table, right_column, left_table, left_column;
 		if (filters.size() > 1)
