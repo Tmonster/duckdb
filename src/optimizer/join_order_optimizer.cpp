@@ -284,8 +284,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double left_mult_winner = 0;
 	double left_sel_winner = 0;
 
-	if (info->filters.size() > 1)
-		throw NotImplementedException("Join has more than one filter, skip this test case for now");
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
@@ -309,27 +307,27 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			right_col = info->filters[it]->right_binding.second;
 			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
-	}
 
-	D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_mults));
-	D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_sels));
-	D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_mults));
-	D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_sels));
+		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_mults));
+		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats.table_col_sels));
+		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_mults));
+		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats.table_col_sels));
 
-	if (left_table == right_table)
-		same_base_table = true;
+		if (left_table == right_table)
+			same_base_table = true;
 
-	right_mult = right->join_stats.table_col_mults[right_pair_key];
-	right_sel = right->join_stats.table_col_sels[right_pair_key];
-	left_mult = left->join_stats.table_col_mults[left_pair_key];
-	left_sel = left->join_stats.table_col_sels[left_pair_key];
+		right_mult = right->join_stats.table_col_mults[right_pair_key];
+		right_sel = right->join_stats.table_col_sels[right_pair_key];
+		left_mult = left->join_stats.table_col_mults[left_pair_key];
+		left_sel = left->join_stats.table_col_sels[left_pair_key];
 
-	if (left_sel * right_mult * right_sel < cur_scale_factor) {
-		right_mult_winner = right_mult;
-		right_sel_winner = right_sel;
-		left_mult_winner = left_mult;
-		left_sel_winner = left_sel;
-		cur_scale_factor = right_mult * right_sel;
+		if (left_sel * right_mult * right_sel < cur_scale_factor) {
+			right_mult_winner = right_mult;
+			right_sel_winner = right_sel;
+			left_mult_winner = left_mult;
+			left_sel_winner = left_sel;
+			cur_scale_factor = right_mult * right_sel;
+		}
 	}
 
 	D_ASSERT(left_mult >= 1);
@@ -773,6 +771,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node) {
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
+
+//	JoinNode::printWholeNode(node);
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
