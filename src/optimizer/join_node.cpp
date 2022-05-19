@@ -109,6 +109,7 @@ void JoinNode::update_cardinality_estimate(bool same_base_table) {
 
 void JoinNode::update_cost() {
 	cost = cardinality + left->cost + right->cost;
+	join_stats.cost = cost;
 }
 
 void JoinNode::update_cardinality_ratio(bool same_base_table) {
