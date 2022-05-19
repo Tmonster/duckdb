@@ -36,13 +36,15 @@ struct JoinStats {
 	double right_col_sel;
 	double right_col_mult;
 
+	idx_t cost;
+
 	unordered_map<idx_t, unordered_set<idx_t>> table_cols;
 
 	unordered_map<idx_t, double> table_col_mults;
 	unordered_map<idx_t, double> table_col_sels;
 
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
-	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_mult(1), right_col_sel(1) {
+	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_mult(1), right_col_sel(1), cost(0) {
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		table_col_mults = unordered_map<idx_t, double>();
 		table_col_sels = unordered_map<idx_t, double>();
@@ -51,7 +53,7 @@ struct JoinStats {
 	JoinStats(JoinStats &b): base_table_left(b.base_table_left), base_table_right(b.base_table_right),
 	      base_column_left(b.base_column_left), base_column_right(b.base_column_right),
 	      cardinality_ratio(b.cardinality_ratio), left_col_sel(b.left_col_sel),
-	      left_col_mult(b.left_col_mult), right_col_mult(b.right_col_mult), right_col_sel(b.right_col_sel){
+	      left_col_mult(b.left_col_mult), right_col_mult(b.right_col_mult), right_col_sel(b.right_col_sel), cost(b.cost){
 	}
 };
 
