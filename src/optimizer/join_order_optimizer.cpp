@@ -910,7 +910,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
+		if (rel.op->type == LogicalOperatorType::LOGICAL_FILTER &&
+		    rel.op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			auto cardinality = rel.op->children[0]->EstimateCardinality(context);
+			plans[node] = make_unique<JoinNode>(node, rel.op->children[0]->EstimateCardinality(context));
+			rel.op->estimated_cardinality = cardinality;
+			rel.op->has_estimated_cardinality = true;
+		} else {
+			plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
+		}
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
