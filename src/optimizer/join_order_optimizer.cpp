@@ -773,8 +773,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
 
-//	JoinNode::printWholeNode(node);
-
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
 	for (auto &relation : relations) {
@@ -808,7 +806,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 		op = op->children[0].get();
 	}
 	// have to replace at this node
-	//	std::cout << join_tree.second->ToString() << std::endl;
 	parent->children[0] = move(join_tree.second);
 	return plan;
 }
@@ -910,7 +907,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		if (rel.op->type == LogicalOperatorType::LOGICAL_FILTER &&
 		    rel.op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 			auto cardinality = rel.op->children[0]->EstimateCardinality(context);
-			plans[node] = make_unique<JoinNode>(node, rel.op->children[0]->EstimateCardinality(context));
+			plans[node] = make_unique<JoinNode>(node, cardinality);
 			rel.op->estimated_cardinality = cardinality;
 			rel.op->has_estimated_cardinality = true;
 		} else {

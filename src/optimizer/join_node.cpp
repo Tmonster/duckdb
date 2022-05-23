@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <limits>
 
 namespace duckdb {
 
@@ -29,7 +28,6 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 
 	JoinRelationSet *join_relations = set;
 	idx_t relation_id;
-	bool has_filter = false;
 	bool found_table_index = false;
 	for (idx_t it = 0; it < join_relations->count; it++) {
 		relation_id = join_relations->relations[it];
@@ -51,67 +49,79 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			auto catalog_table = get.GetTable();
 
 			if (catalog_table) {
-				// keep track of relation to table names
-				// using catalog table, we can insert HLL stats
-				optimizer->relation_to_table_name[relation_id] = catalog_table->name;
-				// can use catalog_table to get table stats and also update the mult for each column
-				// we might be querying directly on files, so no catalog entry in that case
-				unordered_set<idx_t>::iterator rc_it;
-				std::vector<duckdb::ColumnDefinition>::iterator co_it;
+				// Get HLL stats here
 			}
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
 			}
 		}
 		else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
-//			auto tmp = optimizer->relations.at(relation_id)->op;
-//			auto &get = (LogicalFilter &)*tmp;
-			// here you have to go a logical operator down and get the table.
-//			auto catalog_table = get.GetTable();
-
-//			if (catalog_table) {
-//				// keep track of relation to table names
-//				// using catalog table, we can insert HLL stats
-//				optimizer->relation_to_table_name[relation_id] = catalog_table->name;
-//				// can use catalog_table to get table stats and also update the mult for each column
-//				// we might be querying directly on files, so no catalog entry in that case
-//				unordered_set<idx_t>::iterator rc_it;
-//				std::vector<duckdb::ColumnDefinition>::iterator co_it;
-//			}
-//			if (!get.table_filters.filters.empty()) {
-				has_filter = true;
-//			}
+			if (optimizer->relations.at(relation_id)->op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+				auto &get = (LogicalGet&)*optimizer->relations.at(relation_id)->op->children[0];
+				auto catalog_table = get.GetTable();
+				if (catalog_table) {
+					// Get HLL stats here.
+				}
+			}
+			has_filter = true;
 		}
 		vector<FilterInfo *>::iterator filter_it;
 		idx_t right_table, right_column, left_table, left_column;
-		if (filters.size() > 1)
-			throw NotImplementedException("More than one filter on this join. Ignore this test case for now");
 		for (filter_it = filters.begin(); filter_it != filters.end(); filter_it++) {
 			right_table = (*filter_it)->right_binding.first;
 			right_column = (*filter_it)->right_binding.second;
 			left_table = (*filter_it)->left_binding.first;
 			left_column = (*filter_it)->left_binding.second;
-		}
-		unordered_set<idx_t>::iterator ite;
-		for (ite = optimizer->relation_to_columns[relation_id].begin();
-		     ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
-			// this is where hyperloglog stats can be inserted
-			join_stats.table_cols[relation_id].insert(*ite);
-			auto index = hash_table_col(relation_id, *ite);
-
-			// Here you can use HLL to give a more accurate reading.
-			join_stats.table_col_mults[index] = 1;
-
-			// We only add selectivity for the one column. It can easiliy be the case that other
-			// columns still have their full domain even after a table is filtered on just on column
-			if (has_filter && ((right_table == relation_id && *ite == right_column) ||
-			                   (left_table == relation_id && *ite == left_column))) {
-				join_stats.table_col_sels[index] = default_selectivity;
-			} else
-				join_stats.table_col_sels[index] = 1;
+			apply_sel_to_columns(relation_id, optimizer, right_table, right_column, left_table, left_column);
 		}
 	}
 	init_stats = true;
+}
+
+void JoinNode::apply_sel_to_columns(idx_t relation_id, JoinOrderOptimizer *optimizer,
+                                    idx_t right_table, idx_t right_column,
+                                    idx_t left_table, idx_t left_column) {
+	unordered_set<idx_t>::iterator ite;
+	for (ite = optimizer->relation_to_columns[relation_id].begin();
+	     ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
+
+		// insert the table, col pair into the resulting join node.
+		join_stats.table_cols[relation_id].insert(*ite);
+		auto index = hash_table_col(relation_id, *ite);
+
+		// mults are initialized to 1 and are later updated in update_stats_from_left_table and
+		// update_stats_from_right_table
+		join_stats.table_col_mults[index] = 1;
+
+		// possible it's been initialized if we have multiple filters on different columns
+		// on the same table. So only if the sel doesn't exist, initialize it.
+		if (join_stats.table_col_sels.find(index) == join_stats.table_col_sels.end()) {
+			join_stats.table_col_sels[index] = 1;
+		}
+
+		// We only add selectivity for the one column. It can easiliy be the case that other
+		// columns still have their full domain even after a table is filtered on just on column
+//		apply_sel_to_one_column(relation_id, index, right_table, right_column, left_table, left_column, *ite);
+		apply_sel_to_all_columns(index, has_filter);
+	}
+}
+
+void JoinNode::apply_sel_to_one_column(idx_t relation_id, idx_t index, idx_t right_table, idx_t right_column, idx_t left_table, idx_t left_column,  idx_t cur_col) {
+	if ((has_filter) && ((right_table == relation_id && cur_col == right_column) ||
+	                     (left_table == relation_id && cur_col == left_column))) {
+		join_stats.table_col_sels[index] = default_selectivity;
+	} else {
+		join_stats.table_col_sels[index] = 1;
+	}
+}
+
+
+void JoinNode::apply_sel_to_all_columns(idx_t index, bool has_filter) {
+	if (has_filter) {
+		join_stats.table_col_sels[index] = default_selectivity;
+	} else {
+		join_stats.table_col_sels[index] = 1;
+	}
 }
 
 void JoinNode::update_cardinality_estimate(bool same_base_table) {
@@ -123,11 +133,20 @@ void JoinNode::update_cardinality_estimate(bool same_base_table) {
 		D_ASSERT(join_stats.right_col_mult >= 1);
 		cardinality =
 		    left->cardinality * join_stats.left_col_sel * join_stats.right_col_sel * join_stats.right_col_mult;
+		if (left->has_filter && join_stats.left_col_sel != default_selectivity) {
+			cardinality *= 0.5;
+		}
+		if (right->has_filter && join_stats.right_col_sel != default_selectivity) {
+			cardinality *= 0.5;
+		}
 	}
 }
 
 void JoinNode::update_cost() {
 	cost = cardinality + left->cost + right->cost;
+	if (right->cost == 0) {
+		cost += right->cardinality;
+	}
 	join_stats.cost = cost;
 }
 
