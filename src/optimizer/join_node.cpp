@@ -50,6 +50,8 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 
 			if (catalog_table) {
 				// Get HLL stats here
+//				auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, 0);
+//				if (base_stats.distinct_stats)
 			}
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
@@ -110,8 +112,6 @@ void JoinNode::apply_sel_to_one_column(idx_t relation_id, idx_t index, idx_t rig
 	if ((has_filter) && ((right_table == relation_id && cur_col == right_column) ||
 	                     (left_table == relation_id && cur_col == left_column))) {
 		join_stats.table_col_sels[index] = default_selectivity;
-	} else {
-		join_stats.table_col_sels[index] = 1;
 	}
 }
 
@@ -119,8 +119,6 @@ void JoinNode::apply_sel_to_one_column(idx_t relation_id, idx_t index, idx_t rig
 void JoinNode::apply_sel_to_all_columns(idx_t index, bool has_filter) {
 	if (has_filter) {
 		join_stats.table_col_sels[index] = default_selectivity;
-	} else {
-		join_stats.table_col_sels[index] = 1;
 	}
 }
 
