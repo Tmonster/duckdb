@@ -24,7 +24,8 @@ namespace duckdb {
 class JoinOrderOptimizer;
 
 
-struct JoinStats {
+class JoinStats {
+public:
 	idx_t base_table_left;
 	idx_t base_table_right;
 	idx_t base_column_left;
@@ -43,6 +44,7 @@ struct JoinStats {
 	unordered_map<idx_t, double> table_col_mults;
 	unordered_map<idx_t, double> table_col_sels;
 
+
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
 	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0) {
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
@@ -50,14 +52,26 @@ struct JoinStats {
 		table_col_sels = unordered_map<idx_t, double>();
 	}
 
-	JoinStats(JoinStats &b): base_table_left(b.base_table_left), base_table_right(b.base_table_right),
-	      base_column_left(b.base_column_left), base_column_right(b.base_column_right),
-	      cardinality_ratio(b.cardinality_ratio), left_col_sel(b.left_col_sel),
-	      left_col_mult(b.left_col_mult), right_col_sel(b.right_col_sel), right_col_mult(b.right_col_mult), cost(b.cost){
+	std::unique_ptr<JoinStats> Copy(std::unique_ptr<JoinStats> join_stats) {
+	    base_table_left = join_stats->base_table_left;
+		base_table_right = join_stats->base_table_right;
+		base_column_left = join_stats->base_column_left;
+	    base_column_right = join_stats->base_column_right;
+	    cardinality_ratio = join_stats->cardinality_ratio;
+	    left_col_sel = join_stats->left_col_sel;
+	    left_col_mult = join_stats->left_col_mult;
+	    right_col_sel = join_stats->right_col_sel;
+	  	right_col_mult = join_stats->right_col_mult;
+	  	cost = join_stats->cost;
+
+		// these should be updated using JoinNode functions
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		table_col_mults = unordered_map<idx_t, double>();
 		table_col_sels = unordered_map<idx_t, double>();
+		return join_stats;
 	}
+
+	JoinStats(const JoinStats &) = delete;
 
 };
 
@@ -72,7 +86,7 @@ public:
 	JoinNode *left;
 	JoinNode *right;
 
-	JoinStats join_stats;
+	std::unique_ptr<JoinStats> join_stats;
 
 	//! have the multiplicity and selectivity stats been initialized?
 	bool init_stats;
@@ -84,13 +98,13 @@ public:
 	JoinNode(JoinRelationSet *set, idx_t cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr), init_stats(false),
 	      created_as_intermediate(false) {
-		join_stats = JoinStats();
+		join_stats = make_unique<JoinStats>();
 	}
 	//! Create an intermediate node in the join tree
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
 	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right), init_stats(true),
 	      created_as_intermediate(true) {
-		join_stats = JoinStats();
+		join_stats = make_unique<JoinStats>();
 	}
 
 

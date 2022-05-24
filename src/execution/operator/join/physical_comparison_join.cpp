@@ -30,11 +30,11 @@ string PhysicalComparisonJoin::ParamsToString() const {
 		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
 	extra_info += "\nEC = " + std::to_string(estimated_cardinality) + "\n";
-	extra_info += "COST = " + std::to_string(ph_join_stats.cost) + "\n";
-	extra_info += "MULT: " + std::to_string(ph_join_stats.left_col_mult).substr(0,3) + ", ";
-	extra_info += 			 std::to_string(ph_join_stats.right_col_mult).substr(0,3) + "\n";
-	extra_info += "SELE: " + std::to_string(ph_join_stats.left_col_sel).substr(0,3) + ", ";
-	extra_info +=            std::to_string(ph_join_stats.right_col_sel).substr(0,3) + "\n";
+	extra_info += "COST = " + std::to_string(ph_join_stats->cost) + "\n";
+	extra_info += "MULT: " + std::to_string(ph_join_stats->left_col_mult).substr(0,3) + ", ";
+	extra_info += 			 std::to_string(ph_join_stats->right_col_mult).substr(0,3) + "\n";
+	extra_info += "SELE: " + std::to_string(ph_join_stats->left_col_sel).substr(0,3) + ", ";
+	extra_info +=            std::to_string(ph_join_stats->right_col_sel).substr(0,3) + "\n";
 
 	return extra_info;
 }
