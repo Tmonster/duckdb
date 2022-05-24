@@ -321,6 +321,13 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	return result;
 }
 
+static bool within_5_percent(idx_t old, idx_t neww) {
+	idx_t five_p = old * 0.05;
+	return (neww == old) ||
+	       (neww > old && neww - five_p < old) ||
+	       (neww < old && neww + five_p > old);
+}
+
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
@@ -334,7 +341,12 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-		D_ASSERT(result->cardinality == new_plan->cardinality);
+		if (entry != plans.end()) {
+			if (!within_5_percent(entry->second->cardinality, plans[new_set]->cardinality)) {
+				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
+				D_ASSERT(false);
+			}
+		}
 		plans[new_set] = move(new_plan);
 		return result;
 	}

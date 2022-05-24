@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_node.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -28,11 +29,14 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 
 	JoinRelationSet *join_relations = set;
 	idx_t relation_id;
-	bool found_table_index = false;
+	TableCatalogEntry *catalog_table = NULL;
+
+	D_ASSERT(join_relations->count == 1);
 	for (idx_t it = 0; it < join_relations->count; it++) {
 		relation_id = join_relations->relations[it];
 
 #ifdef DEBUG
+		bool found_table_index = false;
 		unordered_map<idx_t, idx_t>::iterator relation_map_it;
 		found_table_index = false;
 		for (relation_map_it = optimizer->relation_mapping.begin();
@@ -48,56 +52,56 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 		if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto tmp = optimizer->relations.at(relation_id)->op;
 			auto &get = (LogicalGet &)*tmp;
-			auto catalog_table = get.GetTable();
-
-			if (catalog_table) {
-				// Get HLL stats here
-//				auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, 0);
-//				if (base_stats.distinct_stats)
-			}
+			catalog_table = get.GetTable();
 			if (!get.table_filters.filters.empty()) {
 				has_filter = true;
 			}
-		}
-		else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
+		} else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (optimizer->relations.at(relation_id)->op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-				auto &get = (LogicalGet&)*optimizer->relations.at(relation_id)->op->children[0];
-				auto catalog_table = get.GetTable();
-				if (catalog_table) {
-					// Get HLL stats here.
-				}
+				auto &get = (LogicalGet &)*optimizer->relations.at(relation_id)->op->children[0];
+				catalog_table = get.GetTable();
+				has_filter = true;
 			}
-			has_filter = true;
 		}
-		calculate_unique_count(relation_id, optimizer, has_filter);
 	}
-	init_stats = true;
-}
 
-void JoinNode::calculate_unique_count(idx_t relation_id, JoinOrderOptimizer *optimizer, bool has_filter) {
+	idx_t cardinality_with_filter = cardinality;
+	if (has_filter)
+		cardinality_with_filter *= 0.2;
+
 	unordered_set<idx_t>::iterator ite;
+	idx_t index;
+	idx_t count = 0;
 	for (ite = optimizer->relation_to_columns[relation_id].begin();
-	     ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
-		// insert the table, col pair into the resulting join node.
-		join_stats->table_cols[relation_id].insert(*ite);
-		auto index = hash_table_col(relation_id, *ite);
+		 ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
+		if (catalog_table) {
+			// Get HLL stats here
+			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, *ite);
+			count = base_stats->GetDistinctCount();
+//			std::cout << "relation " << relation_id << " count is = " << count << ". cardinality = " << cardinality << std::endl;
+			D_ASSERT(count <= cardinality);
+		}
 
-		// with HLL you can improve the unique values count.
-		join_stats->table_col_unique_vals[index] = cardinality;
-		if (has_filter) {
-			// when adding HLL, first identify which column has the filter, then apply
-			// selectivity in the following way
-			// join_stats->table_col_unique_vals = min(count of filtered column, count of current column)
-			join_stats->table_col_unique_vals[index] *= 0.2;
+		index = hash_table_col(relation_id, *ite);
+		join_stats->table_cols[relation_id].insert(*ite);
+
+		if (count == 0) {
+			join_stats->table_col_unique_vals[index] = cardinality_with_filter;
+		} else {
+			join_stats->table_col_unique_vals[index] = MinValue(cardinality_with_filter, count);
 		}
 	}
+
+	init_stats = true;
 }
 
 double JoinNode::GetTableColMult(idx_t table, idx_t col) {
 	auto hash = hash_table_col(table, col);
 	D_ASSERT(key_exists(hash, join_stats->table_col_unique_vals));
 	D_ASSERT(join_stats->table_col_unique_vals[hash] >= 0);
-	return cardinality / join_stats->table_col_unique_vals[hash];
+	// use ceil because we want to try and over estimate cardinalities
+	// most optimizers still underestimate
+	return (double)cardinality / join_stats->table_col_unique_vals[hash];
 }
 
 void JoinNode::update_cardinality_estimate(bool same_base_table) {

@@ -14,6 +14,7 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 #include <map>
 
@@ -123,7 +124,6 @@ public:
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);
 	double GetTableColMult(idx_t table, idx_t col);
-	void calculate_unique_count(idx_t relation_id, JoinOrderOptimizer *optimizer, bool has_filter);
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
 	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
