@@ -91,10 +91,6 @@ string LogicalOperator::ToString() const {
 	return renderer.ToString(*this);
 }
 
-void LogicalOperator::AddJoinStats(JoinStats new_stats) {
-	join_stats = JoinStats(new_stats);
-}
-
 void LogicalOperator::Verify() {
 #ifdef DEBUG
 	// verify expressions

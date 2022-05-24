@@ -28,9 +28,11 @@ namespace duckdb {
 class LogicalOperator {
 public:
 	explicit LogicalOperator(LogicalOperatorType type) : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
+		join_stats = make_unique<JoinStats>();
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+		join_stats = make_unique<JoinStats>();
 	}
 	virtual ~LogicalOperator() {
 	}
@@ -47,7 +49,7 @@ public:
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
 
-	JoinStats join_stats;
+	unique_ptr<JoinStats> join_stats;
 
 
 public:
@@ -65,7 +67,6 @@ public:
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
-	void AddJoinStats(JoinStats new_stats);
 
 	void AddChild(unique_ptr<LogicalOperator> child);
 	
