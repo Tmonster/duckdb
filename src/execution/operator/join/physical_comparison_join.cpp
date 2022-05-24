@@ -29,12 +29,12 @@ string PhysicalComparisonJoin::ParamsToString() const {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
-	extra_info += "\nEC = " + std::to_string(estimated_cardinality) + "\n";
+	extra_info += "\nEC = " + std::to_string(ph_join_stats->cardinality) + "\n";
 	extra_info += "COST = " + std::to_string(ph_join_stats->cost) + "\n";
-	extra_info += "MULT: " + std::to_string(ph_join_stats->left_col_mult).substr(0,3) + ", ";
-	extra_info += 			 std::to_string(ph_join_stats->right_col_mult).substr(0,3) + "\n";
-	extra_info += "SELE: " + std::to_string(ph_join_stats->left_col_sel).substr(0,3) + ", ";
-	extra_info +=            std::to_string(ph_join_stats->right_col_sel).substr(0,3) + "\n";
+	auto left_join_key = JoinNode::hash_table_col(ph_join_stats->base_table_left, ph_join_stats->base_column_left);
+	auto right_join_key = JoinNode::hash_table_col(ph_join_stats->base_table_right, ph_join_stats->base_column_right);
+	extra_info += "LEFT UNIQ VALS: " + std::to_string(ph_join_stats->table_col_unique_vals[left_join_key]) + "\n";
+	extra_info += "RIGH UNIQ VALS: " + std::to_string(ph_join_stats->table_col_unique_vals[right_join_key]) + "\n";
 
 	return extra_info;
 }
