@@ -190,7 +190,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 			throw NotImplementedException("Unimplemented logical operator type!");
 		}
 	}
-	plan->AddStats(op.join_stats);
+	if (op.join_stats && plan->ph_join_stats) {
+		op.join_stats = plan->ph_join_stats->Copy(move(op.join_stats));
+	} else {
+		op.join_stats = make_unique<JoinStats>();
+	}
 
 	return plan;
 }
