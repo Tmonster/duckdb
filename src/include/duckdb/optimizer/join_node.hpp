@@ -38,18 +38,16 @@ public:
 	double right_col_mult;
 
 	idx_t cost;
+	idx_t cardinality;
 
 	unordered_map<idx_t, unordered_set<idx_t>> table_cols;
-
-	unordered_map<idx_t, double> table_col_mults;
-	unordered_map<idx_t, double> table_col_sels;
+	unordered_map<idx_t, double> table_col_unique_vals;
 
 
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
-	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0) {
+	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0), cardinality(0) {
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
-		table_col_mults = unordered_map<idx_t, double>();
-		table_col_sels = unordered_map<idx_t, double>();
+		table_col_unique_vals = unordered_map<idx_t, double>();
 	}
 
 	std::unique_ptr<JoinStats> Copy(std::unique_ptr<JoinStats> join_stats) {
@@ -62,12 +60,16 @@ public:
 	    left_col_mult = join_stats->left_col_mult;
 	    right_col_sel = join_stats->right_col_sel;
 	  	right_col_mult = join_stats->right_col_mult;
+
 	  	cost = join_stats->cost;
+		cardinality = join_stats->cardinality;
 
 		// these should be updated using JoinNode functions
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
-		table_col_mults = unordered_map<idx_t, double>();
-		table_col_sels = unordered_map<idx_t, double>();
+		unordered_map<idx_t, double>::iterator it;
+		for (it = join_stats->table_col_unique_vals.begin(); it != join_stats->table_col_unique_vals.end(); it++) {
+			table_col_unique_vals[it->first] = it->second;
+		}
 		return join_stats;
 	}
 
@@ -116,22 +118,18 @@ public:
 	void update_cardinality_estimate(bool same_base_table);
 	void update_cost();
 
-	void update_cardinality_ratio(bool same_base_table);
-
-	void update_stats_from_left_table(idx_t left_pair_key, idx_t right_pair_key);
-	void update_stats_from_right_table(idx_t left_pair_key, idx_t right_pair_key);
+	void update_stats_from_joined_tables(idx_t left_pair_key, idx_t right_pair_key);
 
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);
-	void apply_sel_to_columns(idx_t relation_id, JoinOrderOptimizer *optimizer, idx_t right_table, idx_t right_column, idx_t left_table, idx_t left_column);
-	void apply_sel_to_one_column(idx_t relation_id, idx_t index, idx_t right_table, idx_t right_column, idx_t left_table, idx_t left_column, idx_t cur_col);
-	void apply_sel_to_all_columns(idx_t index, bool has_filter);
+	double GetTableColMult(idx_t table, idx_t col);
+	void calculate_unique_count(idx_t relation_id, JoinOrderOptimizer *optimizer, bool has_filter);
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
 	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
 	                         unordered_set<idx_t> desired_right);
 	static void printWholeNode(JoinNode *node);
-	static void PrintNodeSelMulStats(JoinNode *node);
+	static void PrintNodeUniqueValueStats(JoinNode *node);
 };
 
 } // namespace duckdb

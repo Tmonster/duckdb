@@ -272,18 +272,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t right_col;
 	idx_t right_pair_key;
 
-	double right_sel = 1;
-	double right_mult = 1;
-	double left_sel = 1;
-	double left_mult = 1;
-
 	bool same_base_table = false;
-
-	double cur_scale_factor = NumericLimits<double>::Maximum();
-	double right_mult_winner = 0;
-	double right_sel_winner = 0;
-	double left_mult_winner = 0;
-	double left_sel_winner = 0;
 
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -309,49 +298,21 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
 
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_mults));
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_sels));
-		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats->table_col_mults));
-		D_ASSERT(JoinNode::key_exists(left_pair_key, left->join_stats->table_col_sels));
-
-		if (left_table == right_table)
-			same_base_table = true;
-
-		right_mult = right->join_stats->table_col_mults[right_pair_key];
-		right_sel = right->join_stats->table_col_sels[right_pair_key];
-		left_mult = left->join_stats->table_col_mults[left_pair_key];
-		left_sel = left->join_stats->table_col_sels[left_pair_key];
-
-		if (left_sel * right_mult * right_sel < cur_scale_factor) {
-			right_mult_winner = right_mult;
-			right_sel_winner = right_sel;
-			left_mult_winner = left_mult;
-			left_sel_winner = left_sel;
-			cur_scale_factor = right_mult * right_sel;
-		}
+		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
+		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
 	}
 
-	D_ASSERT(left_mult >= 1);
-	D_ASSERT(right_mult >= 1);
-	D_ASSERT(left_sel <= 1 && left_sel > 0);
-	D_ASSERT(right_sel <= 1 && right_sel > 0);
+	result->join_stats->base_table_left = left_table;
+	result->join_stats->base_table_right = right_table;
+	result->join_stats->base_column_left = left_col;
+	result->join_stats->base_column_right = right_col;
 
-	//! switch the variables around again.
-	result->join_stats->right_col_mult = right_mult_winner;
-	result->join_stats->right_col_sel = right_sel_winner;
-	result->join_stats->left_col_mult = left_mult_winner;
-	result->join_stats->left_col_sel = left_sel_winner;
-
-	//! new cardinality estimation
+	//! new cardinality estimation and cost
 	result->update_cardinality_estimate(same_base_table);
 
 	result->update_cost();
 
-	result->update_cardinality_ratio(same_base_table);
-
-	result->update_stats_from_left_table(left_pair_key, right_pair_key);
-
-	result->update_stats_from_right_table(left_pair_key, right_pair_key);
+	result->update_stats_from_joined_tables(left_pair_key, right_pair_key);
 
 #ifdef DEBUG
 	result->check_all_table_keys_forwarded();
@@ -359,8 +320,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	return result;
 }
-
-int bool_new_plan_made = false;
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
@@ -375,8 +334,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
+		D_ASSERT(result->cardinality == new_plan->cardinality);
 		plans[new_set] = move(new_plan);
-		bool_new_plan_made = true;
 		return result;
 	}
 
