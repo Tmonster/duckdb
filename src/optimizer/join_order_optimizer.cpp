@@ -280,7 +280,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 			right_table = info->filters[it]->left_binding.first;
 			right_col = info->filters[it]->left_binding.second;
-			right_pair_key = (right_table << 32) + right_col;
+			right_pair_key =  JoinNode::hash_table_col(right_table, right_col);
 
 			left_table = info->filters[it]->right_binding.first;
 			left_col = info->filters[it]->right_binding.second;
@@ -291,7 +291,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
 			left_table = info->filters[it]->left_binding.first;
 			left_col = info->filters[it]->left_binding.second;
-			left_pair_key = (left_table << 32) + left_col;
+			left_pair_key = JoinNode::hash_table_col(left_table, left_col);
 
 			right_table = info->filters[it]->right_binding.first;
 			right_col = info->filters[it]->right_binding.second;
@@ -322,7 +322,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 }
 
 static bool within_5_percent(idx_t old, idx_t neww) {
-	idx_t five_p = old * 0.05;
+	idx_t five_p = old * 0.01;
 	return (neww == old) ||
 	       (neww > old && neww - five_p < old) ||
 	       (neww < old && neww + five_p > old);
@@ -337,7 +337,11 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-
+	if (new_set->count == 7) {
+		std::cout << "Set " << new_set->ToString() << " has new cost of " << new_plan->cost << std::endl;
+		std::cout << "left set is " << new_plan->left->set->ToString() << std::endl;
+		std::cout << "right set is " << new_plan->right->set->ToString() << std::endl;
+	}
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
@@ -346,6 +350,14 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
 				D_ASSERT(false);
 			}
+		}
+		if (new_set->count == 7) {
+			std::cout << "Set " << new_set->ToString() << " has new lower cost of " << new_plan->cost << std::endl;
+			std::cout << "left set is " << new_plan->left->set->ToString() << " cost is " << new_plan->left->cost << std::endl;
+			std::cout << "right set is " << new_plan->right->set->ToString() << " cost is " << new_plan->right->cost << std::endl;
+		}
+		if (new_set->ToString().compare("[0, 1, 2, 3, 5, 6]") == 0) {
+			std::cout << new_plan->set->ToString() << " has new cost " << new_plan->cost << std::endl;
 		}
 		plans[new_set] = move(new_plan);
 		return result;

@@ -79,7 +79,10 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, *ite);
 			count = base_stats->GetDistinctCount();
 //			std::cout << "relation " << relation_id << " count is = " << count << ". cardinality = " << cardinality << std::endl;
-			D_ASSERT(count <= cardinality);
+			if (count > cardinality) {
+				count = cardinality;
+			}
+//			D_ASSERT(count <= cardinality);
 		}
 
 		index = hash_table_col(relation_id, *ite);
@@ -108,6 +111,7 @@ void JoinNode::update_cardinality_estimate(bool same_base_table) {
 
 	JoinNode *min_count_node = right;
 	JoinNode *max_count_node = left;
+
 	auto left_hash = hash_table_col(join_stats->base_table_left, join_stats->base_column_left);
 	auto right_hash = hash_table_col(join_stats->base_table_right, join_stats->base_column_right);
 
@@ -130,12 +134,15 @@ void JoinNode::update_cardinality_estimate(bool same_base_table) {
 
 void JoinNode::update_cost() {
 	cost = cardinality + left->cost + right->cost;
+
+	//! when joining base tables, be sure to consider the cost of scanning the base tables.
 	if (left->cost == 0) {
 		cost += left->cardinality;
 	}
 	if (right->cost == 0) {
 		cost += right->cardinality;
 	}
+
 	join_stats->cost = cost;
 }
 
