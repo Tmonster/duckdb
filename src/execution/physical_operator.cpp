@@ -36,10 +36,6 @@ vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
 	return result;
 }
 
-void PhysicalOperator::AddStats(JoinStats join_stats) {
-	ph_join_stats = JoinStats(join_stats);
-}
-
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
