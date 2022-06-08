@@ -343,8 +343,11 @@ void JoinOrderOptimizer::UpdateDPTree(unique_ptr<JoinNode> new_plan) {
 	auto new_set = new_plan->set;
 	plans[new_set] = move(new_plan);
 
-	// now update every plan that uses this plan
+	// exclude what we have so far
 	unordered_set<idx_t> exclusion_set;
+	UpdateExclusionSet(new_set, exclusion_set);
+
+	// now update every plan that uses this plan
 	for (auto neighbor : query_graph.GetNeighbors(new_set, exclusion_set)) {
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto combined_set = set_manager.Union(new_set, neighbor_relation);
@@ -353,7 +356,7 @@ void JoinOrderOptimizer::UpdateDPTree(unique_ptr<JoinNode> new_plan) {
 		}
 
 		// recurse
-		EmitPair(new_set, neighbor_relation, query_graph.GetConnection(new_set, neighbor_relation));
+		EnumerateCmpRecursive(new_set, neighbor_relation, exclusion_set);
 	}
 }
 
@@ -370,13 +373,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-		if (entry != plans.end() && entry->second->cardinality != plans[new_set]->cardinality) {
-			D_ASSERT(false);
-//			if (!within_5_percent(entry->second->cardinality, plans[new_set]->cardinality)) {
-//				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
-//			}
-		}
-
 		UpdateDPTree(move(new_plan));
 		return result;
 	}
@@ -413,11 +409,9 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (neighbors.empty()) {
 		return true;
 	}
-	// we iterate over the neighbors ordered by their first node
-//	sort(neighbors.begin(), neighbors.end(), [&](idx_t a, idx_t b) -> bool {
-//		return a > b;
-//	});
 
+	// we iterate over the neighbors ordered by their first node
+	sort(neighbors.begin(), neighbors.end());
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbfor,  hence we have to do a connectedness check before we can emit it
@@ -429,11 +423,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 			}
 		}
 		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
-			return false;
-		}
-		unordered_set<idx_t> exclusion_set_copy = exclusion_set;
-		exclusion_set_copy.insert(neighbor_relation->relations[0]);
-		if (!EnumerateCmpRecursive(neighbor_relation, node, exclusion_set_copy)) {
 			return false;
 		}
 	}
