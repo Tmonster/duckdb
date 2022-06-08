@@ -67,7 +67,8 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 
 	idx_t cardinality_with_filter = cardinality;
 	if (has_filter) {
-		cardinality_with_filter *= 0.2;
+		// believe it or not, sometimes we predict a cardinality of 0
+		cardinality_with_filter = MaxValue(cardinality_with_filter * 0.2, (double)1);
 		join_stats->cardinality = cardinality_with_filter;
 		cardinality = cardinality_with_filter;
 	}
