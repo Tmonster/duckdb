@@ -172,7 +172,15 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[get->table_index] = relations.size();
+		idx_t relation_id = relations.size();
+
+		//! make sure the optimizer has knowledge of the exact column bindings as well.
+		relation_mapping[get->table_index] = relation_id;
+		for(idx_t it = 0; it < get->column_ids.size(); it++) {
+			idx_t key = JoinNode::hash_table_col(relation_id, it);
+			relation_column_to_original_column[key] = get->column_ids[it];
+		}
+
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
@@ -238,7 +246,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	if (info->filters.empty()) {
 		// cross product
 		expected_cardinality = left->cardinality * right->cardinality;
-		auto cost = expected_cardinality + left->cost + right->cost;
+//		auto cost = expected_cardinality + left->cost + right->cost;
 
 		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
@@ -274,6 +282,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	bool same_base_table = false;
 
+	bool fight_me = left->join_stats->table_name_to_relation.find("cast_info") != left->join_stats->table_name_to_relation.end();
+	bool fight_me_2 = right->join_stats->table_name_to_relation.find("title") != right->join_stats->table_name_to_relation.end();
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
@@ -312,7 +322,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	result->update_cost();
 
-	result->update_stats_from_joined_tables(left_pair_key, right_pair_key);
+	result->update_stats_from_joined_tables(left_table, left_col, right_table, right_col);
 
 #ifdef DEBUG
 	result->check_all_table_keys_forwarded();
@@ -322,7 +332,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 }
 
 static bool within_5_percent(idx_t old, idx_t neww) {
-	idx_t five_p = old * 0.01;
+	idx_t five_p = old * 0.05;
 	return (neww == old) ||
 	       (neww > old && neww - five_p < old) ||
 	       (neww < old && neww + five_p > old);
@@ -337,28 +347,17 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	if (new_set->count == 7) {
-		std::cout << "Set " << new_set->ToString() << " has new cost of " << new_plan->cost << std::endl;
-		std::cout << "left set is " << new_plan->left->set->ToString() << std::endl;
-		std::cout << "right set is " << new_plan->right->set->ToString() << std::endl;
-	}
+
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-		if (entry != plans.end()) {
-			if (!within_5_percent(entry->second->cardinality, plans[new_set]->cardinality)) {
-				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
-				D_ASSERT(false);
-			}
+		if (entry != plans.end() && entry->second->cardinality != plans[new_set]->cardinality) {
+			D_ASSERT(false);
+//			if (!within_5_percent(entry->second->cardinality, plans[new_set]->cardinality)) {
+//				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
+//			}
 		}
-		if (new_set->count == 7) {
-			std::cout << "Set " << new_set->ToString() << " has new lower cost of " << new_plan->cost << std::endl;
-			std::cout << "left set is " << new_plan->left->set->ToString() << " cost is " << new_plan->left->cost << std::endl;
-			std::cout << "right set is " << new_plan->right->set->ToString() << " cost is " << new_plan->right->cost << std::endl;
-		}
-		if (new_set->ToString().compare("[0, 1, 2, 3, 5, 6]") == 0) {
-			std::cout << new_plan->set->ToString() << " has new cost " << new_plan->cost << std::endl;
-		}
+
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -378,6 +377,8 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	return true;
 }
 
+
+
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (node->count == relations.size()) {
 		return true;
@@ -394,10 +395,13 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		return true;
 	}
 	// we iterate over the neighbors ordered by their first node
-	sort(neighbors.begin(), neighbors.end());
+//	sort(neighbors.begin(), neighbors.end(), [&](idx_t a, idx_t b) -> bool {
+//		return a > b;
+//	});
+
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
-		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
+		// (only!) this neighbfor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto connection = query_graph.GetConnection(node, neighbor_relation);
 		if (connection) {
@@ -408,6 +412,11 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
 			return false;
 		}
+		unordered_set<idx_t> exclusion_set_copy = exclusion_set;
+		exclusion_set_copy.insert(neighbor_relation->relations[0]);
+		if (!EnumerateCmpRecursive(neighbor_relation, node, exclusion_set_copy)) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -415,6 +424,7 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right,
                                                unordered_set<idx_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
+	// Why not get neighbors of left+right under the exclusion set?
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
@@ -448,7 +458,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 }
 
 bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
-	// find neighbors of S under the exlusion set
+	// find neighbors of S under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
 		return true;

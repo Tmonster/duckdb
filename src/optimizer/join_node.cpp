@@ -66,8 +66,11 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 	}
 
 	idx_t cardinality_with_filter = cardinality;
-	if (has_filter)
+	if (has_filter) {
 		cardinality_with_filter *= 0.2;
+		join_stats->cardinality = cardinality_with_filter;
+		cardinality = cardinality_with_filter;
+	}
 
 	unordered_set<idx_t>::iterator ite;
 	idx_t index;
@@ -76,12 +79,19 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 		 ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
 		if (catalog_table) {
 			// Get HLL stats here
-			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, *ite);
+			idx_t key = hash_table_col(relation_id, *ite);
+			idx_t actual_column = optimizer->relation_column_to_original_column[key];
+			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
 			count = base_stats->GetDistinctCount();
 //			std::cout << "relation " << relation_id << " count is = " << count << ". cardinality = " << cardinality << std::endl;
 			if (count > cardinality) {
 				count = cardinality;
 			}
+			join_stats->table_name_to_relation[catalog_table->name] = relation_id;
+
+			index = relation_id * 100000 + *ite;
+			std::string col_name = catalog_table->columns.at(actual_column).name;
+			join_stats->relation_column_to_column_name[index] = col_name;
 //			D_ASSERT(count <= cardinality);
 		}
 
@@ -89,9 +99,9 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 		join_stats->table_cols[relation_id].insert(*ite);
 
 		if (count == 0) {
-			join_stats->table_col_unique_vals[index] = cardinality_with_filter;
+			join_stats->table_col_unique_vals[index] = cardinality;
 		} else {
-			join_stats->table_col_unique_vals[index] = MinValue(cardinality_with_filter, count);
+			join_stats->table_col_unique_vals[index] = MinValue(cardinality, (double)count);
 		}
 	}
 
@@ -128,7 +138,7 @@ void JoinNode::update_cardinality_estimate(bool same_base_table) {
 	// W.L.O.G suppose column a from a table A is joining with column a from table B.
 	// and A[a].count < B[a].count
 	// A has less unique values in column a. Assume all are matched in B[a].
-	cardinality = max_count_node->GetTableColMult(max_count_table, max_count_column) * min_count_node->cardinality;
+	cardinality = max_count_node->GetTableColMult(max_count_table, max_count_column) * (double)min_count_node->cardinality;
 	join_stats->cardinality = cardinality;
 }
 
@@ -146,13 +156,14 @@ void JoinNode::update_cost() {
 	join_stats->cost = cost;
 }
 
-void JoinNode::update_stats_from_joined_tables(idx_t left_pair_key, idx_t right_pair_key) {
+void JoinNode::update_stats_from_joined_tables(idx_t left_table, idx_t left_column, idx_t right_table, idx_t right_column) {
 
+	idx_t left_pair_key = hash_table_col(left_table, left_column);
+	idx_t right_pair_key = hash_table_col(right_table, right_column);
 	idx_t cur_left_table, cur_right_table;
 	unordered_set<idx_t>::iterator col_it;
-	join_stats->table_col_unique_vals[left_pair_key] = MinValue(right->join_stats->table_col_unique_vals[right_pair_key],
-	                                                            left->join_stats->table_col_unique_vals[left_pair_key]);
-	join_stats->table_col_unique_vals[right_pair_key] = join_stats->table_col_unique_vals[left_pair_key];
+
+	D_ASSERT(cardinality > 0);
 	//! 5) update all other left multiplicities of columns in the joined table(s)
 	for (idx_t table_it = 0; table_it < left->set->count; table_it++) {
 		cur_left_table = left->set->relations[table_it];
@@ -161,8 +172,12 @@ void JoinNode::update_stats_from_joined_tables(idx_t left_pair_key, idx_t right_
 
 			join_stats->table_cols[cur_left_table].insert(*col_it);
 			auto left_table_hash = hash_table_col(cur_left_table, *col_it);
+
 			join_stats->table_col_unique_vals[left_table_hash] =
-			    left->join_stats->table_col_unique_vals[left_table_hash];
+			    MinValue(left->join_stats->table_col_unique_vals[left_table_hash], cardinality);
+
+			auto table_col_hash = cur_left_table * 100000 + *col_it;
+			join_stats->relation_column_to_column_name[table_col_hash] = left->join_stats->relation_column_to_column_name[table_col_hash];
 		}
 	}
 	for (idx_t table_it = 0; table_it < right->set->count; table_it++) {
@@ -172,8 +187,13 @@ void JoinNode::update_stats_from_joined_tables(idx_t left_pair_key, idx_t right_
 
 			join_stats->table_cols[cur_right_table].insert(*col_it);
 			auto right_table_hash = hash_table_col(cur_right_table, *col_it);
+
 			join_stats->table_col_unique_vals[right_table_hash] =
-			    right->join_stats->table_col_unique_vals[right_table_hash];
+			    MinValue(right->join_stats->table_col_unique_vals[right_table_hash], cardinality);
+
+			auto table_col_hash = cur_right_table * 100000 + *col_it;
+			join_stats->relation_column_to_column_name[table_col_hash] =
+			    right->join_stats->relation_column_to_column_name[table_col_hash];
 		}
 	}
 }
