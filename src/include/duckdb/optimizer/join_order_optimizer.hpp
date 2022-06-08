@@ -80,6 +80,8 @@ private:
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
 	                          LogicalOperator *parent = nullptr);
+	//! Recursively update the DP tree
+	void UpdateDPTree(unique_ptr<JoinNode> new_plan);
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
 	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
