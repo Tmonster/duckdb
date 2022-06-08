@@ -91,7 +91,7 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			join_stats->table_name_to_relation[catalog_table->name] = relation_id;
 
 			index = relation_id * 100000 + *ite;
-			std::string col_name = catalog_table->columns.at(actual_column).name;
+			std::string col_name = catalog_table->columns.at(actual_column).Name();
 			join_stats->relation_column_to_column_name[index] = col_name;
 //			D_ASSERT(count <= cardinality);
 		}
