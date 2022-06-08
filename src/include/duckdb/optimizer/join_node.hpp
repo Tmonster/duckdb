@@ -39,16 +39,20 @@ public:
 	double right_col_mult;
 
 	idx_t cost;
-	idx_t cardinality;
+	double cardinality;
 
 	unordered_map<idx_t, unordered_set<idx_t>> table_cols;
 	unordered_map<idx_t, double> table_col_unique_vals;
+	unordered_map<idx_t , std::string> relation_column_to_column_name;
+	unordered_map<std::string, idx_t> table_name_to_relation;
 
 
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
 	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0), cardinality(0) {
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		table_col_unique_vals = unordered_map<idx_t, double>();
+		relation_column_to_column_name = unordered_map<idx_t, std::string>();
+		table_name_to_relation = unordered_map<std::string, idx_t>();
 	}
 
 	std::unique_ptr<JoinStats> Copy(std::unique_ptr<JoinStats> join_stats) {
@@ -65,6 +69,8 @@ public:
 	  	cost = join_stats->cost;
 		cardinality = join_stats->cardinality;
 
+		table_name_to_relation = unordered_map<std::string, idx_t>();
+		relation_column_to_column_name = unordered_map<idx_t, std::string>();
 		// these should be updated using JoinNode functions
 		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
 		unordered_map<idx_t, double>::iterator it;
@@ -83,7 +89,7 @@ public:
 	//! Represents a node in the join plan
 	JoinRelationSet *set;
 	NeighborInfo *info;
-	idx_t cardinality;
+	double cardinality;
 	idx_t cost;
 	bool has_filter;
 	JoinNode *left;
@@ -119,7 +125,7 @@ public:
 	void update_cardinality_estimate(bool same_base_table);
 	void update_cost();
 
-	void update_stats_from_joined_tables(idx_t left_pair_key, idx_t right_pair_key);
+	void update_stats_from_joined_tables(idx_t left_table, idx_t left_column, idx_t right_table, idx_t right_column);
 
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);

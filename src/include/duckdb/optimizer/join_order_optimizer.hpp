@@ -43,6 +43,8 @@ private:
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A mapping of base table index -> all columns used to determine the join order
 	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
+	//! A mapping of (relation, bound_column) -> actual column (but same relation)
+	unordered_map<idx_t, idx_t> relation_column_to_original_column;
 
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
