@@ -338,6 +338,25 @@ static bool within_5_percent(idx_t old, idx_t neww) {
 	       (neww < old && neww + five_p > old);
 }
 
+void JoinOrderOptimizer::UpdateDPTree(unique_ptr<JoinNode> new_plan) {
+	// add this plan
+	auto new_set = new_plan->set;
+	plans[new_set] = move(new_plan);
+
+	// now update every plan that uses this plan
+	unordered_set<idx_t> exclusion_set;
+	for (auto neighbor : query_graph.GetNeighbors(new_set, exclusion_set)) {
+		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
+		auto combined_set = set_manager.Union(new_set, neighbor_relation);
+		if (plans.find(combined_set) == plans.end()) {
+			continue;
+		}
+
+		// recurse
+		EmitPair(new_set, neighbor_relation, query_graph.GetConnection(new_set, neighbor_relation));
+	}
+}
+
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
@@ -358,7 +377,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 //			}
 		}
 
-		plans[new_set] = move(new_plan);
+		UpdateDPTree(move(new_plan));
 		return result;
 	}
 
