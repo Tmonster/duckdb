@@ -118,6 +118,7 @@ public:
 
 
 	static idx_t hash_table_col(idx_t table, idx_t col);
+	static idx_t readable_hash(idx_t table, idx_t col);
 
 	void check_all_table_keys_forwarded();
 
