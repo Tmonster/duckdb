@@ -282,8 +282,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	bool same_base_table = false;
 
-	bool fight_me = left->join_stats->table_name_to_relation.find("cast_info") != left->join_stats->table_name_to_relation.end();
-	bool fight_me_2 = right->join_stats->table_name_to_relation.find("title") != right->join_stats->table_name_to_relation.end();
+//	bool fight_me = left->join_stats->table_name_to_relation.find("cast_info") != left->join_stats->table_name_to_relation.end();
+//	bool fight_me_2 = right->join_stats->table_name_to_relation.find("title") != right->join_stats->table_name_to_relation.end();
+	D_ASSERT(info->filters.size() == 1);
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
@@ -331,13 +332,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	return result;
 }
 
-static bool within_5_percent(idx_t old, idx_t neww) {
-	idx_t five_p = old * 0.05;
-	return (neww == old) ||
-	       (neww > old && neww - five_p < old) ||
-	       (neww < old && neww + five_p > old);
-}
-
 void JoinOrderOptimizer::UpdateDPTree(unique_ptr<JoinNode> new_plan) {
 	// add this plan
 	auto new_set = new_plan->set;
@@ -370,14 +364,21 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-		if (entry != plans.end() && entry->second->cardinality != plans[new_set]->cardinality) {
-			D_ASSERT(false);
-//			if (!within_5_percent(entry->second->cardinality, plans[new_set]->cardinality)) {
-//				std::cout << "entry card = " << entry->second->cardinality << ". newPlan->card = " << new_plan->cardinality << std::endl;
-//			}
+		if (entry != plans.end()) {
+			if (ceil(result->cardinality) != ceil(entry->second->cardinality)) {
+//				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
+//				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
+//				D_ASSERT(result->cardinality == entry->second->cardinality);
+			}
+
 		}
 
-		UpdateDPTree(move(new_plan));
+//		if (result->set->ToString().compare("[0, 3, 4, 7, 9]") == 0) {
+//			std::cout << "break here and check " << std::endl;
+//		}
+
+//		UpdateDPTree(move(new_plan));
+		plans[new_set] = move(new_plan);
 		return result;
 	}
 
@@ -413,10 +414,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (neighbors.empty()) {
 		return true;
 	}
-	// we iterate over the neighbors ordered by their first node
-//	sort(neighbors.begin(), neighbors.end(), [&](idx_t a, idx_t b) -> bool {
-//		return a > b;
-//	});
 
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
@@ -431,11 +428,11 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
 			return false;
 		}
-		unordered_set<idx_t> exclusion_set_copy = exclusion_set;
-		exclusion_set_copy.insert(neighbor_relation->relations[0]);
-		if (!EnumerateCmpRecursive(neighbor_relation, node, exclusion_set_copy)) {
-			return false;
-		}
+//		unordered_set<idx_t> exclusion_set_copy = exclusion_set;
+//		exclusion_set_copy.insert(neighbor_relation->relations[0]);
+//		if (!EnumerateCmpRecursive(neighbor_relation, node, exclusion_set_copy)) {
+//			return false;
+//		}
 	}
 	return true;
 }

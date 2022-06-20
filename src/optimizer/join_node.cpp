@@ -90,7 +90,7 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 			}
 			join_stats->table_name_to_relation[catalog_table->name] = relation_id;
 
-			index = relation_id * 100000 + *ite;
+			index = readable_hash(relation_id, *ite);
 			std::string col_name = catalog_table->columns.at(actual_column).Name();
 			join_stats->relation_column_to_column_name[index] = col_name;
 //			D_ASSERT(count <= cardinality);
@@ -100,9 +100,10 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 		join_stats->table_cols[relation_id].insert(*ite);
 
 		if (count == 0) {
+			// assume primary key
 			join_stats->table_col_unique_vals[index] = cardinality;
 		} else {
-			join_stats->table_col_unique_vals[index] = MinValue(cardinality, (double)count);
+			join_stats->table_col_unique_vals[index] =  (double)count;
 		}
 	}
 
@@ -175,9 +176,9 @@ void JoinNode::update_stats_from_joined_tables(idx_t left_table, idx_t left_colu
 			auto left_table_hash = hash_table_col(cur_left_table, *col_it);
 
 			join_stats->table_col_unique_vals[left_table_hash] =
-			    MinValue(left->join_stats->table_col_unique_vals[left_table_hash], cardinality);
+			    left->join_stats->table_col_unique_vals[left_table_hash];
 
-			auto table_col_hash = cur_left_table * 100000 + *col_it;
+			auto table_col_hash = readable_hash(cur_left_table, *col_it);
 			join_stats->relation_column_to_column_name[table_col_hash] = left->join_stats->relation_column_to_column_name[table_col_hash];
 		}
 	}
@@ -190,13 +191,19 @@ void JoinNode::update_stats_from_joined_tables(idx_t left_table, idx_t left_colu
 			auto right_table_hash = hash_table_col(cur_right_table, *col_it);
 
 			join_stats->table_col_unique_vals[right_table_hash] =
-			    MinValue(right->join_stats->table_col_unique_vals[right_table_hash], cardinality);
+			    right->join_stats->table_col_unique_vals[right_table_hash];
 
-			auto table_col_hash = cur_right_table * 100000 + *col_it;
+			auto table_col_hash = readable_hash(cur_left_table, *col_it);
 			join_stats->relation_column_to_column_name[table_col_hash] =
 			    right->join_stats->relation_column_to_column_name[table_col_hash];
 		}
 	}
+
+	auto domain_left = left->join_stats->table_col_unique_vals[left_pair_key];
+	auto domain_right = right->join_stats->table_col_unique_vals[right_pair_key];
+	double lower_domain = MinValue(domain_left, domain_right);
+	join_stats->table_col_unique_vals[left_pair_key] = lower_domain;
+	join_stats->table_col_unique_vals[right_pair_key] = lower_domain;
 }
 
 //! Check to make sure all columns have mult and sel values in the resulting Join Node
@@ -242,6 +249,10 @@ bool JoinNode::key_exists(idx_t key, unordered_map<idx_t, double> stat_column) {
 
 idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
 	return (table << 32) + col;
+}
+
+idx_t JoinNode::readable_hash(idx_t table, idx_t col) {
+	return table * 10000000 + col;
 }
 
 //! ******************************************************
