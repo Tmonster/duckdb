@@ -123,13 +123,17 @@ public:
 	void check_all_table_keys_forwarded();
 
 public:
-	void update_cardinality_estimate(bool same_base_table);
+
+	void update_cardinality_estimate(JoinOrderOptimizer *optimizer);
+	idx_t getTdom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer);
 	void update_cost();
 
 	void update_stats_from_joined_tables(idx_t left_table, idx_t left_column, idx_t right_table, idx_t right_column);
 
+	TableCatalogEntry* GetCatalogTableEntry(LogicalOperator *op);
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
-	void InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer);
+	void InitColumnStats(JoinOrderOptimizer *optimizer);
+	void InitTDoms(JoinOrderOptimizer *optimizer);
 	double GetTableColMult(idx_t table, idx_t col);
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);

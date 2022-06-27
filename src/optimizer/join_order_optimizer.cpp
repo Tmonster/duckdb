@@ -64,8 +64,23 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, i
 			D_ASSERT(relation_mapping.find(right.binding.table_index) != relation_mapping.end());
 			*left_binding = std::make_pair(relation_mapping[left.binding.table_index], left.binding.column_index);
 			*right_binding = std::make_pair(relation_mapping[right.binding.table_index], right.binding.column_index);
+			return;
 		}
 	}
+	else if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expression;
+		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		// map the base table index to the relation index used by the JoinOrderOptimizer
+		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+		*left_binding = std::make_pair(relation_mapping[colref.binding.table_index], colref.binding.column_index);
+		*right_binding = std::make_pair(-1, -1);
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+		GetColumnBindings(expr, left_binding, right_binding);
+	});
+
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
@@ -176,10 +191,13 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relation_id;
+		std::cout << "column_ids for relation " << relation_id << std::endl;
 		for(idx_t it = 0; it < get->column_ids.size(); it++) {
-			idx_t key = JoinNode::hash_table_col(relation_id, it);
+			idx_t key = JoinNode::readable_hash(relation_id, it);
+			std::cout << "key = " << key << ": " << get->column_ids[it] << std::endl;
 			relation_column_to_original_column[key] = get->column_ids[it];
 		}
+		std::cout << std::endl;
 
 		relations.push_back(move(relation));
 		return true;
@@ -250,14 +268,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
-		// for (idx_t i = 0; i < left->set->count; i++) {
-		//		result.multiplicities[left->set->relations[i]] =
-		//		 left->multiplicities[left->set->relations[i]] * right->cardinality;
-		//	}
-		//	for (idx_t i = 0; i < right->set->count; i++) {
-		//		result.multiplicities[right->set->relations[i]] =
-		//			  right->multiplicities[right->set->relations[i]] * left->cardinality;
-		//	}
 	}
 
 	// normal join, expect foreign key join
@@ -267,8 +277,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// create result and add multiplicities
 
 	// Get underlying operators and initialize selectivities
-	left->InitColumnStats(info->filters, this);
-	right->InitColumnStats(info->filters, this);
+	left->InitColumnStats(this);
+	right->InitColumnStats(this);
 
 	auto cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
@@ -279,8 +289,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	idx_t right_table;
 	idx_t right_col;
 	idx_t right_pair_key;
-
-	bool same_base_table = false;
 
 //	bool fight_me = left->join_stats->table_name_to_relation.find("cast_info") != left->join_stats->table_name_to_relation.end();
 //	bool fight_me_2 = right->join_stats->table_name_to_relation.find("title") != right->join_stats->table_name_to_relation.end();
@@ -309,8 +317,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
 
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
-		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
+//		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
+//		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
 	}
 
 	result->join_stats->base_table_left = left_table;
@@ -319,14 +327,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	result->join_stats->base_column_right = right_col;
 
 	//! new cardinality estimation and cost
-	result->update_cardinality_estimate(same_base_table);
+	result->update_cardinality_estimate(this);
 
 	result->update_cost();
 
-	result->update_stats_from_joined_tables(left_table, left_col, right_table, right_col);
+//	result->update_stats_from_joined_tables(left_table, left_col, right_table, right_col);
 
 #ifdef DEBUG
-	result->check_all_table_keys_forwarded();
+//	result->check_all_table_keys_forwarded();
 #endif
 
 	return result;
@@ -366,16 +374,12 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		auto result = new_plan.get();
 		if (entry != plans.end()) {
 			if (ceil(result->cardinality) != ceil(entry->second->cardinality)) {
-//				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
-//				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
-//				D_ASSERT(result->cardinality == entry->second->cardinality);
+				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
+				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
+				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
 
 		}
-
-//		if (result->set->ToString().compare("[0, 3, 4, 7, 9]") == 0) {
-//			std::cout << "break here and check " << std::endl;
-//		}
 
 //		UpdateDPTree(move(new_plan));
 		plans[new_set] = move(new_plan);
@@ -428,11 +432,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
 			return false;
 		}
-//		unordered_set<idx_t> exclusion_set_copy = exclusion_set;
-//		exclusion_set_copy.insert(neighbor_relation->relations[0]);
-//		if (!EnumerateCmpRecursive(neighbor_relation, node, exclusion_set_copy)) {
-//			return false;
-//		}
 	}
 	return true;
 }
@@ -831,6 +830,95 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
+
+void JoinOrderOptimizer::InitEquivalentRelations() {
+	JoinRelationSet *left = NULL;
+	JoinRelationSet *right = NULL;
+	vector<idx_t> to_add_to;
+	for (idx_t i = 0; i < filter_infos.size(); i++) {
+		left = filter_infos[i]->left_set;
+		right = filter_infos[i]->right_set;
+		to_add_to.clear();
+		if (!left || !right) {
+			//! I'm pretty sure here you have filters on one relation, and it's a string filter
+			//! or number filter. So here, just grab the set (MAKE SURE IT'S 1) and add it to the
+			//! the equivalence_relations
+			D_ASSERT(filter_infos[i]->set->count == 1);
+//			if (relations.at(filter_infos[i]->set->relations[0])->op->type == Logi)
+			bool found = false;
+			for(unordered_set<idx_t> i_set : equivalent_relations) {
+				if (i_set.count(filter_infos[i]->set->relations[0]) > 0) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				idx_t key = JoinNode::readable_hash(filter_infos[i]->set->relations[0], filter_infos[i]->left_binding.second);
+				unordered_set<idx_t> tmp({key});
+				equivalent_relations.push_back(tmp);
+			}
+			continue;
+		}
+		D_ASSERT(left->count == 1);
+		D_ASSERT(right->count == 1);
+		vector<unordered_set<idx_t>>::iterator it;
+		// loop through equivalent_relations
+		idx_t index_er = 0;
+		idx_t left_hash = JoinNode::readable_hash(filter_infos[i]->left_binding.first, filter_infos[i]->left_binding.second);
+		idx_t right_hash = JoinNode::readable_hash(filter_infos[i]->right_binding.first, filter_infos[i]->right_binding.second);
+//		std::cout << "joining " << left_hash << " = " << right_hash << std::endl;
+		bool added_to_index_er = false;
+		for(unordered_set<idx_t> i_set : equivalent_relations) {
+			added_to_index_er = false;
+			if (i_set.count(left_hash) > 0) {
+				to_add_to.push_back(index_er);
+				added_to_index_er = true;
+			}
+			if (i_set.count(right_hash) > 0 && !added_to_index_er) {
+				to_add_to.push_back(index_er);
+			}
+			index_er += 1;
+		}
+		if (to_add_to.size() > 1) {
+			for(idx_t i: equivalent_relations.at(to_add_to[1])) {
+				equivalent_relations.at(to_add_to[0]).insert(i);
+			}
+			equivalent_relations.at(to_add_to[1]).clear();
+			// add all values of one set to the other, delete the empty one
+		} else if (to_add_to.size() == 1){
+			idx_t set_i = to_add_to.at(0);
+			equivalent_relations.at(set_i).insert(left_hash);
+			equivalent_relations.at(set_i).insert(right_hash);
+		} else if (to_add_to.size() == 0) {
+			unordered_set<idx_t> tmp({left_hash, right_hash});
+			equivalent_relations.push_back(tmp);
+		}
+	}
+	vector<unordered_set<idx_t>>::iterator it;
+	for(it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
+		if (it->size() == 0) {
+			equivalent_relations.erase(it);
+		}
+	}
+	for(it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
+		equivalent_relations_tdom_hll.push_back(0);
+		equivalent_relations_tdom_no_hll.push_back(NumericLimits<idx_t>::Maximum());
+	}
+#ifdef DEBUG
+	//! make sure all relations appear only once in the equivalet relations vector
+	unordered_set<idx_t> seen;
+	for(unordered_set<idx_t> i_set : equivalent_relations) {
+		std::cout << "equal set = ";
+		for(idx_t i: i_set) {
+			std::cout << i << ", ";
+			D_ASSERT(seen.count(i) == 0);
+			seen.insert(i);
+		}
+		std::cout << std::endl;
+	}
+#endif
+}
+
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
@@ -934,6 +1022,24 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		} else {
 			plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
 		}
+	}
+
+	InitEquivalentRelations();
+	for (idx_t i = 0; i < relations.size(); i++) {
+		auto node = set_manager.GetJoinRelation(i);
+		plans[node]->InitTDoms(this);
+//		plans[node]->InitColumnStats(this);
+	}
+
+	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
+	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
+	for (idx_t i = 0; i < equivalent_relations.size(); i++) {
+		std::cout << "set: " ;
+		for (idx_t j: equivalent_relations.at(i)) {
+			std::cout << j << ", ";
+		}
+		std::cout << ": hll-dom = " << equivalent_relations_tdom_hll.at(i);
+		std::cout << ": no-hll-dom = " << equivalent_relations_tdom_no_hll.at(i) << std::endl;
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

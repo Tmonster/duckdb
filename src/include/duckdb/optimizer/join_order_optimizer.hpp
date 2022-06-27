@@ -63,6 +63,10 @@ private:
 	//! C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
+	vector<unordered_set<idx_t>> equivalent_relations;
+	vector<idx_t> equivalent_relations_tdom_no_hll;
+	vector<idx_t> equivalent_relations_tdom_hll;
+
 	unordered_map<idx_t, std::string> relation_to_table_name;
 
 	//! Extract the bindings referred to by an Expression
@@ -80,6 +84,9 @@ private:
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
 	                          LogicalOperator *parent = nullptr);
+
+	void InitEquivalentRelations();
+
 	//! Recursively update the DP tree
 	void UpdateDPTree(unique_ptr<JoinNode> new_plan);
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
@@ -107,7 +114,6 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
 
-	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 
