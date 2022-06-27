@@ -18,7 +18,126 @@ namespace duckdb {
 
 static const double default_selectivity = 0.2;
 
-void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer *optimizer) {
+
+TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
+	if (op->type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = (LogicalGet &)op;
+		TableCatalogEntry *entry = get.GetTable();
+		return entry;
+	}
+	for(auto &child: op->children) {
+		TableCatalogEntry *entry = GetCatalogTableEntry(child.get());
+		if (entry != NULL) return entry;
+	}
+	return NULL;
+}
+
+void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
+	JoinRelationSet *join_relations = set;
+	idx_t relation_id;
+	TableCatalogEntry *catalog_table = NULL;
+
+	D_ASSERT(join_relations->count == 1);
+	relation_id = join_relations->relations[0];
+	bool got_catalog = false;
+	if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
+		auto tmp = optimizer->relations.at(relation_id)->op;
+		auto &get = (LogicalGet &)*tmp;
+		catalog_table = get.GetTable();
+		if (!get.table_filters.filters.empty()) {
+			has_filter = true;
+		}
+		optimizer->relation_to_table_name[relation_id] = catalog_table->name;
+	} else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
+		if (optimizer->relations.at(relation_id)->op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = (LogicalGet &)*optimizer->relations.at(relation_id)->op->children[0];
+			catalog_table = get.GetTable();
+			optimizer->relation_to_table_name[relation_id] = catalog_table->name;
+			has_filter = true;
+		} else {
+			// most likely dealing with a filter on top of a join
+			// queries like id IN ('1', '2', '3') trigger this
+			auto tmp = optimizer->relations.at(relation_id)->op;
+			catalog_table = GetCatalogTableEntry(tmp);
+			if (catalog_table) optimizer->relation_to_table_name[relation_id] = catalog_table->name;
+			has_filter = true;
+		}
+	}
+
+
+	idx_t cardinality_with_filter = cardinality;
+	idx_t direct_filter_hash = -1;
+	if (has_filter) {
+		cardinality_with_filter = 0.2 * cardinality;
+		if (cardinality_with_filter < 1) cardinality_with_filter = 1;
+		// check if the filter is on the column, how?
+		for (auto &filter : optimizer->filter_infos) {
+			// if there is a filter info where
+			if (filter->set->count == 1 && filter->set->relations[0] == relation_id) {
+				// then the filter is on this relation_id
+				// the readable hash represents the table_column that has a direct filter.
+				// that Tdom can be multiplied by 0.2.
+				direct_filter_hash = readable_hash(relation_id, filter->left_binding.second);
+			}
+		}
+	}
+
+	unordered_set<idx_t>::iterator ite;
+	idx_t count = 0;
+	for (ite = optimizer->relation_to_columns[relation_id].begin();
+	     ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
+
+		//! for every column in the relation, get the count via either HLL, or assume it to be
+		//! the cardinality
+		idx_t key = readable_hash(relation_id, *ite);
+		if (catalog_table) {
+			// Get HLL stats here
+			idx_t actual_column = optimizer->relation_column_to_original_column[key];
+			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
+			count = base_stats->GetDistinctCount();
+			if (key == direct_filter_hash) {
+				std::cout << "direct filter found" << std::endl;
+				count = count * 0.2;
+				if (count < 1) count = 1;
+			}
+			// HLL messed up, count can't be greater than cardinality
+			if (count > cardinality) {
+				count = cardinality;
+			}
+		} else {
+			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
+			// otherwise assume the total domain is still the cardinality
+			if (key == direct_filter_hash) {
+				std::cout << "direct filter found" << std::endl;
+				count = cardinality_with_filter;
+			} else {
+				count = cardinality;
+			}
+		}
+
+		idx_t ind = 0;
+		for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
+			if (i_set.count(key) == 1) {
+				if (catalog_table) {
+					if (optimizer->equivalent_relations_tdom_hll.at(ind) < count) {
+						optimizer->equivalent_relations_tdom_hll.at(ind) = count;
+					}
+					optimizer->equivalent_relations_tdom_no_hll.at(ind) = count;
+				} else {
+					if (optimizer->equivalent_relations_tdom_no_hll.at(ind) > count) {
+						optimizer->equivalent_relations_tdom_no_hll.at(ind) = count;
+					}
+					optimizer->equivalent_relations_tdom_hll.at(ind) = count;
+				}
+				break;
+			}
+			ind+=1;
+		}
+	}
+	join_stats->cardinality = cardinality_with_filter;
+}
+
+void JoinNode::InitColumnStats(JoinOrderOptimizer *optimizer) {
 	if (init_stats) {
 		return;
 	}
@@ -111,36 +230,31 @@ void JoinNode::InitColumnStats(vector<FilterInfo *> filters, JoinOrderOptimizer 
 }
 
 double JoinNode::GetTableColMult(idx_t table, idx_t col) {
-	auto hash = hash_table_col(table, col);
-	D_ASSERT(key_exists(hash, join_stats->table_col_unique_vals));
-	D_ASSERT(join_stats->table_col_unique_vals[hash] >= 0);
-	// use ceil because we want to try and over estimate cardinalities
-	// most optimizers still underestimate
-	return (double)cardinality / join_stats->table_col_unique_vals[hash];
+//	auto hash = hash_table_col(table, col);
+//	D_ASSERT(key_exists(hash, join_stats->table_col_unique_vals));
+//	D_ASSERT(join_stats->table_col_unique_vals[hash] >= 0);
+//	// use ceil because we want to try and over estimate cardinalities
+//	// most optimizers still underestimate
+//	return (double)cardinality / join_stats->table_col_unique_vals[hash];
+	return (double)1;
 }
 
-void JoinNode::update_cardinality_estimate(bool same_base_table) {
-
-	JoinNode *min_count_node = right;
-	JoinNode *max_count_node = left;
-
-	auto left_hash = hash_table_col(join_stats->base_table_left, join_stats->base_column_left);
-	auto right_hash = hash_table_col(join_stats->base_table_right, join_stats->base_column_right);
-
-	idx_t max_count_table = join_stats->base_table_left;
-	idx_t max_count_column = join_stats->base_column_left;
-	if (left->join_stats->table_col_unique_vals[left_hash] < right->join_stats->table_col_unique_vals[right_hash]) {
-		min_count_node = left;
-		max_count_node = right;
-		max_count_table = join_stats->base_table_right;
-		max_count_column = join_stats->base_column_right;
+idx_t JoinNode::getTdom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
+	idx_t use_ind = 0;
+	idx_t key = readable_hash(table, column);
+	for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
+		if (i_set.count(key) == 1) {
+			return optimizer->equivalent_relations_tdom_hll[use_ind];
+		}
+		use_ind+=1;
 	}
+	throw NotImplementedException("shouldn't get here actually");
+}
 
-	// Find the table with *more* unique values in the joined columns.
-	// W.L.O.G suppose column a from a table A is joining with column a from table B.
-	// and A[a].count < B[a].count
-	// A has less unique values in column a. Assume all are matched in B[a].
-	cardinality = max_count_node->GetTableColMult(max_count_table, max_count_column) * (double)min_count_node->cardinality;
+void JoinNode::update_cardinality_estimate(JoinOrderOptimizer *optimizer) {
+
+	idx_t tdom_of_join = getTdom(join_stats->base_table_right, join_stats->base_column_right, optimizer);
+	cardinality = (left->cardinality * right->cardinality)/tdom_of_join;
 	join_stats->cardinality = cardinality;
 }
 
