@@ -191,13 +191,13 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relation_id;
-		std::cout << "column_ids for relation " << relation_id << std::endl;
+//		std::cout << "column_ids for relation " << relation_id << std::endl;
 		for(idx_t it = 0; it < get->column_ids.size(); it++) {
 			idx_t key = JoinNode::readable_hash(relation_id, it);
-			std::cout << "key = " << key << ": " << get->column_ids[it] << std::endl;
+//			std::cout << "key = " << key << ": " << get->column_ids[it] << std::endl;
 			relation_column_to_original_column[key] = get->column_ids[it];
 		}
-		std::cout << std::endl;
+//		std::cout << std::endl;
 
 		relations.push_back(move(relation));
 		return true;
@@ -340,24 +340,36 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	return result;
 }
 
-void JoinOrderOptimizer::UpdateDPTree(unique_ptr<JoinNode> new_plan) {
-	// add this plan
-	auto new_set = new_plan->set;
-	plans[new_set] = move(new_plan);
 
-	// now update every plan that uses this plan
-	unordered_set<idx_t> exclusion_set;
-	for (auto neighbor : query_graph.GetNeighbors(new_set, exclusion_set)) {
-		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
-		auto combined_set = set_manager.Union(new_set, neighbor_relation);
-		if (plans.find(combined_set) == plans.end()) {
-			continue;
-		}
+//void JoinOrderOptimizer::updateDPTree(unique_ptr<JoinNode> new_plan, unique_ptr<JoinNode> entry) {
+//	for (auto &plan: plans) {
+//		if (plan.second->left->set == entry->set) {
+//
+//		}
+//		if (plan.second->right->set == entry->set) {
+//
+//		}
+// 	}
+//}
 
-		// recurse
-		EmitPair(new_set, neighbor_relation, query_graph.GetConnection(new_set, neighbor_relation));
-	}
-}
+//void UpdateDPTreeOLD(unique_ptr<JoinNode> new_plan) {
+//	// add this plan
+//	auto new_set = new_plan->set;
+//	plans[new_set] = move(new_plan);
+//
+//	// now update every plan that uses this plan
+//	unordered_set<idx_t> exclusion_set;
+//	for (auto neighbor : query_graph.GetNeighbors(new_set, exclusion_set)) {
+//		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
+//		auto combined_set = set_manager.Union(new_set, neighbor_relation);
+//		if (plans.find(combined_set) == plans.end()) {
+//			continue;
+//		}
+//
+//		// recurse
+//		EmitPair(new_set, neighbor_relation, query_graph.GetConnection(new_set, neighbor_relation));
+//	}
+//}
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
@@ -378,9 +390,9 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
-
 		}
-
+		string relations = new_set->ToString();
+//		std::cout << "updating cost for join node: " << relations << std::endl;
 //		UpdateDPTree(move(new_plan));
 		plans[new_set] = move(new_plan);
 		return result;
@@ -611,10 +623,10 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 
 void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
-	if (!SolveJoinOrderExactly()) {
+//	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
 		SolveJoinOrderApproximately();
-	}
+//	}
 }
 
 void JoinOrderOptimizer::GenerateCrossProducts() {
@@ -906,16 +918,16 @@ void JoinOrderOptimizer::InitEquivalentRelations() {
 	}
 #ifdef DEBUG
 	//! make sure all relations appear only once in the equivalet relations vector
-	unordered_set<idx_t> seen;
-	for(unordered_set<idx_t> i_set : equivalent_relations) {
-		std::cout << "equal set = ";
-		for(idx_t i: i_set) {
-			std::cout << i << ", ";
-			D_ASSERT(seen.count(i) == 0);
-			seen.insert(i);
-		}
-		std::cout << std::endl;
-	}
+//	unordered_set<idx_t> seen;
+//	for(unordered_set<idx_t> i_set : equivalent_relations) {
+//		std::cout << "equal set = ";
+//		for(idx_t i: i_set) {
+//			std::cout << i << ", ";
+//			D_ASSERT(seen.count(i) == 0);
+//			seen.insert(i);
+//		}
+//		std::cout << std::endl;
+//	}
 #endif
 }
 
@@ -1033,14 +1045,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
-	for (idx_t i = 0; i < equivalent_relations.size(); i++) {
-		std::cout << "set: " ;
-		for (idx_t j: equivalent_relations.at(i)) {
-			std::cout << j << ", ";
-		}
-		std::cout << ": hll-dom = " << equivalent_relations_tdom_hll.at(i);
-		std::cout << ": no-hll-dom = " << equivalent_relations_tdom_no_hll.at(i) << std::endl;
-	}
+//	for (idx_t i = 0; i < equivalent_relations.size(); i++) {
+//		std::cout << "set: " ;
+//		for (idx_t j: equivalent_relations.at(i)) {
+//			std::cout << j << ", ";
+//		}
+//		std::cout << ": hll-dom = " << equivalent_relations_tdom_hll.at(i);
+//		std::cout << ": no-hll-dom = " << equivalent_relations_tdom_no_hll.at(i) << std::endl;
+//	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

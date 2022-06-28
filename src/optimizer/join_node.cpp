@@ -21,8 +21,8 @@ static const double default_selectivity = 0.2;
 
 TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
 	if (op->type == LogicalOperatorType::LOGICAL_GET) {
-		auto &get = (LogicalGet &)op;
-		TableCatalogEntry *entry = get.GetTable();
+		auto get = (LogicalGet*)op;
+		TableCatalogEntry *entry = get->GetTable();
 		return entry;
 	}
 	for(auto &child: op->children) {
@@ -96,7 +96,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
 			count = base_stats->GetDistinctCount();
 			if (key == direct_filter_hash) {
-				std::cout << "direct filter found" << std::endl;
+//				std::cout << "direct filter found" << std::endl;
 				count = count * 0.2;
 				if (count < 1) count = 1;
 			}
@@ -108,7 +108,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
 			// otherwise assume the total domain is still the cardinality
 			if (key == direct_filter_hash) {
-				std::cout << "direct filter found" << std::endl;
+//				std::cout << "direct filter found" << std::endl;
 				count = cardinality_with_filter;
 			} else {
 				count = cardinality;
@@ -122,7 +122,9 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 					if (optimizer->equivalent_relations_tdom_hll.at(ind) < count) {
 						optimizer->equivalent_relations_tdom_hll.at(ind) = count;
 					}
-					optimizer->equivalent_relations_tdom_no_hll.at(ind) = count;
+					if (optimizer->equivalent_relations_tdom_no_hll.at(ind) > count) {
+						optimizer->equivalent_relations_tdom_no_hll.at(ind) = count;
+					}
 				} else {
 					if (optimizer->equivalent_relations_tdom_no_hll.at(ind) > count) {
 						optimizer->equivalent_relations_tdom_no_hll.at(ind) = count;
