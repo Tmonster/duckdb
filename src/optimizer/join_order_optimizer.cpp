@@ -172,7 +172,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		for (idx_t it : bindings) {
-			relation_mapping[it] = relations.size();
+			auto relation_id = relations.size();
+			relation_mapping[it] = relation_id;
 		}
 		relations.push_back(move(relation));
 		return true;
@@ -188,10 +189,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		idx_t relation_id = relations.size();
-
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relation_id;
-//		std::cout << "column_ids for relation " << relation_id << std::endl;
 		for(idx_t it = 0; it < get->column_ids.size(); it++) {
 			idx_t key = JoinNode::readable_hash(relation_id, it);
 //			std::cout << "key = " << key << ": " << get->column_ids[it] << std::endl;
@@ -259,14 +258,21 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
 	// but for now we just assume foreign key joins only
-	idx_t expected_cardinality = 0;
+	double expected_cardinality = 0;
 	// TODO: determine left filters and right filers.
 	if (info->filters.empty()) {
 		// cross product
-		expected_cardinality = left->cardinality * right->cardinality;
-//		auto cost = expected_cardinality + left->cost + right->cost;
-
-		throw NotImplementedException("there is a cross product. Need to implement this as well");
+		if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
+			expected_cardinality = NumericLimits<double>::Maximum();
+		} else {
+//			std::cout << "(NumericLimits<double>::Maximum() / right->cardinality) = " << (NumericLimits<double>::Maximum() / right->cardinality) << std::endl;
+//			std::cout << "left->cardinality = " << left->cardinality << std::endl;
+			expected_cardinality = left->cardinality * right->cardinality;
+		}
+		auto cost = expected_cardinality + left->cost + right->cost;
+		auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+		return result;
+//		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
 	}
 
@@ -280,7 +286,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	left->InitColumnStats(this);
 	right->InitColumnStats(this);
 
-	auto cost = 0;
+	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 
 	idx_t left_table;
@@ -391,13 +397,12 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
 		}
-		string relations = new_set->ToString();
-//		std::cout << "updating cost for join node: " << relations << std::endl;
-//		UpdateDPTree(move(new_plan));
+//		std::cout << "New cost for " << new_set->ToString() << " = " << new_plan->cost << std::endl;
+//		std::cout << "New cardinality for " << new_set->ToString() << " = " << new_plan->cardinality << std::endl;
+
 		plans[new_set] = move(new_plan);
 		return result;
 	}
-
 	return entry->second.get();
 }
 
@@ -420,6 +425,9 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		return true;
 	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
+	for (idx_t i = 0; i < node->count - 1; i++) {
+		D_ASSERT(node->relations[i] <= node->relations[i+1]);
+	}
 	unordered_set<idx_t> exclusion_set;
 	for (idx_t i = 0; i < node->relations[0]; i++) {
 		exclusion_set.insert(i);
@@ -430,10 +438,16 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (neighbors.empty()) {
 		return true;
 	}
-
-	for (auto neighbor : neighbors) {
+	vector<idx_t> neighbors_reversed(neighbors.size());
+	std::reverse_copy(neighbors.begin(), neighbors.end(), std::begin(neighbors_reversed));
+	std::sort(neighbors_reversed.begin(), neighbors_reversed.end());
+	std::reverse(neighbors_reversed.begin(), neighbors_reversed.end());
+	for (idx_t i = 0; i < neighbors_reversed.size() - 1; i++) {
+		D_ASSERT(neighbors_reversed[i] >= neighbors_reversed[i+1]);
+	}
+	for (auto neighbor : neighbors_reversed) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
-		// (only!) this neighbfor,  hence we have to do a connectedness check before we can emit it
+		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto connection = query_graph.GetConnection(node, neighbor_relation);
 		if (connection) {
@@ -452,10 +466,13 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
                                                unordered_set<idx_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	// Why not get neighbors of left+right under the exclusion set?
+//	if (JoinNode::desired_relation_set(right, unordered_set<idx_t>({1})) && left->count == 7) {
+//		std::cout << "here 2" << std::endl;
+//	}
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
-	if (neighbors.empty()) {
-		return true;
-	}
+//	if (neighbors.empty()) {
+//		return true;
+//	}
 	vector<JoinRelationSet *> union_sets;
 	union_sets.resize(neighbors.size());
 	for (idx_t i = 0; i < neighbors.size(); i++) {
@@ -487,6 +504,10 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	// find neighbors of S under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
+//	if (JoinNode::desired_relation_set(node, unordered_set<idx_t>({0, 2, 3, 4, 5, 6, 7}))) {
+//		std::cout << "break here plz" << std::endl;
+//		std::cout << "exclusion set size = " << exclusion_set.size() << std::endl;
+//	}
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -507,8 +528,9 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_
 	// recursively enumerate the sets
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); i++) {
-		// updated the set of excluded entries with this neighbor
+		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
+		// updated the set of excluded entries with this neighbor
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
 		}
@@ -532,6 +554,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
+//		 std::cout << "enumerate CSG recursive, start node = " << start_node->ToString() << std::endl;
 		if (!EnumerateCSGRecursive(start_node, exclusion_set)) {
 			return false;
 		}
@@ -623,10 +646,10 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 
 void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
-//	if (!SolveJoinOrderExactly()) {
+	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
 		SolveJoinOrderApproximately();
-//	}
+	}
 }
 
 void JoinOrderOptimizer::GenerateCrossProducts() {
@@ -1041,10 +1064,12 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto node = set_manager.GetJoinRelation(i);
 		plans[node]->InitTDoms(this);
 //		plans[node]->InitColumnStats(this);
+//		plans[node]->InitColumnStats(this);
 	}
 
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
+//	printRelation2tableNameMapping(relation_to_table_name);
 //	for (idx_t i = 0; i < equivalent_relations.size(); i++) {
 //		std::cout << "set: " ;
 //		for (idx_t j: equivalent_relations.at(i)) {

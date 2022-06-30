@@ -33,6 +33,7 @@ public:
 	bool has_overflow_strings;
 
 public:
+	static idx_t GetValidMinMaxSubstring(const_data_ptr_t data);
 	void Update(const string_t &value);
 	void Merge(const BaseStatistics &other) override;
 
