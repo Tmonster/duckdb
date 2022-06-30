@@ -90,7 +90,7 @@ public:
 	JoinRelationSet *set;
 	NeighborInfo *info;
 	double cardinality;
-	idx_t cost;
+	double cost;
 	bool has_filter;
 	JoinNode *left;
 	JoinNode *right;
@@ -104,13 +104,13 @@ public:
 	//! Create a leaf node in the join tree
 	//! set cost to 0 because leaf nodes/base table already exist
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet *set, idx_t cardinality)
+	JoinNode(JoinRelationSet *set, double cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr), init_stats(false),
 	      created_as_intermediate(false) {
 		join_stats = make_unique<JoinStats>();
 	}
 	//! Create an intermediate node in the join tree
-	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
+	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, double cardinality, double cost)
 	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right), init_stats(true),
 	      created_as_intermediate(true) {
 		join_stats = make_unique<JoinStats>();
