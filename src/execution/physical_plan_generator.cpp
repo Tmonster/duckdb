@@ -49,8 +49,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.EndPhase();
 	
 	plan->Verify();
-//	plan->AddStats(op->join_stats);
-
 	return plan;
 }
 

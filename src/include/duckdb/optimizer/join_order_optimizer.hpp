@@ -17,8 +17,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
-#include <map>
-
 #include <functional>
 
 namespace duckdb {
@@ -75,11 +73,6 @@ private:
 	//! Get column bindings from a filter
 	void GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding);
 
-	//	//! initialize the column stats for a node. Used by leaf nodes. Intermediate nodes should not be calling this
-	//function
-	//	//! Intermediate node stats are defined when the node is created (in CreateJoinTree)
-	//	void InitColumnStats(JoinNode *node,  vector<FilterInfo *> filters);
-
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
@@ -87,8 +80,6 @@ private:
 
 	void InitEquivalentRelations();
 
-	//! Recursively update the DP tree
-	void UpdateDPTree(unique_ptr<JoinNode> new_plan);
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
 	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
@@ -99,7 +90,6 @@ private:
 	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet *node);
-	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	bool EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
@@ -114,6 +104,7 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
 
+	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 

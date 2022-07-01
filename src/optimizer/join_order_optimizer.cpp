@@ -303,29 +303,19 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
-
 			right_table = info->filters[it]->left_binding.first;
 			right_col = info->filters[it]->left_binding.second;
-			right_pair_key =  JoinNode::hash_table_col(right_table, right_col);
-
 			left_table = info->filters[it]->right_binding.first;
 			left_col = info->filters[it]->right_binding.second;
-			left_pair_key = JoinNode::hash_table_col(left_table, left_col);
 		}
 		// currently finding in multiplicities because the syntax is easier for me.
 		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
 		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
 			left_table = info->filters[it]->left_binding.first;
 			left_col = info->filters[it]->left_binding.second;
-			left_pair_key = JoinNode::hash_table_col(left_table, left_col);
-
 			right_table = info->filters[it]->right_binding.first;
 			right_col = info->filters[it]->right_binding.second;
-			right_pair_key = JoinNode::hash_table_col(right_table, right_col);
 		}
-
-//		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
-//		D_ASSERT(JoinNode::key_exists(right_pair_key, right->join_stats->table_col_unique_vals));
 	}
 
 	result->join_stats->base_table_left = left_table;
@@ -334,49 +324,13 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	result->join_stats->base_column_right = right_col;
 
 	//! new cardinality estimation and cost
-	result->update_cardinality_estimate(this);
+	result->UpdateCardinalityEstimate(this);
 
-	result->update_cost();
-
-//	result->update_stats_from_joined_tables(left_table, left_col, right_table, right_col);
-
-#ifdef DEBUG
-//	result->check_all_table_keys_forwarded();
-#endif
+	result->UpdateCost();
 
 	return result;
 }
 
-
-//void JoinOrderOptimizer::updateDPTree(unique_ptr<JoinNode> new_plan, unique_ptr<JoinNode> entry) {
-//	for (auto &plan: plans) {
-//		if (plan.second->left->set == entry->set) {
-//
-//		}
-//		if (plan.second->right->set == entry->set) {
-//
-//		}
-// 	}
-//}
-
-//void UpdateDPTreeOLD(unique_ptr<JoinNode> new_plan) {
-//	// add this plan
-//	auto new_set = new_plan->set;
-//	plans[new_set] = move(new_plan);
-//
-//	// now update every plan that uses this plan
-//	unordered_set<idx_t> exclusion_set;
-//	for (auto neighbor : query_graph.GetNeighbors(new_set, exclusion_set)) {
-//		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
-//		auto combined_set = set_manager.Union(new_set, neighbor_relation);
-//		if (plans.find(combined_set) == plans.end()) {
-//			continue;
-//		}
-//
-//		// recurse
-//		EmitPair(new_set, neighbor_relation, query_graph.GetConnection(new_set, neighbor_relation));
-//	}
-//}
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
@@ -388,31 +342,13 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	bool print_cost = false;
-//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({1, 2, 5})) ||
-//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5}))) {
-//		print_cost = true;
-//	}
-//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({1, 2, 5, 8})) ||
-//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5, 8}))) {
-//		print_cost = true;
-//	}
-//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({0, 1, 2, 5})) ||
-//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({0, 1, 2, 5}))) {
-//		print_cost = true;
-//	}
-//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({0})) ||
-//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5}))) {
-//		print_cost = true;
-//	}
 
-//	if (print_cost && (left->count <= 1 || right->count <= 2)) {
-//		std::cout.precision(10);
-//		std::cout << "joining " << left->ToString() << " with " << right->ToString() << std::endl;
-//		std::cout << "cost is " << new_plan->cost << std::endl;
-//	}
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
+
+#ifdef DEBUG
+		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
 			if (ceil(result->cardinality) != ceil(entry->second->cardinality)) {
 				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
@@ -420,9 +356,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
 		}
+#endif
 
-//		std::cout << "New cost for " << new_set->ToString() << " = " << new_plan->cost << std::endl;
-//		std::cout << "New cardinality for " << new_set->ToString() << " = " << new_plan->cardinality << std::endl;
 		plans[new_set] = move(new_plan);
 		return result;
 	}

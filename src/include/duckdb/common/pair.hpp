@@ -13,5 +13,4 @@
 namespace duckdb {
 using std::make_pair;
 using std::pair;
-
 } // namespace duckdb

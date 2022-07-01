@@ -74,8 +74,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 								cardinality_with_equality_table_filter = ceil(cardinality/ col_count);
 							}
 							has_equality_table_filter = true;
-
-//							std::cout << "direct filter on column in " << catalog_table->name << ". Count = " << col_count << std::endl;
 						}
 					}
 				}
@@ -220,11 +218,7 @@ void JoinNode::InitColumnStats(JoinOrderOptimizer *optimizer) {
 	return;
 }
 
-double JoinNode::GetTableColMult(idx_t table, idx_t col) {
-	return (double)1;
-}
-
-idx_t JoinNode::getTdom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
+idx_t JoinNode::GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
 	idx_t use_ind = 0;
 	idx_t key = readable_hash(table, column);
 	for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
@@ -236,9 +230,9 @@ idx_t JoinNode::getTdom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer
 	throw NotImplementedException("shouldn't get here actually");
 }
 
-void JoinNode::update_cardinality_estimate(JoinOrderOptimizer *optimizer) {
+void JoinNode::UpdateCardinalityEstimate(JoinOrderOptimizer *optimizer) {
 
-	idx_t tdom_of_join = getTdom(join_stats->base_table_right, join_stats->base_column_right, optimizer);
+	idx_t tdom_of_join = GetTDom(join_stats->base_table_right, join_stats->base_column_right, optimizer);
 	auto left_card = left->cardinality;
 	auto right_card = right->cardinality;
 	if (left->has_filter) {
@@ -252,107 +246,10 @@ void JoinNode::update_cardinality_estimate(JoinOrderOptimizer *optimizer) {
 	join_stats->cardinality = cardinality;
 }
 
-void JoinNode::update_cost() {
+void JoinNode::UpdateCost() {
 	cost = cardinality + left->cost + right->cost;
 
-	//! when joining base tables, be sure to consider the cost of scanning the base tables.
-//	if (left->cost == 0) {
-//		cost += left->cardinality;
-//	}
-//	if (right->cost == 0) {
-//		cost += right->cardinality;
-//	}
-
 	join_stats->cost = cost;
-}
-
-void JoinNode::update_stats_from_joined_tables(idx_t left_table, idx_t left_column, idx_t right_table, idx_t right_column) {
-
-	idx_t left_pair_key = hash_table_col(left_table, left_column);
-	idx_t right_pair_key = hash_table_col(right_table, right_column);
-	idx_t cur_left_table, cur_right_table;
-	unordered_set<idx_t>::iterator col_it;
-
-	D_ASSERT(cardinality > 0);
-	//! 5) update all other left multiplicities of columns in the joined table(s)
-	for (idx_t table_it = 0; table_it < left->set->count; table_it++) {
-		cur_left_table = left->set->relations[table_it];
-		for (col_it = left->join_stats->table_cols[cur_left_table].begin();
-		     col_it != left->join_stats->table_cols[cur_left_table].end(); col_it++) {
-
-			join_stats->table_cols[cur_left_table].insert(*col_it);
-			auto left_table_hash = hash_table_col(cur_left_table, *col_it);
-
-			join_stats->table_col_unique_vals[left_table_hash] =
-			    left->join_stats->table_col_unique_vals[left_table_hash];
-
-			auto table_col_hash = readable_hash(cur_left_table, *col_it);
-			join_stats->relation_column_to_column_name[table_col_hash] = left->join_stats->relation_column_to_column_name[table_col_hash];
-		}
-	}
-	for (idx_t table_it = 0; table_it < right->set->count; table_it++) {
-		cur_right_table = right->set->relations[table_it];
-		for (col_it = right->join_stats->table_cols[cur_right_table].begin();
-		     col_it != right->join_stats->table_cols[cur_right_table].end(); col_it++) {
-
-			join_stats->table_cols[cur_right_table].insert(*col_it);
-			auto right_table_hash = hash_table_col(cur_right_table, *col_it);
-
-			join_stats->table_col_unique_vals[right_table_hash] =
-			    right->join_stats->table_col_unique_vals[right_table_hash];
-
-			auto table_col_hash = readable_hash(cur_left_table, *col_it);
-			join_stats->relation_column_to_column_name[table_col_hash] =
-			    right->join_stats->relation_column_to_column_name[table_col_hash];
-		}
-	}
-
-	auto domain_left = left->join_stats->table_col_unique_vals[left_pair_key];
-	auto domain_right = right->join_stats->table_col_unique_vals[right_pair_key];
-	double lower_domain = MinValue(domain_left, domain_right);
-	join_stats->table_col_unique_vals[left_pair_key] = lower_domain;
-	join_stats->table_col_unique_vals[right_pair_key] = lower_domain;
-}
-
-//! Check to make sure all columns have mult and sel values in the resulting Join Node
-void JoinNode::check_all_table_keys_forwarded() {
-	idx_t rights_column_count = 0;
-	idx_t key;
-	unordered_map<idx_t, unordered_set<idx_t>>::iterator tab_col_iterator;
-	unordered_map<idx_t, double>::iterator val_iterator;
-	for (tab_col_iterator = right->join_stats->table_cols.begin();
-	     tab_col_iterator != right->join_stats->table_cols.end(); tab_col_iterator++) {
-		rights_column_count += tab_col_iterator->second.size();
-	}
-	D_ASSERT(rights_column_count == right->join_stats->table_col_unique_vals.size());
-
-	for (val_iterator = right->join_stats->table_col_unique_vals.begin();
-	     val_iterator != right->join_stats->table_col_unique_vals.end(); val_iterator++) {
-		key = val_iterator->first;
-		D_ASSERT(key_exists(key, join_stats->table_col_unique_vals));
-		D_ASSERT(join_stats->table_col_unique_vals[key] >= 1);
-	}
-
-	idx_t lefts_column_count = 0;
-	for (tab_col_iterator = left->join_stats->table_cols.begin(); tab_col_iterator != left->join_stats->table_cols.end();
-	     tab_col_iterator++) {
-		lefts_column_count += tab_col_iterator->second.size();
-	}
-	D_ASSERT(lefts_column_count == left->join_stats->table_col_unique_vals.size());
-	for (val_iterator = left->join_stats->table_col_unique_vals.begin();
-	     val_iterator != left->join_stats->table_col_unique_vals.end(); val_iterator++) {
-		key = val_iterator->first;
-		D_ASSERT(key_exists(key, join_stats->table_col_unique_vals));
-		D_ASSERT(join_stats->table_col_unique_vals[key] >= 1);
-	}
-
-	D_ASSERT(join_stats->table_col_unique_vals.size() ==
-	         (right->join_stats->table_col_unique_vals.size() +
-	          left->join_stats->table_col_unique_vals.size()));
-}
-
-bool JoinNode::key_exists(idx_t key, unordered_map<idx_t, double> stat_column) {
-	return stat_column.find(key) != stat_column.end();
 }
 
 idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
@@ -381,45 +278,4 @@ bool JoinNode::desired_join(JoinRelationSet *left, JoinRelationSet *right, unord
 	bool right_is_left = desired_relation_set(right, desired_left) && desired_relation_set(left, desired_right);
 	return left_is_left || right_is_left;
 }
-
-void JoinNode::printWholeNode(JoinNode *node) {
-	if (!node)
-		return;
-	PrintNodeUniqueValueStats(node);
-	printWholeNode(node->left);
-	printWholeNode(node->right);
-}
-
-void JoinNode::PrintNodeUniqueValueStats(JoinNode *node) {
-	if (!node)
-		return;
-	unordered_map<idx_t, unordered_set<idx_t>>::iterator it;
-	unordered_set<idx_t>::iterator col_it;
-	idx_t table;
-	idx_t col;
-	idx_t key;
-	std::string relations = "";
-	for (idx_t rel_it = 0; rel_it < node->set->count; rel_it++) {
-		relations += std::to_string(node->set->relations[rel_it]) + ", ";
-	}
-	std::cout << "relations = [" << relations << "] " << std::endl;
-	std::cout << "Expected cardinality = " << std::to_string(node->cardinality) << std::endl;
-	std::cout << "cost = " << node->cost << std::endl;
-	for (it = node->join_stats->table_cols.begin(); it != node->join_stats->table_cols.end(); it++) {
-		table = it->first;
-		for (col_it = it->second.begin(); col_it != it->second.end(); col_it++) {
-			col = *col_it;
-			key = hash_table_col(table, col);
-			std::cout << "node table_col_unique_vals[" << table << "][" << col << "] = " << node->join_stats->table_col_unique_vals[key]
-			          << std::endl;
-		}
-	}
-	if (node->set->count > 1) {
-		std::cout << "join on [" << node->join_stats->base_table_left << "][" << node->join_stats->base_column_left;
-		std::cout << "] = [" << node->join_stats->base_table_right << "][" << node->join_stats->base_column_right << "]"
-		          << std::endl;
-	}
-	std::cout << "----------------------------------" << std::endl;
-}
-
 } // namespace duckdb

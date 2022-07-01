@@ -27,61 +27,30 @@ class JoinOrderOptimizer;
 
 class JoinStats {
 public:
+	idx_t cost;
 	idx_t base_table_left;
 	idx_t base_table_right;
 	idx_t base_column_left;
 	idx_t base_column_right;
 
-	double cardinality_ratio;
-	double left_col_sel;
-	double left_col_mult;
-	double right_col_sel;
-	double right_col_mult;
-
-	idx_t cost;
 	double cardinality;
 
-	unordered_map<idx_t, unordered_set<idx_t>> table_cols;
-	unordered_map<idx_t, double> table_col_unique_vals;
-	unordered_map<idx_t , std::string> relation_column_to_column_name;
-	unordered_map<std::string, idx_t> table_name_to_relation;
-
-
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
-	      cardinality_ratio(1), left_col_sel(1), left_col_mult(1), right_col_sel(1), right_col_mult(1), cost(0), cardinality(0) {
-		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
-		table_col_unique_vals = unordered_map<idx_t, double>();
-		relation_column_to_column_name = unordered_map<idx_t, std::string>();
-		table_name_to_relation = unordered_map<std::string, idx_t>();
+	      cost(0), cardinality(0) {
 	}
 
 	std::unique_ptr<JoinStats> Copy(std::unique_ptr<JoinStats> join_stats) {
-	    base_table_left = join_stats->base_table_left;
+		base_table_left = join_stats->base_table_left;
 		base_table_right = join_stats->base_table_right;
 		base_column_left = join_stats->base_column_left;
-	    base_column_right = join_stats->base_column_right;
-	    cardinality_ratio = join_stats->cardinality_ratio;
-	    left_col_sel = join_stats->left_col_sel;
-	    left_col_mult = join_stats->left_col_mult;
-	    right_col_sel = join_stats->right_col_sel;
-	  	right_col_mult = join_stats->right_col_mult;
+		base_column_right = join_stats->base_column_right;
 
 	  	cost = join_stats->cost;
 		cardinality = join_stats->cardinality;
-
-		table_name_to_relation = unordered_map<std::string, idx_t>();
-		relation_column_to_column_name = unordered_map<idx_t, std::string>();
-		// these should be updated using JoinNode functions
-		table_cols = unordered_map<idx_t, unordered_set<idx_t>>();
-		unordered_map<idx_t, double>::iterator it;
-		for (it = join_stats->table_col_unique_vals.begin(); it != join_stats->table_col_unique_vals.end(); it++) {
-			table_col_unique_vals[it->first] = it->second;
-		}
 		return join_stats;
 	}
 
 	JoinStats(const JoinStats &) = delete;
-
 };
 
 class JoinNode {
@@ -95,7 +64,7 @@ public:
 	JoinNode *left;
 	JoinNode *right;
 
-	std::unique_ptr<JoinStats> join_stats;
+	unique_ptr<JoinStats> join_stats;
 
 	//! have the multiplicity and selectivity stats been initialized?
 	bool init_stats;
@@ -124,23 +93,20 @@ public:
 
 public:
 
-	void update_cardinality_estimate(JoinOrderOptimizer *optimizer);
-	idx_t getTdom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer);
-	void update_cost();
+	idx_t GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer);
+	void UpdateCardinalityEstimate(JoinOrderOptimizer *optimizer);
 
-	void update_stats_from_joined_tables(idx_t left_table, idx_t left_column, idx_t right_table, idx_t right_column);
+	void UpdateCost();
 
 	TableCatalogEntry* GetCatalogTableEntry(LogicalOperator *op);
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(JoinOrderOptimizer *optimizer);
 	void InitTDoms(JoinOrderOptimizer *optimizer);
-	double GetTableColMult(idx_t table, idx_t col);
+
 	//! debugging functions
 	static bool desired_relation_set(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
 	static bool desired_join(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
 	                         unordered_set<idx_t> desired_right);
-	static void printWholeNode(JoinNode *node);
-	static void PrintNodeUniqueValueStats(JoinNode *node);
 };
 
 } // namespace duckdb

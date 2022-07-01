@@ -31,11 +31,6 @@ string PhysicalComparisonJoin::ParamsToString() const {
 	}
 	extra_info += "\nEC = " + std::to_string(ph_join_stats->cardinality) + "\n";
 	extra_info += "COST = " + std::to_string(ph_join_stats->cost) + "\n";
-	auto left_join_key = JoinNode::hash_table_col(ph_join_stats->base_table_left, ph_join_stats->base_column_left);
-	auto right_join_key = JoinNode::hash_table_col(ph_join_stats->base_table_right, ph_join_stats->base_column_right);
-	extra_info += "LEFT UNIQ VALS: " + std::to_string(ph_join_stats->table_col_unique_vals[left_join_key]) + "\n";
-	extra_info += "RIGH UNIQ VALS: " + std::to_string(ph_join_stats->table_col_unique_vals[right_join_key]) + "\n";
-
 	return extra_info;
 }
 

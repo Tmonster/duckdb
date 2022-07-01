@@ -149,7 +149,7 @@ FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_t
 	}
 }
 
-idx_t StringStatistics::GetValidMinMaxSubstring(const_data_ptr_t data) {
+static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
