@@ -171,6 +171,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		std::cout << "non reorderable join" << std::endl;
 		for (idx_t it : bindings) {
 			auto relation_id = relations.size();
 			relation_mapping[it] = relation_id;
@@ -386,7 +387,29 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
+	bool print_cost = false;
+//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({1, 2, 5})) ||
+//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5}))) {
+//		print_cost = true;
+//	}
+//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({1, 2, 5, 8})) ||
+//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5, 8}))) {
+//		print_cost = true;
+//	}
+//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({0, 1, 2, 5})) ||
+//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({0, 1, 2, 5}))) {
+//		print_cost = true;
+//	}
+//	if (JoinNode::desired_relation_set(left, unordered_set<idx_t>({0})) ||
+//	    JoinNode::desired_relation_set(right, unordered_set<idx_t>({1, 2, 5}))) {
+//		print_cost = true;
+//	}
 
+//	if (print_cost && (left->count <= 1 || right->count <= 2)) {
+//		std::cout.precision(10);
+//		std::cout << "joining " << left->ToString() << " with " << right->ToString() << std::endl;
+//		std::cout << "cost is " << new_plan->cost << std::endl;
+//	}
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
@@ -397,9 +420,9 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
 		}
+
 //		std::cout << "New cost for " << new_set->ToString() << " = " << new_plan->cost << std::endl;
 //		std::cout << "New cardinality for " << new_set->ToString() << " = " << new_plan->cardinality << std::endl;
-
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -408,7 +431,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 
 bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	pairs++;
-	if (pairs >= 2000) {
+	if (pairs >= 20000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic
@@ -648,6 +671,7 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
+//		std::cout << "solving approx" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
