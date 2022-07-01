@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-static const double default_selectivity = 0.2;
+static const double default_selectivity = 0.05;
 
 
 TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
@@ -52,6 +52,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		if (!get.table_filters.filters.empty()) {
 			has_filter = true;
 			unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
+			auto num_table_filters = get.table_filters.filters.size();
 			for(it = get.table_filters.filters.begin(); it != get.table_filters.filters.end(); it++) {
 //				std::cout << std::to_string(it->second->filter_type == TableFilterType::CONJUNCTION_AND) << std::endl;
 
@@ -66,8 +67,14 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 							auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
 
 							auto col_count = base_stats->GetDistinctCount();
+							if (has_equality_table_filter) {
+								cardinality_with_equality_table_filter = MinValue((idx_t)ceil(cardinality / col_count), cardinality_with_equality_table_filter);
+							}
+							else {
+								cardinality_with_equality_table_filter = ceil(cardinality/ col_count);
+							}
 							has_equality_table_filter = true;
-							cardinality_with_equality_table_filter = ceil(cardinality / col_count);
+
 //							std::cout << "direct filter on column in " << catalog_table->name << ". Count = " << col_count << std::endl;
 						}
 					}
@@ -123,7 +130,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 	if (has_filter) {
 		// If the filter an equality filter?
 		// if so, cardinality_with_filter = cardinality / tdom(column_with_filter).
-		cardinality_with_filter = 0.2 * cardinality;
+		cardinality_with_filter = default_selectivity * cardinality;
 		if (cardinality_with_filter < 1) cardinality_with_filter = 1;
 		// check if the filter is on the column, how?
 		for (auto &filter : optimizer->filter_infos) {
@@ -159,7 +166,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			count = base_stats->GetDistinctCount();
 			if (key == direct_filter_hash) {
 //				std::cout << "direct filter found" << std::endl;
-				count = count * 0.2;
+				count = count * default_selectivity;
 				if (count < 1) count = 1;
 			}
 			// HLL messed up, count can't be greater than cardinality
@@ -211,96 +218,9 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 
 void JoinNode::InitColumnStats(JoinOrderOptimizer *optimizer) {
 	return;
-//	if (init_stats) {
-//		return;
-//	}
-//	join_stats->right_col_sel = 1;
-//	join_stats->right_col_mult = 1;
-//	join_stats->left_col_sel = 1;
-//	join_stats->left_col_mult = 1;
-//
-//	JoinRelationSet *join_relations = set;
-//	idx_t relation_id;
-//	TableCatalogEntry *catalog_table = NULL;
-//
-//	D_ASSERT(join_relations->count == 1);
-//	for (idx_t it = 0; it < join_relations->count; it++) {
-//		relation_id = join_relations->relations[it];
-//
-//#ifdef DEBUG
-//		bool found_table_index = false;
-//		unordered_map<idx_t, idx_t>::iterator relation_map_it;
-//		found_table_index = false;
-//		for (relation_map_it = optimizer->relation_mapping.begin();
-//		     relation_map_it != optimizer->relation_mapping.end(); relation_map_it++) {
-//			if (relation_map_it->second == relation_id) {
-//				found_table_index = true;
-//				break;
-//			}
-//		}
-//		D_ASSERT(found_table_index);
-//#endif
-//
-//		if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
-//			auto tmp = optimizer->relations.at(relation_id)->op;
-//			auto &get = (LogicalGet &)*tmp;
-//			catalog_table = get.GetTable();
-//			if (!get.table_filters.filters.empty()) {
-//				has_filter = true;
-//			}
-//		} else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
-//			if (optimizer->relations.at(relation_id)->op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-//				auto &get = (LogicalGet &)*optimizer->relations.at(relation_id)->op->children[0];
-//				catalog_table = get.GetTable();
-//				has_filter = true;
-//			}
-//		}
-//	}
-//
-//	idx_t cardinality_with_filter = cardinality;
-//	if (has_filter) {
-//		// believe it or not, sometimes we predict a cardinality of 0
-//		cardinality_with_filter = MaxValue(cardinality_with_filter * 0.2, (double)1);
-//		join_stats->cardinality = cardinality_with_filter;
-//	}
-//
-//	unordered_set<idx_t>::iterator ite;
-//	idx_t index;
-//	idx_t count = 0;
-//	for (ite = optimizer->relation_to_columns[relation_id].begin();
-//		 ite != optimizer->relation_to_columns[relation_id].end(); ite++) {
-//		if (catalog_table) {
-//			// Get HLL stats here
-//			idx_t key = hash_table_col(relation_id, *ite);
-//			idx_t actual_column = optimizer->relation_column_to_original_column[key];
-//			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
-//			count = base_stats->GetDistinctCount();
-////			std::cout << "relation " << relation_id << " count is = " << count << ". cardinality = " << cardinality << std::endl;
-//			if (count > cardinality) {
-//				count = cardinality;
-//			}
-//			join_stats->table_name_to_relation[catalog_table->name] = relation_id;
-//
-//			index = readable_hash(relation_id, *ite);
-//			std::string col_name = catalog_table->columns.at(actual_column).Name();
-//			join_stats->relation_column_to_column_name[index] = col_name;
-//		}
-//
-//		index = hash_table_col(relation_id, *ite);
-//		join_stats->table_cols[relation_id].insert(*ite);
-//
-//	}
-//
-//	init_stats = true;
 }
 
 double JoinNode::GetTableColMult(idx_t table, idx_t col) {
-//	auto hash = hash_table_col(table, col);
-//	D_ASSERT(key_exists(hash, join_stats->table_col_unique_vals));
-//	D_ASSERT(join_stats->table_col_unique_vals[hash] >= 0);
-//	// use ceil because we want to try and over estimate cardinalities
-//	// most optimizers still underestimate
-//	return (double)cardinality / join_stats->table_col_unique_vals[hash];
 	return (double)1;
 }
 
@@ -327,6 +247,7 @@ void JoinNode::update_cardinality_estimate(JoinOrderOptimizer *optimizer) {
 	if (right->has_filter) {
 		right_card = right->join_stats->cardinality;
 	}
+
 	cardinality = (left_card * right_card)/tdom_of_join;
 	join_stats->cardinality = cardinality;
 }
@@ -335,12 +256,12 @@ void JoinNode::update_cost() {
 	cost = cardinality + left->cost + right->cost;
 
 	//! when joining base tables, be sure to consider the cost of scanning the base tables.
-	if (left->cost == 0) {
-		cost += left->cardinality;
-	}
-	if (right->cost == 0) {
-		cost += right->cardinality;
-	}
+//	if (left->cost == 0) {
+//		cost += left->cardinality;
+//	}
+//	if (right->cost == 0) {
+//		cost += right->cardinality;
+//	}
 
 	join_stats->cost = cost;
 }
