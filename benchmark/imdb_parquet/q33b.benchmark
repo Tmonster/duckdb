@@ -2,7 +2,6 @@
 # description: Run query 33b from the IMDB benchmark (single-threaded)
 # group: [imdb_parquet]
 
-
 template benchmark/imdb_parquet/imdb_parquet.benchmark.in
 QUERY_NUMBER=33b
 QUERY_NUMBER_PADDED=33b

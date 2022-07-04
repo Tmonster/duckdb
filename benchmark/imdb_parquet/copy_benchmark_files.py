@@ -127,7 +127,6 @@ for q_file in query_files:
 # description: Run query {q_description_name} from the IMDB benchmark (single-threaded)
 # group: [imdb_parquet]
 
-
 template benchmark/imdb_parquet/imdb_parquet.benchmark.in
 QUERY_NUMBER={actual_num}
 QUERY_NUMBER_PADDED={actual_num}
