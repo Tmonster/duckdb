@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 #include <map>
 
@@ -24,15 +25,19 @@ namespace duckdb {
 
 class JoinOrderOptimizer;
 
+struct TableFilterStats {
+	idx_t cardinality_with_equality_filter;
+	bool has_equality_filter;
+};
 
 class JoinStats {
 public:
-	idx_t cost;
 	idx_t base_table_left;
 	idx_t base_table_right;
 	idx_t base_column_left;
 	idx_t base_column_right;
 
+	idx_t cost;
 	double cardinality;
 
 	JoinStats() : base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0),
@@ -90,6 +95,7 @@ public:
 	static idx_t readable_hash(idx_t table, idx_t col);
 
 	void check_all_table_keys_forwarded();
+	unique_ptr<TableFilterStats> InspectTableFilters(TableFilterSet *filters, TableCatalogEntry *catalog_table, JoinOrderOptimizer *optimizer);
 
 public:
 

@@ -266,14 +266,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
 			expected_cardinality = NumericLimits<double>::Maximum();
 		} else {
-//			std::cout << "(NumericLimits<double>::Maximum() / right->cardinality) = " << (NumericLimits<double>::Maximum() / right->cardinality) << std::endl;
-//			std::cout << "left->cardinality = " << left->cardinality << std::endl;
 			expected_cardinality = left->cardinality * right->cardinality;
 		}
-		auto cost = expected_cardinality + left->cost + right->cost;
+		auto cost = 0;
 		auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+		result->UpdateCost();
 		return result;
-//		throw NotImplementedException("there is a cross product. Need to implement this as well");
 		// TODO: make sure there isn't a weird switch between right relations and left relations
 	}
 
@@ -281,24 +279,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
 
-	// create result and add multiplicities
-
-	// Get underlying operators and initialize selectivities
-	left->InitColumnStats(this);
-	right->InitColumnStats(this);
-
 	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 
 	idx_t left_table;
 	idx_t left_col;
-	idx_t left_pair_key;
 	idx_t right_table;
 	idx_t right_col;
-	idx_t right_pair_key;
 
-//	bool fight_me = left->join_stats->table_name_to_relation.find("cast_info") != left->join_stats->table_name_to_relation.end();
-//	bool fight_me_2 = right->join_stats->table_name_to_relation.find("title") != right->join_stats->table_name_to_relation.end();
 	D_ASSERT(info->filters.size() == 1);
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -308,7 +296,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			left_table = info->filters[it]->right_binding.first;
 			left_col = info->filters[it]->right_binding.second;
 		}
-		// currently finding in multiplicities because the syntax is easier for me.
 		else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
 		         JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
 			left_table = info->filters[it]->left_binding.first;
@@ -341,7 +328,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	bool print_cost = false;
 
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
@@ -369,7 +355,7 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	if (pairs >= 20000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
-		// at 10K pairs stop searching exactly and switch to heuristic
+		// at 20K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
 	EmitPair(left, right, info);
@@ -424,13 +410,10 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
                                                unordered_set<idx_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	// Why not get neighbors of left+right under the exclusion set?
-//	if (JoinNode::desired_relation_set(right, unordered_set<idx_t>({1})) && left->count == 7) {
-//		std::cout << "here 2" << std::endl;
-//	}
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
-//	if (neighbors.empty()) {
-//		return true;
-//	}
+	if (neighbors.empty()) {
+		return true;
+	}
 	vector<JoinRelationSet *> union_sets;
 	union_sets.resize(neighbors.size());
 	for (idx_t i = 0; i < neighbors.size(); i++) {
@@ -462,14 +445,9 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	// find neighbors of S under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
-//	if (JoinNode::desired_relation_set(node, unordered_set<idx_t>({0, 2, 3, 4, 5, 6, 7}))) {
-//		std::cout << "break here plz" << std::endl;
-//		std::cout << "exclusion set size = " << exclusion_set.size() << std::endl;
-//	}
 	if (neighbors.empty()) {
 		return true;
 	}
-	// now first emit the connected subgraphs of the neighbors
 	vector<JoinRelationSet *> union_sets;
 	union_sets.resize(neighbors.size());
 	for (idx_t i = 0; i < neighbors.size(); i++) {
@@ -606,7 +584,6 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
-//		std::cout << "solving approx" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
@@ -1026,14 +1003,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
 //	printRelation2tableNameMapping(relation_to_table_name);
-//	for (idx_t i = 0; i < equivalent_relations.size(); i++) {
-//		std::cout << "set: " ;
-//		for (idx_t j: equivalent_relations.at(i)) {
-//			std::cout << j << ", ";
-//		}
-//		std::cout << ": hll-dom = " << equivalent_relations_tdom_hll.at(i);
-//		std::cout << ": no-hll-dom = " << equivalent_relations_tdom_no_hll.at(i) << std::endl;
-//	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

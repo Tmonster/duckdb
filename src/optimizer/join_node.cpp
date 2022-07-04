@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-static const double default_selectivity = 0.05;
+static const double default_selectivity = 0.2;
+
 
 
 TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
@@ -35,50 +36,74 @@ TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
 }
 
 
+unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filters,
+                                                           TableCatalogEntry *catalog_table,
+                                                           JoinOrderOptimizer *optimizer) {
+	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
+	unique_ptr<TableFilterStats> stats = make_unique<TableFilterStats>();
+	stats->has_equality_filter = false;
+	for(it = filters->filters.begin(); it != filters->filters.end(); it++) {
+		if (it->second->filter_type == TableFilterType::CONJUNCTION_AND) {
+			ConjunctionAndFilter &fil = (ConjunctionAndFilter &)*it->second;
+			for (auto &child_filter : fil.child_filters) {
+				if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+					auto comparison_filter = (ConstantFilter &)*child_filter;
+					if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+						auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
+
+						auto col_count = base_stats->GetDistinctCount();
+						if (stats->has_equality_filter) {
+							stats->cardinality_with_equality_filter =
+							    MinValue((idx_t)ceil(cardinality / col_count), stats->cardinality_with_equality_filter);
+						} else {
+							stats->cardinality_with_equality_filter = ceil(cardinality / col_count);
+						}
+						stats->has_equality_filter = true;
+					}
+				}
+			}
+		}
+		else if (it->second->filter_type == TableFilterType::CONJUNCTION_OR) {
+			ConjunctionOrFilter &fil = (ConjunctionOrFilter &)*it->second;
+			for (auto &child_filter : fil.child_filters) {
+				if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+					auto comparison_filter = (ConstantFilter &)*child_filter;
+					if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+						auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
+
+						auto col_count = base_stats->GetDistinctCount();
+						if (stats->has_equality_filter) {
+							stats->cardinality_with_equality_filter += stats->cardinality_with_equality_filter;
+						} else {
+							stats->cardinality_with_equality_filter = ceil(cardinality / col_count);
+						}
+						stats->has_equality_filter = true;
+					}
+				}
+			}
+		}
+	}
+	return stats;
+}
 
 void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 	JoinRelationSet *join_relations = set;
 	idx_t relation_id;
 	TableCatalogEntry *catalog_table = NULL;
-	bool has_equality_table_filter = false;
-	idx_t cardinality_with_equality_table_filter = 0;
+
 	D_ASSERT(join_relations->count == 1);
+	unique_ptr<TableFilterStats> tablestats = NULL;
 	relation_id = join_relations->relations[0];
-	bool got_catalog = false;
+
+	// First check table filters
 	if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_GET) {
 		auto tmp = optimizer->relations.at(relation_id)->op;
 		auto &get = (LogicalGet &)*tmp;
 		catalog_table = get.GetTable();
 		if (!get.table_filters.filters.empty()) {
 			has_filter = true;
-			unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
-			auto num_table_filters = get.table_filters.filters.size();
-			for(it = get.table_filters.filters.begin(); it != get.table_filters.filters.end(); it++) {
-//				std::cout << std::to_string(it->second->filter_type == TableFilterType::CONJUNCTION_AND) << std::endl;
+			 tablestats = InspectTableFilters(&get.table_filters, catalog_table, optimizer);
 
-				ConjunctionAndFilter &fil = (ConjunctionAndFilter&)*it->second;
-				for (auto &child_filter: fil.child_filters) {
-					if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-						auto comparison_filter = (ConstantFilter&)*child_filter;
-						if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-//							std::cout << "table has an equality filter" << std::endl;
-//							std::cout << "the relation_id, idx_t is " << relation_id << ", " << it->first << std::endl;
-
-							auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
-
-							auto col_count = base_stats->GetDistinctCount();
-							if (has_equality_table_filter) {
-								cardinality_with_equality_table_filter = MinValue((idx_t)ceil(cardinality / col_count), cardinality_with_equality_table_filter);
-							}
-							else {
-								cardinality_with_equality_table_filter = ceil(cardinality/ col_count);
-							}
-							has_equality_table_filter = true;
-						}
-					}
-				}
-
-			}
 		}
 		optimizer->relation_to_table_name[relation_id] = catalog_table->name;
 	} else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -88,28 +113,9 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			optimizer->relation_to_table_name[relation_id] = catalog_table->name;
 			has_filter = true;
 			if (!get.table_filters.filters.empty()) {
-				unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
-				for(it = get.table_filters.filters.begin(); it != get.table_filters.filters.end(); it++) {
-//					std::cout << std::to_string(it->second->filter_type == TableFilterType::CONJUNCTION_AND) << std::endl;
-
-					ConjunctionAndFilter &fil = (ConjunctionAndFilter&)*it->second;
-					for (auto &child_filter: fil.child_filters) {
-						if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-							auto comparison_filter = (ConstantFilter&)*child_filter;
-							if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-								//							std::cout << "table has an equality filter" << std::endl;
-								//							std::cout << "the relation_id, idx_t is " << relation_id << ", " << it->first << std::endl;
-
-								auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
-
-								auto col_count = base_stats->GetDistinctCount();
-								has_equality_table_filter = true;
-								cardinality_with_equality_table_filter = ceil(cardinality / col_count);
-								//							std::cout << "direct filter on column in " << catalog_table->name << ". Count = " << col_count << std::endl;
-							}
-						}
-					}
-
+				if (!get.table_filters.filters.empty()) {
+					has_filter = true;
+					tablestats = InspectTableFilters(&get.table_filters, catalog_table, optimizer);
 				}
 			}
 		} else {
@@ -122,7 +128,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		}
 	}
 
-
+	//! estimate cardinality based off of filters.
 	idx_t cardinality_with_filter = cardinality;
 	idx_t direct_filter_hash = -1;
 	if (has_filter) {
@@ -140,11 +146,13 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 				direct_filter_hash = readable_hash(relation_id, filter->left_binding.second);
 			}
 		}
-		if (has_equality_table_filter) {
-			cardinality_with_filter = cardinality_with_equality_table_filter;
+		if (tablestats && tablestats->has_equality_filter) {
+			cardinality_with_filter = tablestats->cardinality_with_equality_filter;
 		}
 	}
 
+
+	//! Initialize the tdoms for all columns the relation uses in join conditions.
 	unordered_set<idx_t>::iterator ite;
 	idx_t count = 0;
 	for (ite = optimizer->relation_to_columns[relation_id].begin();
@@ -153,9 +161,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
 		idx_t key = readable_hash(relation_id, *ite);
-//		if (key == JoinNode::readable_hash(1,0) || key == JoinNode::readable_hash(3,2)) {
-//			std::cout << "break here" << std::endl;
-//		}
 		if (catalog_table) {
 			// Get HLL stats here
 			idx_t actual_column = optimizer->relation_column_to_original_column[key];
@@ -212,10 +217,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		}
 	}
 	join_stats->cardinality = cardinality_with_filter;
-}
-
-void JoinNode::InitColumnStats(JoinOrderOptimizer *optimizer) {
-	return;
 }
 
 idx_t JoinNode::GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
