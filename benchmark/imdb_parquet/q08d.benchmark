@@ -1,6 +1,6 @@
 # name: benchmark/imdb_parquet/q08d.benchmark
 # description: Run query 08d from the IMDB benchmark (single-threaded)
-# group: [imdb]
+# group: [imdb_parquet]
 
 
 template benchmark/imdb_parquet/imdb_parquet.benchmark.in
