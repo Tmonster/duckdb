@@ -93,6 +93,8 @@ public:
 
 	static idx_t hash_table_col(idx_t table, idx_t col);
 	static idx_t readable_hash(idx_t table, idx_t col);
+	static idx_t GetColumnFromReadableHash(idx_t hash);
+	static idx_t GetTableFromReadableHash(idx_t hash);
 
 	void check_all_table_keys_forwarded();
 	unique_ptr<TableFilterStats> InspectTableFilters(TableFilterSet *filters, TableCatalogEntry *catalog_table, JoinOrderOptimizer *optimizer);

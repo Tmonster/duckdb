@@ -19,6 +19,7 @@
 namespace duckdb {
 
 static const double default_selectivity = 0.2;
+static const idx_t readable_offset = 10000000;
 
 
 
@@ -50,7 +51,7 @@ unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filte
 					auto comparison_filter = (ConstantFilter &)*child_filter;
 					if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 						auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, it->first);
-
+						auto is_us_filter = comparison_filter.constant.ToString().compare("[us]") == 0;
 						auto col_count = base_stats->GetDistinctCount();
 						if (stats->has_equality_filter) {
 							stats->cardinality_with_equality_filter =
@@ -58,6 +59,9 @@ unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filte
 						} else {
 							stats->cardinality_with_equality_filter = ceil(cardinality / col_count);
 						}
+//						if (is_us_filter) {
+//							stats->cardinality_with_equality_filter = 84843;
+//						}
 						stats->has_equality_filter = true;
 					}
 				}
@@ -163,12 +167,13 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		idx_t key = readable_hash(relation_id, *ite);
 		if (catalog_table) {
 			// Get HLL stats here
-			idx_t actual_column = optimizer->relation_column_to_original_column[key];
+			auto table_col_hash = optimizer->relation_column_to_original_column[key];
+			auto actual_column = JoinNode::GetColumnFromReadableHash(table_col_hash);
+
 			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
 
 			count = base_stats->GetDistinctCount();
 			if (key == direct_filter_hash) {
-//				std::cout << "direct filter found" << std::endl;
 				count = count * default_selectivity;
 				if (count < 1) count = 1;
 			}
@@ -177,7 +182,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 				count = cardinality;
 			}
 			if (base_stats->type == LogicalTypeId::INTEGER) {
-				//TODO: check column type as well. Maybe wrap this in a try catch
 				auto &numeric_stats = (NumericStatistics&)*base_stats;
 				auto max_value = numeric_stats.max.GetValue<idx_t>();
 				if (count > max_value) {
@@ -257,8 +261,17 @@ idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
 	return (table << 32) + col;
 }
 
+
 idx_t JoinNode::readable_hash(idx_t table, idx_t col) {
-	return table * 10000000 + col;
+	return table * readable_offset + col;
+}
+
+idx_t JoinNode::GetColumnFromReadableHash(idx_t hash) {
+	return hash % readable_offset;
+}
+
+idx_t JoinNode::GetTableFromReadableHash(idx_t hash) {
+	return idx_t ((int)hash / (int)readable_offset);
 }
 
 //! ******************************************************

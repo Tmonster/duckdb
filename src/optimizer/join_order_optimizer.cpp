@@ -158,9 +158,18 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
+
+		// Keep track of all of the filter bindings the new join order optimizer makes
+		auto child_binding_maps = vector<unordered_map<idx_t, idx_t>>({});
+		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
+			child_binding_maps.push_back(unordered_map<idx_t, idx_t>({}));
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
+			for (auto &rc_2_oc: optimizer.relation_column_to_original_column) {
+				child_binding_maps.at(child_bindings_it)[rc_2_oc.first] = rc_2_oc.second;
+			}
+			child_bindings_it += 1;
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations
@@ -171,9 +180,21 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		std::cout << "non reorderable join" << std::endl;
+		auto relation_id = relations.size();
 		for (idx_t it : bindings) {
-			auto relation_id = relations.size();
+//			auto actual_table_id = it;
+			for (auto &map_set: child_binding_maps) {
+				for (auto &mapping : map_set) {
+					auto relation_column_id = JoinNode::GetColumnFromReadableHash(mapping.first);
+					auto actual_column_id = JoinNode::GetColumnFromReadableHash(mapping.second);
+					auto actual_table_id = JoinNode::GetTableFromReadableHash(mapping.second);
+					if (actual_table_id == it) {
+						auto key = JoinNode::readable_hash(relation_id, relation_column_id);
+						auto value = JoinNode::readable_hash(actual_table_id, actual_column_id);
+						relation_column_to_original_column[key] = value;
+					}
+				}
+			}
 			relation_mapping[it] = relation_id;
 		}
 		relations.push_back(move(relation));
@@ -191,13 +212,13 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		idx_t relation_id = relations.size();
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		relation_mapping[get->table_index] = relation_id;
+		auto table_index = get->table_index;
+		relation_mapping[table_index] = relation_id;
 		for(idx_t it = 0; it < get->column_ids.size(); it++) {
 			idx_t key = JoinNode::readable_hash(relation_id, it);
-//			std::cout << "key = " << key << ": " << get->column_ids[it] << std::endl;
-			relation_column_to_original_column[key] = get->column_ids[it];
+			idx_t value = JoinNode::readable_hash(get->table_index, get->column_ids[it]);
+			relation_column_to_original_column[key] = value;
 		}
-//		std::cout << std::endl;
 
 		relations.push_back(move(relation));
 		return true;
@@ -996,8 +1017,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto node = set_manager.GetJoinRelation(i);
 		plans[node]->InitTDoms(this);
-//		plans[node]->InitColumnStats(this);
-//		plans[node]->InitColumnStats(this);
 	}
 
 	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
