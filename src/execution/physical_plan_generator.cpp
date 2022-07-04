@@ -47,7 +47,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.StartPhase("create_plan");
 	auto plan = CreatePlan(*op);
 	profiler.EndPhase();
-	
+
 	plan->Verify();
 	return plan;
 }

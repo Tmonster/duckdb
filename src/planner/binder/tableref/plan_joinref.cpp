@@ -22,7 +22,6 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bin
 	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
 	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
-
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;

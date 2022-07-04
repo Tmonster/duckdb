@@ -43,5 +43,4 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	return found_conjunction;
 }
 
-
 } // namespace duckdb

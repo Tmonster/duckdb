@@ -279,9 +279,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	}
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
-	// but for now we just assume foreign key joins only
 	double expected_cardinality = 0;
-	// TODO: determine left filters and right filers.
 	if (info->filters.empty()) {
 		// cross product
 		if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
@@ -293,7 +291,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 		result->UpdateCost();
 		return result;
-		// TODO: make sure there isn't a weird switch between right relations and left relations
 	}
 
 	// normal join, expect foreign key join
@@ -303,10 +300,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 
-	idx_t left_table;
-	idx_t left_col;
-	idx_t right_table;
-	idx_t right_col;
+	idx_t left_table, left_col, right_table, right_col;
 
 	D_ASSERT(info->filters.size() == 1);
 	for (idx_t it = 0; it < info->filters.size(); it++) {
@@ -333,7 +327,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	//! new cardinality estimation and cost
 	result->UpdateCardinalityEstimate(this);
-
 	result->UpdateCost();
 
 	return result;
@@ -353,7 +346,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-
 #ifdef DEBUG
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
@@ -373,10 +365,10 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 
 bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	pairs++;
-	if (pairs >= 20000) {
+	if (pairs >= 10000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
-		// at 20K pairs stop searching exactly and switch to heuristic
+		// at 10K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
 	EmitPair(left, right, info);
@@ -390,9 +382,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		return true;
 	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
-	for (idx_t i = 0; i < node->count - 1; i++) {
-		D_ASSERT(node->relations[i] <= node->relations[i+1]);
-	}
 	unordered_set<idx_t> exclusion_set;
 	for (idx_t i = 0; i < node->relations[0]; i++) {
 		exclusion_set.insert(i);
@@ -403,6 +392,8 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (neighbors.empty()) {
 		return true;
 	}
+
+	//! Neighbors should be reversed when iterating over them.
 	vector<idx_t> neighbors_reversed(neighbors.size());
 	std::reverse_copy(neighbors.begin(), neighbors.end(), std::begin(neighbors_reversed));
 	std::sort(neighbors_reversed.begin(), neighbors_reversed.end());
@@ -430,7 +421,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right,
                                                unordered_set<idx_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
-	// Why not get neighbors of left+right under the exclusion set?
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
@@ -511,7 +501,6 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
-//		 std::cout << "enumerate CSG recursive, start node = " << start_node->ToString() << std::endl;
 		if (!EnumerateCSGRecursive(start_node, exclusion_set)) {
 			return false;
 		}
@@ -893,19 +882,6 @@ void JoinOrderOptimizer::InitEquivalentRelations() {
 		equivalent_relations_tdom_hll.push_back(0);
 		equivalent_relations_tdom_no_hll.push_back(NumericLimits<idx_t>::Maximum());
 	}
-#ifdef DEBUG
-	//! make sure all relations appear only once in the equivalet relations vector
-//	unordered_set<idx_t> seen;
-//	for(unordered_set<idx_t> i_set : equivalent_relations) {
-//		std::cout << "equal set = ";
-//		for(idx_t i: i_set) {
-//			std::cout << i << ", ";
-//			D_ASSERT(seen.count(i) == 0);
-//			seen.insert(i);
-//		}
-//		std::cout << std::endl;
-//	}
-#endif
 }
 
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
@@ -1047,8 +1023,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		D_ASSERT(final_plan != plans.end());
 	}
 	// now perform the actual reordering
-	auto final_plan_get = final_plan->second.get();
-	return RewritePlan(move(plan), final_plan_get);
+	return RewritePlan(move(plan), final_plan->second.get());
 }
 
 } // namespace duckdb

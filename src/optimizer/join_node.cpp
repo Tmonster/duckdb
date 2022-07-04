@@ -192,7 +192,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
 			// otherwise assume the total domain is still the cardinality
 			if (key == direct_filter_hash) {
-//				std::cout << "direct filter found" << std::endl;
 				count = cardinality_with_filter;
 			} else {
 				count = cardinality;
