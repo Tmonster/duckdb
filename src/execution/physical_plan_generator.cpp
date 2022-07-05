@@ -57,136 +57,136 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	unique_ptr<PhysicalOperator> plan = NULL;
 
 	switch (op.type) {
-		case LogicalOperatorType::LOGICAL_GET:
-			plan = CreatePlan((LogicalGet &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			plan = CreatePlan((LogicalProjection &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-			plan = CreatePlan((LogicalEmptyResult &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_FILTER:
-			plan = CreatePlan((LogicalFilter &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			plan = CreatePlan((LogicalAggregate &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_WINDOW:
-			plan = CreatePlan((LogicalWindow &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_UNNEST:
-			plan = CreatePlan((LogicalUnnest &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_LIMIT:
-			plan = CreatePlan((LogicalLimit &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-			plan = CreatePlan((LogicalLimitPercent &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_SAMPLE:
-			plan = CreatePlan((LogicalSample &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_ORDER_BY:
-			plan = CreatePlan((LogicalOrder &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_TOP_N:
-			plan = CreatePlan((LogicalTopN &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-			plan = CreatePlan((LogicalCopyToFile &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-			plan = CreatePlan((LogicalDummyScan &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-			plan = CreatePlan((LogicalAnyJoin &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-			plan = CreatePlan((LogicalDelimJoin &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-			plan = CreatePlan((LogicalComparisonJoin &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-			plan = CreatePlan((LogicalCrossProduct &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_UNION:
-		case LogicalOperatorType::LOGICAL_EXCEPT:
-		case LogicalOperatorType::LOGICAL_INTERSECT:
-			plan = CreatePlan((LogicalSetOperation &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_INSERT:
-			plan = CreatePlan((LogicalInsert &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_DELETE:
-			plan = CreatePlan((LogicalDelete &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CHUNK_GET:
-			plan = CreatePlan((LogicalChunkGet &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_DELIM_GET:
-			plan = CreatePlan((LogicalDelimGet &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-			plan = CreatePlan((LogicalExpressionGet &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_UPDATE:
-			plan = CreatePlan((LogicalUpdate &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CREATE_TABLE:
-			plan = CreatePlan((LogicalCreateTable &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CREATE_INDEX:
-			plan = CreatePlan((LogicalCreateIndex &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_EXPLAIN:
-			plan = CreatePlan((LogicalExplain &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_SHOW:
-			plan = CreatePlan((LogicalShow &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_DISTINCT:
-			plan = CreatePlan((LogicalDistinct &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_PREPARE:
-			plan = CreatePlan((LogicalPrepare &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_EXECUTE:
-			plan = CreatePlan((LogicalExecute &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-		case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-		case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
-		case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-		case LogicalOperatorType::LOGICAL_CREATE_TYPE:
-			plan = CreatePlan((LogicalCreate &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_PRAGMA:
-			plan = CreatePlan((LogicalPragma &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_TRANSACTION:
-		case LogicalOperatorType::LOGICAL_ALTER:
-		case LogicalOperatorType::LOGICAL_DROP:
-		case LogicalOperatorType::LOGICAL_VACUUM:
-		case LogicalOperatorType::LOGICAL_LOAD:
-			plan = CreatePlan((LogicalSimple &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-			plan = CreatePlan((LogicalRecursiveCTE &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_CTE_REF:
-			plan = CreatePlan((LogicalCTERef &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_EXPORT:
-			plan = CreatePlan((LogicalExport &)op);
-			break;
-		case LogicalOperatorType::LOGICAL_SET:
-			plan = CreatePlan((LogicalSet &)op);
-			break;
-		default: {
-			throw NotImplementedException("Unimplemented logical operator type!");
-		}
+	case LogicalOperatorType::LOGICAL_GET:
+		plan = CreatePlan((LogicalGet &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		plan = CreatePlan((LogicalProjection &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		plan = CreatePlan((LogicalEmptyResult &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		plan = CreatePlan((LogicalFilter &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		plan = CreatePlan((LogicalAggregate &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		plan = CreatePlan((LogicalWindow &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		plan = CreatePlan((LogicalUnnest &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		plan = CreatePlan((LogicalLimit &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		plan = CreatePlan((LogicalLimitPercent &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		plan = CreatePlan((LogicalSample &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		plan = CreatePlan((LogicalOrder &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_TOP_N:
+		plan = CreatePlan((LogicalTopN &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		plan = CreatePlan((LogicalCopyToFile &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		plan = CreatePlan((LogicalDummyScan &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		plan = CreatePlan((LogicalAnyJoin &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		plan = CreatePlan((LogicalDelimJoin &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		plan = CreatePlan((LogicalComparisonJoin &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		plan = CreatePlan((LogicalCrossProduct &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		plan = CreatePlan((LogicalSetOperation &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_INSERT:
+		plan = CreatePlan((LogicalInsert &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_DELETE:
+		plan = CreatePlan((LogicalDelete &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
+		plan = CreatePlan((LogicalChunkGet &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+		plan = CreatePlan((LogicalDelimGet &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+		plan = CreatePlan((LogicalExpressionGet &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_UPDATE:
+		plan = CreatePlan((LogicalUpdate &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+		plan = CreatePlan((LogicalCreateTable &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+		plan = CreatePlan((LogicalCreateIndex &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+		plan = CreatePlan((LogicalExplain &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_SHOW:
+		plan = CreatePlan((LogicalShow &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		plan = CreatePlan((LogicalDistinct &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_PREPARE:
+		plan = CreatePlan((LogicalPrepare &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EXECUTE:
+		plan = CreatePlan((LogicalExecute &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+		plan = CreatePlan((LogicalCreate &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+		plan = CreatePlan((LogicalPragma &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_DROP:
+	case LogicalOperatorType::LOGICAL_VACUUM:
+	case LogicalOperatorType::LOGICAL_LOAD:
+		plan = CreatePlan((LogicalSimple &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		plan = CreatePlan((LogicalRecursiveCTE &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		plan = CreatePlan((LogicalCTERef &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPORT:
+		plan = CreatePlan((LogicalExport &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_SET:
+		plan = CreatePlan((LogicalSet &)op);
+		break;
+	default: {
+		throw NotImplementedException("Unimplemented logical operator type!");
+	}
 	}
 	if (op.join_stats && plan->ph_join_stats) {
 		op.join_stats->cardinality = plan->ph_join_stats->cardinality;

@@ -27,7 +27,8 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type) : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
+	explicit LogicalOperator(LogicalOperatorType type)
+	    : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
@@ -48,7 +49,6 @@ public:
 	bool has_estimated_cardinality;
 
 	unique_ptr<JoinStats> join_stats;
-
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();

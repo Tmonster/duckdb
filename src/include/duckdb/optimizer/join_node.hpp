@@ -32,7 +32,6 @@ struct TableFilterStats {
 
 class JoinStats {
 public:
-
 	idx_t cost;
 	double cardinality;
 
@@ -67,32 +66,29 @@ public:
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, double cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr),
-	      base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0), init_stats(false)
-	       {
+	      base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0), init_stats(false) {
 		join_stats = make_unique<JoinStats>();
 	}
 	//! Create an intermediate node in the join tree
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, double cardinality, double cost)
 	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right),
-	      base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0), init_stats(false)
-	      {
+	      base_table_left(0), base_table_right(0), base_column_left(0), base_column_right(0), init_stats(false) {
 		join_stats = make_unique<JoinStats>();
 	}
-
 
 	static idx_t hash_table_col(idx_t table, idx_t col);
 
 	void check_all_table_keys_forwarded();
-	unique_ptr<TableFilterStats> InspectTableFilters(TableFilterSet *filters, TableCatalogEntry *catalog_table, JoinOrderOptimizer *optimizer);
+	unique_ptr<TableFilterStats> InspectTableFilters(TableFilterSet *filters, TableCatalogEntry *catalog_table,
+	                                                 JoinOrderOptimizer *optimizer);
 
 public:
-
 	idx_t GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer);
 	void UpdateCardinalityEstimate(JoinOrderOptimizer *optimizer);
 
 	void UpdateCost();
 
-	TableCatalogEntry* GetCatalogTableEntry(LogicalOperator *op);
+	TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op);
 	static bool key_exists(idx_t key, unordered_map<idx_t, double> stat_column);
 	void InitColumnStats(JoinOrderOptimizer *optimizer);
 	void InitTDoms(JoinOrderOptimizer *optimizer);

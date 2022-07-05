@@ -20,27 +20,26 @@ namespace duckdb {
 
 static const double default_selectivity = 0.2;
 
-TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
+TableCatalogEntry *JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
 	if (op->type == LogicalOperatorType::LOGICAL_GET) {
-		auto get = (LogicalGet*)op;
+		auto get = (LogicalGet *)op;
 		TableCatalogEntry *entry = get->GetTable();
 		return entry;
 	}
-	for(auto &child: op->children) {
+	for (auto &child : op->children) {
 		TableCatalogEntry *entry = GetCatalogTableEntry(child.get());
-		if (entry != NULL) return entry;
+		if (entry != NULL)
+			return entry;
 	}
 	return NULL;
 }
 
-
-unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filters,
-                                                           TableCatalogEntry *catalog_table,
+unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filters, TableCatalogEntry *catalog_table,
                                                            JoinOrderOptimizer *optimizer) {
 	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
 	unique_ptr<TableFilterStats> stats = make_unique<TableFilterStats>();
 	stats->has_equality_filter = false;
-	for(it = filters->filters.begin(); it != filters->filters.end(); it++) {
+	for (it = filters->filters.begin(); it != filters->filters.end(); it++) {
 		if (it->second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			ConjunctionAndFilter &fil = (ConjunctionAndFilter &)*it->second;
 			for (auto &child_filter : fil.child_filters) {
@@ -56,15 +55,14 @@ unique_ptr<TableFilterStats> JoinNode::InspectTableFilters(TableFilterSet *filte
 						} else {
 							stats->cardinality_with_equality_filter = ceil(cardinality / col_count);
 						}
-//						if (is_us_filter) {
-//							stats->cardinality_with_equality_filter = 84843;
-//						}
+						//						if (is_us_filter) {
+						//							stats->cardinality_with_equality_filter = 84843;
+						//						}
 						stats->has_equality_filter = true;
 					}
 				}
 			}
-		}
-		else if (it->second->filter_type == TableFilterType::CONJUNCTION_OR) {
+		} else if (it->second->filter_type == TableFilterType::CONJUNCTION_OR) {
 			ConjunctionOrFilter &fil = (ConjunctionOrFilter &)*it->second;
 			for (auto &child_filter : fil.child_filters) {
 				if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
@@ -103,8 +101,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		catalog_table = get.GetTable();
 		if (!get.table_filters.filters.empty()) {
 			has_filter = true;
-			 tablestats = InspectTableFilters(&get.table_filters, catalog_table, optimizer);
-
+			tablestats = InspectTableFilters(&get.table_filters, catalog_table, optimizer);
 		}
 		optimizer->relation_to_table_name[relation_id] = catalog_table->name;
 	} else if (optimizer->relations.at(relation_id)->op->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -124,7 +121,8 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			// queries like id IN ('1', '2', '3') trigger this
 			auto tmp = optimizer->relations.at(relation_id)->op;
 			catalog_table = GetCatalogTableEntry(tmp);
-			if (catalog_table) optimizer->relation_to_table_name[relation_id] = catalog_table->name;
+			if (catalog_table)
+				optimizer->relation_to_table_name[relation_id] = catalog_table->name;
 			has_filter = true;
 		}
 	}
@@ -136,7 +134,8 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 		// If the filter an equality filter?
 		// if so, cardinality_with_filter = cardinality / tdom(column_with_filter).
 		cardinality_with_filter = default_selectivity * cardinality;
-		if (cardinality_with_filter < 1) cardinality_with_filter = 1;
+		if (cardinality_with_filter < 1)
+			cardinality_with_filter = 1;
 		// check if the filter is on the column, how?
 		for (auto &filter : optimizer->filter_infos) {
 			// if there is a filter info where
@@ -151,7 +150,6 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			cardinality_with_filter = tablestats->cardinality_with_equality_filter;
 		}
 	}
-
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.
 	unordered_set<idx_t>::iterator ite;
@@ -172,14 +170,15 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 			count = base_stats->GetDistinctCount();
 			if (key == direct_filter_hash) {
 				count = count * default_selectivity;
-				if (count < 1) count = 1;
+				if (count < 1)
+					count = 1;
 			}
 			// HLL messed up, count can't be greater than cardinality
 			if (count > cardinality) {
 				count = cardinality;
 			}
 			if (base_stats->type == LogicalTypeId::INTEGER) {
-				auto &numeric_stats = (NumericStatistics&)*base_stats;
+				auto &numeric_stats = (NumericStatistics &)*base_stats;
 				auto max_value = numeric_stats.max.GetValue<idx_t>();
 				if (count > max_value) {
 					count = max_value;
@@ -197,7 +196,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 
 		idx_t ind = 0;
 
-		for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
+		for (unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
 			if (i_set.count(key) == 1) {
 				if (catalog_table) {
 					if (optimizer->equivalent_relations_tdom_hll.at(ind) < count) {
@@ -213,7 +212,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 					optimizer->equivalent_relations_tdom_hll.at(ind) = count;
 				}
 			}
-			ind+=1;
+			ind += 1;
 		}
 	}
 	join_stats->cardinality = cardinality_with_filter;
@@ -222,11 +221,11 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 idx_t JoinNode::GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
 	idx_t use_ind = 0;
 	idx_t key = JoinOrderOptimizer::readable_hash(table, column);
-	for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
+	for (unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
 		if (i_set.count(key) == 1) {
 			return optimizer->equivalent_relations_tdom_hll[use_ind];
 		}
-		use_ind+=1;
+		use_ind += 1;
 	}
 	throw NotImplementedException("Could not get Total domain of join. Most likely a bug in InitTdoms");
 }
@@ -241,7 +240,7 @@ void JoinNode::UpdateCardinalityEstimate(JoinOrderOptimizer *optimizer) {
 	auto left_card = left->cardinality;
 	auto right_card = right->cardinality;
 
-	cardinality = (left_card * right_card)/tdom_join_right;
+	cardinality = (left_card * right_card) / tdom_join_right;
 	join_stats->cardinality = cardinality;
 }
 
@@ -254,7 +253,6 @@ void JoinNode::UpdateCost() {
 idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
 	return (table << 32) + col;
 }
-
 
 //! ******************************************************
 //! *          START OF DEBUGGING FUNCTIONS              *

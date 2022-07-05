@@ -70,7 +70,7 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 
 idx_t BaseStatistics::GetDistinctCount() {
 	if (distinct_stats) {
-		auto& d_stats = (DistinctStatistics&)*distinct_stats;
+		auto &d_stats = (DistinctStatistics &)*distinct_stats;
 		return d_stats.GetCount();
 	}
 	return 0;
