@@ -19,9 +19,6 @@
 namespace duckdb {
 
 static const double default_selectivity = 0.2;
-static const idx_t readable_offset = 10000000;
-
-
 
 TableCatalogEntry* JoinNode::GetCatalogTableEntry(LogicalOperator *op) {
 	if (op->type == LogicalOperatorType::LOGICAL_GET) {

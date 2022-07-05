@@ -50,8 +50,11 @@ public:
 	JoinNode *left;
 	JoinNode *right;
 
+	// relation id of the filter used to combine left and right
 	idx_t base_table_left;
 	idx_t base_table_right;
+	// column id of the filter used to combine left and right
+	// to get the true column id look at relation_column_to_original_column in join_order_optimizer
 	idx_t base_column_left;
 	idx_t base_column_right;
 	unique_ptr<JoinStats> join_stats;

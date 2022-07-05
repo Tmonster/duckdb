@@ -1,4 +1,3 @@
-
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 
 #include "duckdb/common/pair.hpp"
@@ -13,6 +12,7 @@
 #include <limits>
 
 namespace duckdb {
+static const idx_t readable_offset = 10000000;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
@@ -68,6 +68,8 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, i
 		}
 	}
 	else if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		// Here you have a filter on a single column in a table. Return a binding for the column
+		// being filtered on so the filter estimator knows what HLL count to pull
 		auto &colref = (BoundColumnRefExpression &)expression;
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
@@ -181,8 +183,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
+		// Add binding information from the nonreorderable join to this relation.
 		for (idx_t it : bindings) {
-//			auto actual_table_id = it;
 			for (auto &map_set: child_binding_maps) {
 				for (auto &mapping : map_set) {
 					auto relation_column_id = GetColumnFromReadableHash(mapping.first);
@@ -325,7 +327,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	result->base_column_left = left_col;
 	result->base_column_right = right_col;
 
-	//! new cardinality estimation and cost
+	// new cardinality estimation and cost
 	result->UpdateCardinalityEstimate(this);
 	result->UpdateCost();
 
@@ -374,8 +376,6 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	EmitPair(left, right, info);
 	return true;
 }
-
-
 
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (node->count == relations.size()) {
