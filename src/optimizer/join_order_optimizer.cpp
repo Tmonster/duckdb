@@ -185,12 +185,12 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 //			auto actual_table_id = it;
 			for (auto &map_set: child_binding_maps) {
 				for (auto &mapping : map_set) {
-					auto relation_column_id = JoinNode::GetColumnFromReadableHash(mapping.first);
-					auto actual_column_id = JoinNode::GetColumnFromReadableHash(mapping.second);
-					auto actual_table_id = JoinNode::GetTableFromReadableHash(mapping.second);
+					auto relation_column_id = GetColumnFromReadableHash(mapping.first);
+					auto actual_column_id = GetColumnFromReadableHash(mapping.second);
+					auto actual_table_id = GetTableFromReadableHash(mapping.second);
 					if (actual_table_id == it) {
-						auto key = JoinNode::readable_hash(relation_id, relation_column_id);
-						auto value = JoinNode::readable_hash(actual_table_id, actual_column_id);
+						auto key = readable_hash(relation_id, relation_column_id);
+						auto value = readable_hash(actual_table_id, actual_column_id);
 						relation_column_to_original_column[key] = value;
 					}
 				}
@@ -215,8 +215,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
 		for(idx_t it = 0; it < get->column_ids.size(); it++) {
-			idx_t key = JoinNode::readable_hash(relation_id, it);
-			idx_t value = JoinNode::readable_hash(get->table_index, get->column_ids[it]);
+			idx_t key = readable_hash(relation_id, it);
+			idx_t value = readable_hash(get->table_index, get->column_ids[it]);
 			relation_column_to_original_column[key] = value;
 		}
 
@@ -320,10 +320,10 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
-	result->join_stats->base_table_left = left_table;
-	result->join_stats->base_table_right = right_table;
-	result->join_stats->base_column_left = left_col;
-	result->join_stats->base_column_right = right_col;
+	result->base_table_left = left_table;
+	result->base_table_right = right_table;
+	result->base_column_left = left_col;
+	result->base_column_right = right_col;
 
 	//! new cardinality estimation and cost
 	result->UpdateCardinalityEstimate(this);
@@ -685,11 +685,6 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
-	if (node->join_stats && result_operator->join_stats) {
-		node->join_stats = result_operator->join_stats->Copy(move(node->join_stats));
-	} else {
-		node->join_stats = make_unique<JoinStats>();
-	}
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
@@ -808,21 +803,33 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
+idx_t JoinOrderOptimizer::readable_hash(idx_t table, idx_t col) {
+	return table * readable_offset + col;
+}
+
+idx_t JoinOrderOptimizer::GetColumnFromReadableHash(idx_t hash) {
+	return hash % readable_offset;
+}
+
+idx_t JoinOrderOptimizer::GetTableFromReadableHash(idx_t hash) {
+	return idx_t ((int)hash / (int)readable_offset);
+}
 
 void JoinOrderOptimizer::InitEquivalentRelations() {
 	JoinRelationSet *left = NULL;
 	JoinRelationSet *right = NULL;
-	vector<idx_t> to_add_to;
+	//! For each filter, we fill keep track of the index of the equivalent relation set
+	//! the left and right relation needs to be added to.
+	vector<idx_t> matching_equivalent_sets;
 	for (idx_t i = 0; i < filter_infos.size(); i++) {
 		left = filter_infos[i]->left_set;
 		right = filter_infos[i]->right_set;
-		to_add_to.clear();
+		matching_equivalent_sets.clear();
 		if (!left || !right) {
-			//! I'm pretty sure here you have filters on one relation, and it's a string filter
-			//! or number filter. So here, just grab the set (MAKE SURE IT'S 1) and add it to the
+			//! Filter on one relation, (i.e string or range filter on a column).
+			//! Grab the relation (should always be 1) and add it to the
 			//! the equivalence_relations
 			D_ASSERT(filter_infos[i]->set->count == 1);
-//			if (relations.at(filter_infos[i]->set->relations[0])->op->type == Logi)
 			bool found = false;
 			for(unordered_set<idx_t> i_set : equivalent_relations) {
 				if (i_set.count(filter_infos[i]->set->relations[0]) > 0) {
@@ -831,53 +838,61 @@ void JoinOrderOptimizer::InitEquivalentRelations() {
 				}
 			}
 			if (!found) {
-				idx_t key = JoinNode::readable_hash(filter_infos[i]->set->relations[0], filter_infos[i]->left_binding.second);
+				idx_t key = readable_hash(filter_infos[i]->set->relations[0], filter_infos[i]->left_binding.second);
 				unordered_set<idx_t> tmp({key});
 				equivalent_relations.push_back(tmp);
 			}
 			continue;
 		}
+		//! assuming filters are only on one column in the left set
+		//! and one column in the right set.
 		D_ASSERT(left->count == 1);
 		D_ASSERT(right->count == 1);
+		auto left_hash = readable_hash(filter_infos[i]->left_binding.first, filter_infos[i]->left_binding.second);
+		auto right_hash = readable_hash(filter_infos[i]->right_binding.first, filter_infos[i]->right_binding.second);
+
+		auto equivalent_relation_index = 0;
+		//! eri = equivalent relation index
+		bool added_to_eri = false;
+
 		vector<unordered_set<idx_t>>::iterator it;
-		// loop through equivalent_relations
-		idx_t index_er = 0;
-		idx_t left_hash = JoinNode::readable_hash(filter_infos[i]->left_binding.first, filter_infos[i]->left_binding.second);
-		idx_t right_hash = JoinNode::readable_hash(filter_infos[i]->right_binding.first, filter_infos[i]->right_binding.second);
-//		std::cout << "joining " << left_hash << " = " << right_hash << std::endl;
-		bool added_to_index_er = false;
 		for(unordered_set<idx_t> i_set : equivalent_relations) {
-			added_to_index_er = false;
+			added_to_eri = false;
 			if (i_set.count(left_hash) > 0) {
-				to_add_to.push_back(index_er);
-				added_to_index_er = true;
+				matching_equivalent_sets.push_back(equivalent_relation_index);
+				added_to_eri = true;
 			}
-			if (i_set.count(right_hash) > 0 && !added_to_index_er) {
-				to_add_to.push_back(index_er);
+			//! don't add both left and right to the matching_equivalent_sets
+			//! since both left and right get added to that index anyway.
+			if (i_set.count(right_hash) > 0 && !added_to_eri) {
+				matching_equivalent_sets.push_back(equivalent_relation_index);
 			}
-			index_er += 1;
+			equivalent_relation_index += 1;
 		}
-		if (to_add_to.size() > 1) {
-			for(idx_t i: equivalent_relations.at(to_add_to[1])) {
-				equivalent_relations.at(to_add_to[0]).insert(i);
+		if (matching_equivalent_sets.size() > 1) {
+			for(idx_t i: equivalent_relations.at(matching_equivalent_sets[1])) {
+				equivalent_relations.at(matching_equivalent_sets[0]).insert(i);
 			}
-			equivalent_relations.at(to_add_to[1]).clear();
+			equivalent_relations.at(matching_equivalent_sets[1]).clear();
 			// add all values of one set to the other, delete the empty one
-		} else if (to_add_to.size() == 1){
-			idx_t set_i = to_add_to.at(0);
+		} else if (matching_equivalent_sets.size() == 1){
+			idx_t set_i = matching_equivalent_sets.at(0);
 			equivalent_relations.at(set_i).insert(left_hash);
 			equivalent_relations.at(set_i).insert(right_hash);
-		} else if (to_add_to.size() == 0) {
+		} else if (matching_equivalent_sets.size() == 0) {
 			unordered_set<idx_t> tmp({left_hash, right_hash});
 			equivalent_relations.push_back(tmp);
 		}
 	}
 	vector<unordered_set<idx_t>>::iterator it;
+	//! erase empty equivalent relation sets
 	for(it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
 		if (it->size() == 0) {
 			equivalent_relations.erase(it);
 		}
 	}
+	//! initialize equivalent relation tdom vector to have the same size as the
+	//! equivalent relations.
 	for(it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
 		equivalent_relations_tdom_hll.push_back(0);
 		equivalent_relations_tdom_no_hll.push_back(NumericLimits<idx_t>::Maximum());

@@ -189,7 +189,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		}
 	}
 	if (op.join_stats && plan->ph_join_stats) {
-		op.join_stats = plan->ph_join_stats->Copy(move(op.join_stats));
+		op.join_stats->cardinality = plan->ph_join_stats->cardinality;
+		op.join_stats->cost = plan->ph_join_stats->cost;
 		op.estimated_cardinality = plan->estimated_cardinality;
 		op.has_estimated_cardinality = true;
 	} else {

@@ -147,7 +147,7 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 				// then the filter is on this relation_id
 				// the readable hash represents the table_column that has a direct filter.
 				// that Tdom can be multiplied by 0.2.
-				direct_filter_hash = readable_hash(relation_id, filter->left_binding.second);
+				direct_filter_hash = JoinOrderOptimizer::readable_hash(relation_id, filter->left_binding.second);
 			}
 		}
 		if (tablestats && tablestats->has_equality_filter) {
@@ -164,11 +164,11 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
-		idx_t key = readable_hash(relation_id, *ite);
+		idx_t key = JoinOrderOptimizer::readable_hash(relation_id, *ite);
 		if (catalog_table) {
 			// Get HLL stats here
 			auto table_col_hash = optimizer->relation_column_to_original_column[key];
-			auto actual_column = JoinNode::GetColumnFromReadableHash(table_col_hash);
+			auto actual_column = JoinOrderOptimizer::GetColumnFromReadableHash(table_col_hash);
 
 			auto base_stats = catalog_table->storage->GetStatistics(optimizer->context, actual_column);
 
@@ -224,29 +224,27 @@ void JoinNode::InitTDoms(JoinOrderOptimizer *optimizer) {
 
 idx_t JoinNode::GetTDom(idx_t table, idx_t column, JoinOrderOptimizer *optimizer) {
 	idx_t use_ind = 0;
-	idx_t key = readable_hash(table, column);
+	idx_t key = JoinOrderOptimizer::readable_hash(table, column);
 	for(unordered_set<idx_t> i_set : optimizer->equivalent_relations) {
 		if (i_set.count(key) == 1) {
 			return optimizer->equivalent_relations_tdom_hll[use_ind];
 		}
 		use_ind+=1;
 	}
-	throw NotImplementedException("shouldn't get here actually");
+	throw NotImplementedException("Could not get Total domain of join. Most likely a bug in InitTdoms");
 }
 
 void JoinNode::UpdateCardinalityEstimate(JoinOrderOptimizer *optimizer) {
 
-	idx_t tdom_of_join = GetTDom(join_stats->base_table_right, join_stats->base_column_right, optimizer);
+	idx_t tdom_join_right = GetTDom(base_table_right, base_column_right, optimizer);
+#ifdef DEBUG
+	idx_t tdom_join_left = GetTDom(base_column_left, base_table_right, optimizer);
+	D_ASSERT(tdom_join_left == tdom_join_right);
+#endif
 	auto left_card = left->cardinality;
 	auto right_card = right->cardinality;
-	if (left->has_filter) {
-		left_card = left->join_stats->cardinality;
-	}
-	if (right->has_filter) {
-		right_card = right->join_stats->cardinality;
-	}
 
-	cardinality = (left_card * right_card)/tdom_of_join;
+	cardinality = (left_card * right_card)/tdom_join_right;
 	join_stats->cardinality = cardinality;
 }
 
@@ -260,18 +258,6 @@ idx_t JoinNode::hash_table_col(idx_t table, idx_t col) {
 	return (table << 32) + col;
 }
 
-
-idx_t JoinNode::readable_hash(idx_t table, idx_t col) {
-	return table * readable_offset + col;
-}
-
-idx_t JoinNode::GetColumnFromReadableHash(idx_t hash) {
-	return hash % readable_offset;
-}
-
-idx_t JoinNode::GetTableFromReadableHash(idx_t hash) {
-	return idx_t ((int)hash / (int)readable_offset);
-}
 
 //! ******************************************************
 //! *          START OF DEBUGGING FUNCTIONS              *

@@ -31,6 +31,10 @@ public:
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right);
 
+	static idx_t readable_hash(idx_t table, idx_t col);
+	static idx_t GetColumnFromReadableHash(idx_t hash);
+	static idx_t GetTableFromReadableHash(idx_t hash);
+
 private:
 	ClientContext &context;
 	//! The total amount of join pairs that have been considered

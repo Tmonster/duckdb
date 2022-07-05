@@ -28,11 +28,9 @@ namespace duckdb {
 class LogicalOperator {
 public:
 	explicit LogicalOperator(LogicalOperatorType type) : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
-		join_stats = make_unique<JoinStats>();
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
-		join_stats = make_unique<JoinStats>();
 	}
 	virtual ~LogicalOperator() {
 	}
