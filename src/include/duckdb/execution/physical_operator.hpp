@@ -107,8 +107,6 @@ public:
 	//! The global state of this operator
 	unique_ptr<GlobalOperatorState> op_state;
 
-	void AddStats(JoinStats join_stats);
-
 public:
 	virtual string GetName() const;
 	virtual string ParamsToString() const {
