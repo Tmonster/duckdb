@@ -16,6 +16,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/optimizer/cardinality_estimator.hpp"
 
 #include <functional>
 
@@ -23,7 +24,7 @@ namespace duckdb {
 
 class JoinOrderOptimizer {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context) : context(context) {
+	explicit JoinOrderOptimizer(ClientContext &context) : context(context), cardinality_estimator(context) {
 	}
 
 	//! Perform join reordering inside a plan
@@ -43,10 +44,6 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
-	//! A mapping of base table index -> all columns used to determine the join order
-	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
-	//! A mapping of (relation, bound_column) -> actual column (but same relation)
-	unordered_map<idx_t, idx_t> relation_column_to_original_column;
 
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
@@ -65,9 +62,7 @@ private:
 	//! C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
-	vector<unordered_set<idx_t>> equivalent_relations;
-	vector<idx_t> equivalent_relations_tdom_no_hll;
-	vector<idx_t> equivalent_relations_tdom_hll;
+	CardinalityEstimator cardinality_estimator;
 
 	unordered_map<idx_t, std::string> relation_to_table_name;
 
@@ -75,7 +70,8 @@ private:
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 
 	//! Get column bindings from a filter
-	void GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding, pair<idx_t, idx_t> *right_binding);
+	void GetColumnBindings(Expression &expression, ColumnBinding &left_binding,
+	                       ColumnBinding &right_binding);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
@@ -113,6 +109,7 @@ private:
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 
 	friend class JoinNode;
+	friend class CardinalityEstimator;
 };
 
 } // namespace duckdb

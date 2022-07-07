@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/join_order_optimizer.hpp"
-
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
@@ -33,7 +32,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		relation_to_columns[relation_mapping[colref.binding.table_index]].insert(colref.binding.column_index);
+		cardinality_estimator.relation_to_columns[relation_mapping[colref.binding.table_index]].insert(colref.binding.column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -52,8 +51,8 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, idx_t> *left_binding,
-                                           pair<idx_t, idx_t> *right_binding) {
+void JoinOrderOptimizer::GetColumnBindings(Expression &expression, ColumnBinding &left_binding,
+                                           ColumnBinding &right_binding) {
 	if (expression.type == ExpressionType::COMPARE_EQUAL) {
 		auto &colref = (BoundComparisonExpression &)expression;
 		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF &&
@@ -62,8 +61,8 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, i
 			auto &left = (BoundColumnRefExpression &)*colref.left;
 			D_ASSERT(relation_mapping.find(left.binding.table_index) != relation_mapping.end());
 			D_ASSERT(relation_mapping.find(right.binding.table_index) != relation_mapping.end());
-			*left_binding = std::make_pair(relation_mapping[left.binding.table_index], left.binding.column_index);
-			*right_binding = std::make_pair(relation_mapping[right.binding.table_index], right.binding.column_index);
+			left_binding = ColumnBinding(relation_mapping[left.binding.table_index], left.binding.column_index);
+			right_binding = ColumnBinding(relation_mapping[right.binding.table_index], right.binding.column_index);
 			return;
 		}
 	} else if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
@@ -74,8 +73,7 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, pair<idx_t, i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		*left_binding = std::make_pair(relation_mapping[colref.binding.table_index], colref.binding.column_index);
-		*right_binding = std::make_pair(-1, -1);
+		left_binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(
@@ -159,13 +157,13 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
 		// Keep track of all of the filter bindings the new join order optimizer makes
-		auto child_binding_maps = vector<unordered_map<idx_t, idx_t>>({});
+		auto child_binding_maps = vector<unordered_map<ColumnBinding, ColumnBinding>>({});
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.push_back(unordered_map<idx_t, idx_t>({}));
+			child_binding_maps.push_back(unordered_map<ColumnBinding, ColumnBinding>({}));
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
-			for (auto &rc_2_oc : optimizer.relation_column_to_original_column) {
+			for (auto &rc_2_oc : optimizer.cardinality_estimator.relation_column_to_original_column) {
 				child_binding_maps.at(child_bindings_it)[rc_2_oc.first] = rc_2_oc.second;
 			}
 			child_bindings_it += 1;
@@ -184,13 +182,16 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		for (idx_t it : bindings) {
 			for (auto &map_set : child_binding_maps) {
 				for (auto &mapping : map_set) {
-					auto relation_column_id = GetColumnFromReadableHash(mapping.first);
-					auto actual_column_id = GetColumnFromReadableHash(mapping.second);
-					auto actual_table_id = GetTableFromReadableHash(mapping.second);
-					if (actual_table_id == it) {
-						auto key = readable_hash(relation_id, relation_column_id);
-						auto value = readable_hash(actual_table_id, actual_column_id);
-						relation_column_to_original_column[key] = value;
+					ColumnBinding relation_bindings = mapping.first;
+					ColumnBinding actual_bindings = mapping.second;
+
+//					auto relation_column_id = GetColumnFromReadableHash(mapping.first);
+//					auto actual_column_id = GetColumnFromReadableHash(mapping.second);
+//					auto actual_table_id = GetTableFromReadableHash(mapping.second);
+
+					if (actual_bindings.table_index == it) {
+						auto key = ColumnBinding({relation_id, relation_bindings.column_index});//readable_hash(relation_id, relation_column_id);//readable_hash(actual_table_id, actual_column_id);
+						cardinality_estimator.relation_column_to_original_column[key] = actual_bindings;
 					}
 				}
 			}
@@ -214,9 +215,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
 		for (idx_t it = 0; it < get->column_ids.size(); it++) {
-			idx_t key = readable_hash(relation_id, it);
-			idx_t value = readable_hash(get->table_index, get->column_ids[it]);
-			relation_column_to_original_column[key] = value;
+			auto key = ColumnBinding(relation_id, it);
+			auto value = ColumnBinding(get->table_index, get->column_ids[it]);
+			cardinality_estimator.relation_column_to_original_column[key] = value;
 		}
 
 		relations.push_back(move(relation));
@@ -267,7 +268,9 @@ void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_t
 }
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
-unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
+unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
+                                                        NeighborInfo *info,
+                                                        JoinNode *left,
                                                         JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
@@ -299,32 +302,21 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 
-	idx_t left_table, left_col, right_table, right_col;
-
 	D_ASSERT(info->filters.size() == 1);
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
-			right_table = info->filters[it]->left_binding.first;
-			right_col = info->filters[it]->left_binding.second;
-			left_table = info->filters[it]->right_binding.first;
-			left_col = info->filters[it]->right_binding.second;
+			result->right_binding = info->filters[it]->left_binding;
+			result->left_binding = info->filters[it]->right_binding;
 		} else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
 		           JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
-			left_table = info->filters[it]->left_binding.first;
-			left_col = info->filters[it]->left_binding.second;
-			right_table = info->filters[it]->right_binding.first;
-			right_col = info->filters[it]->right_binding.second;
+			result->right_binding = info->filters[it]->right_binding;
+			result->left_binding = info->filters[it]->left_binding;
 		}
 	}
 
-	result->base_table_left = left_table;
-	result->base_table_right = right_table;
-	result->base_column_left = left_col;
-	result->base_column_right = right_col;
-
 	// new cardinality estimation and cost
-	result->UpdateCardinalityEstimate(this);
+	cardinality_estimator.EstimateCardinality(result.get());
 	result->UpdateCost();
 
 	return result;
@@ -351,6 +343,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
+			std::cout << "updating cost for " << new_plan->set->ToString() << std::endl;
 		}
 #endif
 
@@ -798,102 +791,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-idx_t JoinOrderOptimizer::readable_hash(idx_t table, idx_t col) {
-	return table * readable_offset + col;
-}
-
-idx_t JoinOrderOptimizer::GetColumnFromReadableHash(idx_t hash) {
-	return hash % readable_offset;
-}
-
-idx_t JoinOrderOptimizer::GetTableFromReadableHash(idx_t hash) {
-	return idx_t((int)hash / (int)readable_offset);
-}
-
-void JoinOrderOptimizer::InitEquivalentRelations() {
-	JoinRelationSet *left = NULL;
-	JoinRelationSet *right = NULL;
-	//! For each filter, we fill keep track of the index of the equivalent relation set
-	//! the left and right relation needs to be added to.
-	vector<idx_t> matching_equivalent_sets;
-	for (idx_t i = 0; i < filter_infos.size(); i++) {
-		left = filter_infos[i]->left_set;
-		right = filter_infos[i]->right_set;
-		matching_equivalent_sets.clear();
-		if (!left || !right) {
-			//! Filter on one relation, (i.e string or range filter on a column).
-			//! Grab the relation (should always be 1) and add it to the
-			//! the equivalence_relations
-			D_ASSERT(filter_infos[i]->set->count == 1);
-			bool found = false;
-			for (unordered_set<idx_t> i_set : equivalent_relations) {
-				if (i_set.count(filter_infos[i]->set->relations[0]) > 0) {
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				idx_t key = readable_hash(filter_infos[i]->set->relations[0], filter_infos[i]->left_binding.second);
-				unordered_set<idx_t> tmp({key});
-				equivalent_relations.push_back(tmp);
-			}
-			continue;
-		}
-		//! assuming filters are only on one column in the left set
-		//! and one column in the right set.
-		D_ASSERT(left->count == 1);
-		D_ASSERT(right->count == 1);
-		auto left_hash = readable_hash(filter_infos[i]->left_binding.first, filter_infos[i]->left_binding.second);
-		auto right_hash = readable_hash(filter_infos[i]->right_binding.first, filter_infos[i]->right_binding.second);
-
-		auto equivalent_relation_index = 0;
-		//! eri = equivalent relation index
-		bool added_to_eri = false;
-
-		vector<unordered_set<idx_t>>::iterator it;
-		for (unordered_set<idx_t> i_set : equivalent_relations) {
-			added_to_eri = false;
-			if (i_set.count(left_hash) > 0) {
-				matching_equivalent_sets.push_back(equivalent_relation_index);
-				added_to_eri = true;
-			}
-			//! don't add both left and right to the matching_equivalent_sets
-			//! since both left and right get added to that index anyway.
-			if (i_set.count(right_hash) > 0 && !added_to_eri) {
-				matching_equivalent_sets.push_back(equivalent_relation_index);
-			}
-			equivalent_relation_index += 1;
-		}
-		if (matching_equivalent_sets.size() > 1) {
-			for (idx_t i : equivalent_relations.at(matching_equivalent_sets[1])) {
-				equivalent_relations.at(matching_equivalent_sets[0]).insert(i);
-			}
-			equivalent_relations.at(matching_equivalent_sets[1]).clear();
-			// add all values of one set to the other, delete the empty one
-		} else if (matching_equivalent_sets.size() == 1) {
-			idx_t set_i = matching_equivalent_sets.at(0);
-			equivalent_relations.at(set_i).insert(left_hash);
-			equivalent_relations.at(set_i).insert(right_hash);
-		} else if (matching_equivalent_sets.size() == 0) {
-			unordered_set<idx_t> tmp({left_hash, right_hash});
-			equivalent_relations.push_back(tmp);
-		}
-	}
-	vector<unordered_set<idx_t>>::iterator it;
-	//! erase empty equivalent relation sets
-	for (it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
-		if (it->size() == 0) {
-			equivalent_relations.erase(it);
-		}
-	}
-	//! initialize equivalent relation tdom vector to have the same size as the
-	//! equivalent relations.
-	for (it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
-		equivalent_relations_tdom_hll.push_back(0);
-		equivalent_relations_tdom_no_hll.push_back(NumericLimits<idx_t>::Maximum());
-	}
-}
-
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
@@ -951,7 +848,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
-		GetColumnBindings(*filter, &filter_info->left_binding, &filter_info->right_binding);
+		filter_info->left_binding = ColumnBinding(0, 0);
+		GetColumnBindings(*filter, filter_info->left_binding, filter_info->right_binding);
 		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
@@ -999,14 +897,21 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 	}
 
-	InitEquivalentRelations();
+//	vector<FilterInfo*> copy_of_filters;
+//	for (auto &filter: filter_infos) {
+//		copy_of_filters.push_back(filter.get());
+//	}
+	cardinality_estimator.InitEquivalentRelations(&filter_infos);
+	cardinality_estimator.InitTotalDomains();
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto node = set_manager.GetJoinRelation(i);
-		plans[node]->InitTDoms(this);
+		auto join_node = plans[node].get();
+		cardinality_estimator.EstimateBaseTableCardinality(join_node, relations[i]->op);
+		cardinality_estimator.UpdateTotalDomains(join_node, relations[i]->op, &filter_infos);
 	}
 
-	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
-	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
+	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_hll.size());
+	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_no_hll.size());
 	//	printRelation2tableNameMapping(relation_to_table_name);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

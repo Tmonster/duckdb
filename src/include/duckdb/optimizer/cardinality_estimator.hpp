@@ -1,0 +1,57 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/optimizer/table_filter_stats.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+#pragma once
+
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "join_node.hpp"
+#include "duckdb/planner/column_binding.hpp"
+
+namespace duckdb {
+
+static constexpr double DEFAULT_SELECTIVITY = 0.2;
+
+class CardinalityEstimator {
+public:
+	//! A mapping of base table index -> all columns used to determine the join order
+	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
+	//! A mapping of (relation, bound_column) -> (actual table, actual column)
+	unordered_map<ColumnBinding, ColumnBinding> relation_column_to_original_column;
+	vector<unordered_set<ColumnBinding>> equivalent_relations;
+	vector<idx_t> equivalent_relations_tdom_no_hll;
+	vector<idx_t> equivalent_relations_tdom_hll;
+
+	explicit CardinalityEstimator(ClientContext &context): context(context) {}
+
+	void InitTotalDomains();
+	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>>* filter_infos);
+	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>>* filter_infos);
+
+	void EstimateCardinality(JoinNode *node);
+	void EstimateBaseTableCardinality(JoinNode *node,
+	                                   LogicalOperator *op);
+private:
+	ClientContext &context;
+
+	//! ********* HELPERS FOR INIT TOTAL DOMAINS ***********
+	bool SingleColumnFilter(FilterInfo *filter_info);
+	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
+	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
+	//! ********* END HELPERS ***********
+
+	idx_t GetTDom(ColumnBinding binding);
+
+	TableFilterSet* GetTableFilters(LogicalOperator *op);
+	idx_t InspectTableFilters(idx_t cardinality,
+							 LogicalOperator *op,
+							 TableFilterSet *table_filters);
+
+
+};
+
+
+} // namespace duckdb

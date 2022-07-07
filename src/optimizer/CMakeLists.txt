@@ -19,6 +19,7 @@ add_library_unity(
   in_clause_rewriter.cpp
   join_node.cpp
   join_order_optimizer.cpp
+  cardinality_estimator.cpp
   optimizer.cpp
   expression_rewriter.cpp
   regex_range_filter.cpp

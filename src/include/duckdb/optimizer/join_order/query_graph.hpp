@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 #include <functional>
 
@@ -25,8 +26,8 @@ struct FilterInfo {
 	idx_t filter_index;
 	JoinRelationSet *left_set = nullptr;
 	JoinRelationSet *right_set = nullptr;
-	pair<idx_t, idx_t> left_binding;
-	pair<idx_t, idx_t> right_binding;
+	ColumnBinding left_binding;
+	ColumnBinding right_binding;
 	JoinRelationSet *set = nullptr;
 };
 
