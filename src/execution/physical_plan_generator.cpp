@@ -4,6 +4,7 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -188,11 +189,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 	}
-	if (op.join_stats && plan->ph_join_stats) {
-		op.join_stats = plan->ph_join_stats->Copy(move(op.join_stats));
-		op.has_estimated_cardinality = true;
+
+	if (plan->ph_join_stats) {
+		plan->ph_join_stats->cost = op.estimated_props.cost;
+		plan->ph_join_stats->cardinality = op.estimated_props.cardinality;
+		plan->estimated_cardinality = op.estimated_cardinality;
 	} else {
-		op.join_stats = make_unique<EstimatedProperties>();
+		plan->ph_join_stats = make_unique<EstimatedProperties>();
 	}
 
 	return plan;

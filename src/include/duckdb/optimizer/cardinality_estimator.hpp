@@ -24,6 +24,7 @@ public:
 	vector<unordered_set<ColumnBinding>> equivalent_relations;
 	vector<idx_t> equivalent_relations_tdom_no_hll;
 	vector<idx_t> equivalent_relations_tdom_hll;
+	unordered_map<idx_t, std::string> relation_to_table_name;
 
 	explicit CardinalityEstimator(ClientContext &context): context(context) {}
 

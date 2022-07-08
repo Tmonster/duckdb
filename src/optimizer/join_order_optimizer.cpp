@@ -185,12 +185,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 					ColumnBinding relation_bindings = mapping.first;
 					ColumnBinding actual_bindings = mapping.second;
 
-//					auto relation_column_id = GetColumnFromReadableHash(mapping.first);
-//					auto actual_column_id = GetColumnFromReadableHash(mapping.second);
-//					auto actual_table_id = GetTableFromReadableHash(mapping.second);
-
 					if (actual_bindings.table_index == it) {
-						auto key = ColumnBinding({relation_id, relation_bindings.column_index});//readable_hash(relation_id, relation_column_id);//readable_hash(actual_table_id, actual_column_id);
+						auto key = ColumnBinding(relation_id, relation_bindings.column_index);
 						cardinality_estimator.relation_column_to_original_column[key] = actual_bindings;
 					}
 				}
@@ -319,6 +315,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	cardinality_estimator.EstimateCardinality(result.get());
 	result->UpdateCost();
 
+//	std::cout << "cost to join " << left->set->ToString() << " and " << right->set->ToString() << " = " << result->cost << std::endl;
+//	std::cout << "cardinality of join = " << result->cardinality << std::endl;
+
 	return result;
 }
 
@@ -338,15 +337,13 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 #ifdef DEBUG
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
-			if (ceil(result->cardinality) != ceil(entry->second->cardinality)) {
+			if (result->cardinality + 0.1 < entry->second->cardinality || result->cardinality - 0.1 > entry->second->cardinality) {
 				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
 				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
-			std::cout << "updating cost for " << new_plan->set->ToString() << std::endl;
 		}
 #endif
-
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -358,7 +355,7 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	if (pairs >= 10000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
-		// at 10K pairs stop searching exactly and switch to heuristic
+		// at 20K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
 	EmitPair(left, right, info);
@@ -496,6 +493,35 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
+
+void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
+	// add this plan
+	auto new_set = new_plan->set;
+	// now update every plan that uses this plan
+	unordered_set<idx_t> exclusion_set;
+	for (idx_t i = 0; i < new_set->count; i++) {
+		exclusion_set.insert(new_set->relations[i]);
+	}
+	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	for (auto neighbor : neighbors) {
+		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
+		auto combined_set = set_manager.Union(new_set, neighbor_relation);
+
+		auto combined_set_plan = plans.find(combined_set);
+		if (combined_set_plan == plans.end()) {
+			continue;
+		}
+
+		auto combined_set_plan_cost = combined_set_plan->second->cost;
+		auto connection = query_graph.GetConnection(new_set, neighbor_relation);
+		// recurse and update up the tree if the combined set produces a plan with a lower cost
+		auto updated_plan = EmitPair(new_set, neighbor_relation, connection);
+		if (updated_plan->cost < combined_set_plan_cost) {
+			UpdateDPTree(updated_plan);
+		}
+	}
+}
+
 void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
@@ -519,6 +545,13 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				if (connection) {
 					// we can! check the cost of this connection
 					auto node = EmitPair(left, right, connection);
+
+					// update the DP tree in case a future best connection uses an entry from the DP table
+					// that uses the node that was potentially just updated. The above call to EmitPair
+					// will cause a nullptr error if future plans rely on the old node that was just
+					// replaced.
+					UpdateDPTree(node);
+
 					if (!best_connection || node->cost < best_connection->cost) {
 						// best pair found so far
 						best_connection = node;
@@ -582,6 +615,7 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
+//		std::cout << "solve approx" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
@@ -673,6 +707,9 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
+	result_operator->estimated_props = EstimatedProperties();
+	result_operator->estimated_props.cardinality = node->estimated_props->cardinality;
+	result_operator->estimated_props.cost = node->estimated_props->cost;
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
@@ -848,7 +885,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
-		filter_info->left_binding = ColumnBinding(0, 0);
 		GetColumnBindings(*filter, filter_info->left_binding, filter_info->right_binding);
 		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
@@ -897,10 +933,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 	}
 
-//	vector<FilterInfo*> copy_of_filters;
-//	for (auto &filter: filter_infos) {
-//		copy_of_filters.push_back(filter.get());
-//	}
 	cardinality_estimator.InitEquivalentRelations(&filter_infos);
 	cardinality_estimator.InitTotalDomains();
 	for (idx_t i = 0; i < relations.size(); i++) {
@@ -912,7 +944,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_hll.size());
 	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_no_hll.size());
-	//	printRelation2tableNameMapping(relation_to_table_name);
+//	printRelation2tableNameMapping(cardinality_estimator.relation_to_table_name);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

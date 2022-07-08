@@ -159,11 +159,12 @@ void CardinalityEstimator::EstimateCardinality(JoinNode *node) {
 	idx_t tdom_join_left = GetTDom(node->left_binding);
 	D_ASSERT(tdom_join_left == tdom_join_right);
 #endif
-	auto left_card = node->left->cardinality;
-	auto right_card = node->right->cardinality;
+	auto left_card = node->left->estimated_props->cardinality;
+	auto right_card = node->right->estimated_props->cardinality;
 	D_ASSERT(tdom_join_right != 0);
 	D_ASSERT(tdom_join_right != NumericLimits<idx_t>::Maximum());
 	node->cardinality = (left_card * right_card) / tdom_join_right;
+	node->estimated_props->cardinality = node->cardinality;
 }
 
 
@@ -172,12 +173,25 @@ static LogicalGet* GetLogicalGet(LogicalOperator *op) {
 	if (op->type == LogicalOperatorType::LOGICAL_GET) {
 		get = (LogicalGet*)op;
 	}
-	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
+	else if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 			get = (LogicalGet*)op->children.at(0).get();
 		}
+		// if there are mark joins below the filter relations, get the catalog table for
+		// the underlying sequential scan.
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			LogicalComparisonJoin *join = (LogicalComparisonJoin*)op->children.at(0).get();
+			if (join->join_type == JoinType::MARK) {
+				return GetLogicalGet(join->children.at(0).get());
+			}
+		}
 	}
 	return get;
+}
+
+
+static bool IsLogicalFilter(LogicalOperator *op) {
+	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos) {
@@ -201,13 +215,10 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, *ite);
 
-		for (auto &filter: *filter_infos) {
-			if (filter->set->count == 1 && filter->left_binding == key) {
-				direct_filter = true;
-			}
-		}
+		//TODO: Go through table filters and find if there is a direct filter
+		// on a join filter
 		if (catalog_table) {
-
+			relation_to_table_name[node->set->relations[0]] = catalog_table->name;
 			// Get HLL stats here
 			auto actual_binding = relation_column_to_original_column[key];
 
@@ -281,9 +292,8 @@ TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	auto catalog_table = GetCatalogTableEntry(op);
 	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
-	bool has_equality_filter;
+	bool has_equality_filter = false;
 	idx_t cardinality_after_filters = cardinality;
-	if (!table_filters) return cardinality_after_filters;
 	for (it = table_filters->filters.begin(); it != table_filters->filters.end(); it++) {
 		if (it->second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			ConjunctionAndFilter &fil = (ConjunctionAndFilter &)*it->second;
@@ -323,16 +333,28 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 			}
 		}
 	}
+	// if the above code didn't find an equality filter (i.e country_code = "[us]")
+	// and there are other table filters, use default selectivity.
+	if (!has_equality_filter && !table_filters->filters.empty()) {
+		cardinality_after_filters = cardinality* DEFAULT_SELECTIVITY;
+	}
 	return cardinality_after_filters;
 }
 
 void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node,
 														LogicalOperator *op) {
+	auto has_logical_filter = IsLogicalFilter(op);
 	auto table_filters = GetTableFilters(op);
-
 	// RunSampleFilter();
-	// else Inspect Table Filters
-	node->estimated_props->cardinality = InspectTableFilters(node->cardinality, op, table_filters);
+
+	auto estimated_filter_card = node->cardinality;
+	// Logical Filter on a seq scan
+	if (has_logical_filter) {
+		estimated_filter_card = node->cardinality * DEFAULT_SELECTIVITY;
+	} else if (table_filters) {
+		estimated_filter_card = MinValue((double)InspectTableFilters(node->cardinality, op, table_filters), (double)estimated_filter_card);
+	}
+	node->estimated_props->cardinality = estimated_filter_card;
 }
 
 

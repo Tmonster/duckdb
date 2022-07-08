@@ -32,9 +32,6 @@ public:
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right);
 
-	static idx_t readable_hash(idx_t table, idx_t col);
-	static idx_t GetColumnFromReadableHash(idx_t hash);
-	static idx_t GetTableFromReadableHash(idx_t hash);
 
 private:
 	ClientContext &context;
@@ -63,8 +60,6 @@ private:
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	CardinalityEstimator cardinality_estimator;
-
-	unordered_map<idx_t, std::string> relation_to_table_name;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
@@ -104,11 +99,12 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
 
+	void UpdateDPTree(JoinNode *new_plan);
+
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 
-	friend class JoinNode;
 	friend class CardinalityEstimator;
 };
 

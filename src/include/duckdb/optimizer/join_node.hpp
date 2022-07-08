@@ -22,15 +22,6 @@ namespace duckdb {
 
 class JoinOrderOptimizer;
 
-//struct TableFilterStats {
-//	idx_t cardinality_with_equality_filter;
-//	TableCatalogEntry *catalog_table;
-//	//! does the table have a filter?
-//	bool has_filter;
-//	//! Is the filter an equality filter (i.e. country_code = [us])
-//	bool has_equality_filter;
-//};
-
 class EstimatedProperties {
 public:
 	idx_t cost;

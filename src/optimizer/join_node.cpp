@@ -1,21 +1,10 @@
 //
 // Created by Tom Ebergen on 5/16/22.
 //
-
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_node.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/optimizer/cardinality_estimator.hpp"
-
-#include <algorithm>
-#include <iostream>
 
 namespace duckdb {
 

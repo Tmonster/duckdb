@@ -47,7 +47,7 @@ public:
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
 
-	unique_ptr<EstimatedProperties> join_stats;
+	EstimatedProperties estimated_props;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();

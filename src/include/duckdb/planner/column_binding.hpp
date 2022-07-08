@@ -26,13 +26,12 @@ struct ColumnBinding {
 		return table_index == rhs.table_index && column_index == rhs.column_index;
 	}
 };
-}
-// namespace duckdb
+} // namespace duckdb
+
 namespace std {
 template<>
 struct std::hash<duckdb::ColumnBinding> {
 	inline size_t operator()(const duckdb::ColumnBinding& binding) const {
-		// size_t value = your hash computations over x
 		return binding.table_index * 1000000 + binding.column_index;
 	}
 };
