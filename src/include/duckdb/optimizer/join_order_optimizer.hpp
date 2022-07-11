@@ -32,7 +32,6 @@ public:
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right);
 
-
 private:
 	ClientContext &context;
 	//! The total amount of join pairs that have been considered
@@ -65,8 +64,7 @@ private:
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 
 	//! Get column bindings from a filter
-	void GetColumnBindings(Expression &expression, ColumnBinding &left_binding,
-	                       ColumnBinding &right_binding);
+	void GetColumnBindings(Expression &expression, ColumnBinding &left_binding, ColumnBinding &right_binding);
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.

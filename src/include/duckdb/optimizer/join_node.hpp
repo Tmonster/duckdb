@@ -28,6 +28,7 @@ public:
 	double cardinality;
 
 	unique_ptr<EstimatedProperties> Copy();
+
 private:
 };
 
@@ -51,7 +52,7 @@ public:
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, double cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr),
-	      left_binding(), right_binding(){
+	      left_binding(), right_binding() {
 		estimated_props = make_unique<EstimatedProperties>();
 	}
 	//! Create an intermediate node in the join tree
@@ -71,7 +72,7 @@ public:
 	//! debugging functions
 	static bool DesiredRelationSet(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
 	static bool DesiredJoin(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
-	                         unordered_set<idx_t> desired_right);
+	                        unordered_set<idx_t> desired_right);
 };
 
 } // namespace duckdb

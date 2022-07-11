@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-static TableCatalogEntry* GetCatalogTableEntry(LogicalOperator *op) {
+static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
 	if (op->type == LogicalOperatorType::LOGICAL_GET) {
 		auto get = (LogicalGet *)op;
 		TableCatalogEntry *entry = get->GetTable();
@@ -25,7 +25,6 @@ static TableCatalogEntry* GetCatalogTableEntry(LogicalOperator *op) {
 	return nullptr;
 }
 
-
 bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	if (filter_info->left_set && filter_info->right_set) {
 		// Both set
@@ -35,15 +34,14 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	//! Grab the relation (should always be 1) and add it to the
 	//! the equivalence_relations
 	D_ASSERT(filter_info->set->count == 1);
-	for (const column_binding_set_t& i_set : equivalent_relations) {
+	for (const column_binding_set_t &i_set : equivalent_relations) {
 		if (i_set.count(filter_info->left_binding) > 0) {
 			// found an equivalent filter
 			return true;
 		}
 	}
 	D_ASSERT(filter_info->set->relations[0] == filter_info->left_binding.table_index);
-	auto key = ColumnBinding(filter_info->set->relations[0],
-							 filter_info->left_binding.column_index);
+	auto key = ColumnBinding(filter_info->set->relations[0], filter_info->left_binding.column_index);
 	column_binding_set_t tmp;
 	tmp.insert(key);
 	equivalent_relations.push_back(tmp);
@@ -57,7 +55,7 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 	bool added_to_eri;
 
 	vector<unordered_set<idx_t>>::iterator it;
-	for (const column_binding_set_t& i_set : equivalent_relations) {
+	for (const column_binding_set_t &i_set : equivalent_relations) {
 		added_to_eri = false;
 		if (i_set.count(filter_info->left_binding) > 0) {
 			matching_equivalent_sets.push_back(equivalent_relation_index);
@@ -72,7 +70,6 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 	}
 	return matching_equivalent_sets;
 }
-
 
 void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets) {
 	if (matching_equivalent_sets.size() > 1) {
@@ -93,14 +90,12 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 	}
 }
 
-
-void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>>* filter_infos) {
+void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos) {
 	//! For each filter, we fill keep track of the index of the equivalent relation set
 	//! the left and right relation needs to be added to.
 	vector<idx_t> matching_equivalent_sets;
-	for (auto &filter: *filter_infos) {
+	for (auto &filter : *filter_infos) {
 		matching_equivalent_sets.clear();
-
 
 		if (SingleColumnFilter(filter.get())) {
 			continue;
@@ -131,10 +126,9 @@ void CardinalityEstimator::InitTotalDomains() {
 	}
 }
 
-
 idx_t CardinalityEstimator::GetTDom(ColumnBinding binding) {
 	idx_t use_ind = 0;
-	for (const column_binding_set_t& i_set : equivalent_relations) {
+	for (const column_binding_set_t &i_set : equivalent_relations) {
 		if (i_set.count(binding) == 1) {
 			auto tdom_hll = equivalent_relations_tdom_hll[use_ind];
 			if (tdom_hll > 0) {
@@ -172,20 +166,19 @@ static bool IsLogicalGet(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_GET;
 }
 
-static LogicalGet* GetLogicalGet(LogicalOperator *op) {
+static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	LogicalGet *get = nullptr;
 	if (IsLogicalGet(op)) {
-		get = (LogicalGet*)op;
-	}
-	else if (IsLogicalFilter(op)) {
+		get = (LogicalGet *)op;
+	} else if (IsLogicalFilter(op)) {
 		auto child = op->children.at(0).get();
 		if (IsLogicalGet(child)) {
-			get = (LogicalGet*)child;
+			get = (LogicalGet *)child;
 		}
 		// if there are mark joins below the filter relations, get the catalog table for
 		// the underlying sequential scan.
 		if (child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			LogicalComparisonJoin *join = (LogicalComparisonJoin*)child;
+			LogicalComparisonJoin *join = (LogicalComparisonJoin *)child;
 			if (join->join_type == JoinType::MARK) {
 				child = join->children[0].get();
 				return GetLogicalGet(child);
@@ -195,9 +188,8 @@ static LogicalGet* GetLogicalGet(LogicalOperator *op) {
 	return get;
 }
 
-
-
-void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos) {
+void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op,
+                                              vector<unique_ptr<FilterInfo>> *filter_infos) {
 	idx_t relation_id = node->set->relations[0];
 
 	TableCatalogEntry *catalog_table = nullptr;
@@ -211,15 +203,14 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	idx_t count = 0;
 
 	bool direct_filter = false;
-	for (ite = relation_to_columns[relation_id].begin();
-	     ite != relation_to_columns[relation_id].end(); ite++) {
+	for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
 
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, *ite);
 
-		//TODO: Go through table filters and find if there is a direct filter
-		// on a join filter
+		// TODO: Go through table filters and find if there is a direct filter
+		//  on a join filter
 		if (catalog_table) {
 			relation_to_table_name[node->set->relations[0]] = catalog_table->name;
 			// Get HLL stats here
@@ -279,8 +270,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 					// In this case, prefer the lower values.
 					// equivalent_relations_tdom_hll is initialized to 0 for all equivalence relations
 					// so check for 0 to make sure an ideal value exists.
-					if (equivalent_relations_tdom_hll.at(ind) > count ||
-					    equivalent_relations_tdom_hll.at(ind) == 0) {
+					if (equivalent_relations_tdom_hll.at(ind) > count || equivalent_relations_tdom_hll.at(ind) == 0) {
 						equivalent_relations_tdom_hll.at(ind) = count;
 					}
 				}
@@ -299,11 +289,8 @@ TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
 	return nullptr;
 }
 
-
-idx_t CardinalityEstimator::InspectConjunctionAND( idx_t cardinality,
-                                                  idx_t column_index,
-                                                 ConjunctionAndFilter *filter,
-                                                 TableCatalogEntry *catalog_table) {
+idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *filter,
+                                                  TableCatalogEntry *catalog_table) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
@@ -325,9 +312,7 @@ idx_t CardinalityEstimator::InspectConjunctionAND( idx_t cardinality,
 	return cardinality_after_filters;
 }
 
-idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality,
-                                                 idx_t column_index,
-                                                 ConjunctionOrFilter *filter,
+idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *filter,
                                                  TableCatalogEntry *catalog_table) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
@@ -369,13 +354,12 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	// and there are other table filters, use default selectivity.
 	bool has_equality_filter = (cardinality_after_filters != cardinality);
 	if (!has_equality_filter && !table_filters->filters.empty()) {
-		cardinality_after_filters = cardinality* DEFAULT_SELECTIVITY;
+		cardinality_after_filters = cardinality * DEFAULT_SELECTIVITY;
 	}
 	return cardinality_after_filters;
 }
 
-void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node,
-														LogicalOperator *op) {
+void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op) {
 	auto has_logical_filter = IsLogicalFilter(op);
 	auto table_filters = GetTableFilters(op);
 
@@ -384,10 +368,10 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node,
 	if (has_logical_filter) {
 		estimated_filter_card = node->cardinality * DEFAULT_SELECTIVITY;
 	} else if (table_filters) {
-		estimated_filter_card = MinValue((double)InspectTableFilters(node->cardinality, op, table_filters), (double)estimated_filter_card);
+		estimated_filter_card =
+		    MinValue((double)InspectTableFilters(node->cardinality, op, table_filters), (double)estimated_filter_card);
 	}
 	node->estimated_props->cardinality = estimated_filter_card;
 }
 
-
-}
+} // namespace duckdb

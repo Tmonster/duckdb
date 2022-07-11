@@ -21,7 +21,6 @@ void JoinNode::UpdateCost() {
 	estimated_props->cost = cost;
 }
 
-
 //! ******************************************************
 //! *          START OF DEBUGGING FUNCTIONS              *
 //! ******************************************************
@@ -35,7 +34,7 @@ bool JoinNode::DesiredRelationSet(JoinRelationSet *relation_set, unordered_set<i
 }
 
 bool JoinNode::DesiredJoin(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
-                            unordered_set<idx_t> desired_right) {
+                           unordered_set<idx_t> desired_right) {
 	bool left_is_left = DesiredRelationSet(left, desired_left) && DesiredRelationSet(right, desired_right);
 	bool right_is_left = DesiredRelationSet(right, desired_left) && DesiredRelationSet(left, desired_right);
 	return left_is_left || right_is_left;

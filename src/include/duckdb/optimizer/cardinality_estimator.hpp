@@ -29,15 +29,16 @@ public:
 	vector<idx_t> equivalent_relations_tdom_hll;
 	unordered_map<idx_t, std::string> relation_to_table_name;
 
-	explicit CardinalityEstimator(ClientContext &context): context(context) {}
+	explicit CardinalityEstimator(ClientContext &context) : context(context) {
+	}
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>>* filter_infos);
-	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>>* filter_infos);
+	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos);
+	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
 
 	void EstimateCardinality(JoinNode *node);
-	void EstimateBaseTableCardinality(JoinNode *node,
-	                                   LogicalOperator *op);
+	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
+
 private:
 	ClientContext &context;
 
@@ -49,19 +50,13 @@ private:
 
 	idx_t GetTDom(ColumnBinding binding);
 
-	TableFilterSet* GetTableFilters(LogicalOperator *op);
+	TableFilterSet *GetTableFilters(LogicalOperator *op);
 
-	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index,
-	                            ConjunctionAndFilter *fil, TableCatalogEntry *catalog_table);
-	idx_t InspectConjunctionOR(idx_t cardinality,
-	                           idx_t column_index,
-	                           ConjunctionOrFilter *fil, TableCatalogEntry *catalog_table);
-	idx_t InspectTableFilters(idx_t cardinality,
-							 LogicalOperator *op,
-							 TableFilterSet *table_filters);
-
-
+	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,
+	                            TableCatalogEntry *catalog_table);
+	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
+	                           TableCatalogEntry *catalog_table);
+	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters);
 };
-
 
 } // namespace duckdb

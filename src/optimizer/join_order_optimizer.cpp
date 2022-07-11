@@ -32,7 +32,8 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		cardinality_estimator.relation_to_columns[relation_mapping[colref.binding.table_index]].insert(colref.binding.column_index);
+		cardinality_estimator.relation_to_columns[relation_mapping[colref.binding.table_index]].insert(
+		    colref.binding.column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -263,9 +264,7 @@ void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_t
 }
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
-unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
-                                                        NeighborInfo *info,
-                                                        JoinNode *left,
+unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
                                                         JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
@@ -314,8 +313,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	cardinality_estimator.EstimateCardinality(result.get());
 	result->UpdateCost();
 
-//	std::cout << "cost to join " << left->set->ToString() << " and " << right->set->ToString() << " = " << result->cost << std::endl;
-//	std::cout << "cardinality of join = " << result->cardinality << std::endl;
+	//	std::cout << "cost to join " << left->set->ToString() << " and " << right->set->ToString() << " = " <<
+	//result->cost << std::endl; 	std::cout << "cardinality of join = " << result->cardinality << std::endl;
 
 	return result;
 }
@@ -336,7 +335,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 #ifdef DEBUG
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
-			if (result->cardinality + 0.1 < entry->second->cardinality || result->cardinality - 0.1 > entry->second->cardinality) {
+			if (result->cardinality + 0.1 < entry->second->cardinality ||
+			    result->cardinality - 0.1 > entry->second->cardinality) {
 				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
 				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
 				D_ASSERT(result->cardinality == entry->second->cardinality);
@@ -492,7 +492,6 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
-
 void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 	// add this plan
 	auto new_set = new_plan->set;
@@ -614,7 +613,7 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
-//		std::cout << "solve approx" << std::endl;
+		//		std::cout << "solve approx" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
@@ -939,9 +938,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		cardinality_estimator.UpdateTotalDomains(join_node, relations[i]->op, &filter_infos);
 	}
 
-	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_hll.size());
-	D_ASSERT(cardinality_estimator.equivalent_relations.size() == cardinality_estimator.equivalent_relations_tdom_no_hll.size());
-//	printRelation2tableNameMapping(cardinality_estimator.relation_to_table_name);
+	D_ASSERT(cardinality_estimator.equivalent_relations.size() ==
+	         cardinality_estimator.equivalent_relations_tdom_hll.size());
+	D_ASSERT(cardinality_estimator.equivalent_relations.size() ==
+	         cardinality_estimator.equivalent_relations_tdom_no_hll.size());
+	//	printRelation2tableNameMapping(cardinality_estimator.relation_to_table_name);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found
