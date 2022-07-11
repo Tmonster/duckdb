@@ -157,16 +157,15 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
 		// Keep track of all of the filter bindings the new join order optimizer makes
-		auto child_binding_maps = vector<unordered_map<ColumnBinding, ColumnBinding>>({});
+		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.push_back(unordered_map<ColumnBinding, ColumnBinding>({}));
+			child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
 			for (auto &rc_2_oc : optimizer.cardinality_estimator.relation_column_to_original_column) {
 				child_binding_maps.at(child_bindings_it)[rc_2_oc.first] = rc_2_oc.second;
 			}
-			child_bindings_it += 1;
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations

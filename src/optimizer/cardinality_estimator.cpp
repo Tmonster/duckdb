@@ -35,7 +35,6 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	//! Grab the relation (should always be 1) and add it to the
 	//! the equivalence_relations
 	D_ASSERT(filter_info->set->count == 1);
-	bool found = false;
 	for (const column_binding_set_t& i_set : equivalent_relations) {
 		if (i_set.count(filter_info->left_binding) > 0) {
 			// found an equivalent filter
@@ -261,9 +260,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			}
 		}
 
-		idx_t ind = 0;
-
-		for (const column_binding_set_t& i_set : equivalent_relations) {
+		for (idx_t ind = 0; ind < equivalent_relations.size(); ind++) {
+			column_binding_set_t i_set = equivalent_relations.at(ind);
 			if (i_set.count(key) == 1) {
 				if (catalog_table) {
 					if (equivalent_relations_tdom_hll.at(ind) < count) {
@@ -281,13 +279,13 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 					// In this case, prefer the lower values.
 					// equivalent_relations_tdom_hll is initialized to 0 for all equivalence relations
 					// so check for 0 to make sure an ideal value exists.
-					if (equivalent_relations_tdom_hll.at(ind) > count || equivalent_relations_tdom_hll.at(ind) == 0) {
+					if (equivalent_relations_tdom_hll.at(ind) > count ||
+					    equivalent_relations_tdom_hll.at(ind) == 0) {
 						equivalent_relations_tdom_hll.at(ind) = count;
 					}
-
 				}
+				break;
 			}
-			ind += 1;
 		}
 	}
 }
@@ -306,8 +304,8 @@ idx_t CardinalityEstimator::InspectConjunctionAND( idx_t cardinality,
                                                   idx_t column_index,
                                                  ConjunctionAndFilter *filter,
                                                  TableCatalogEntry *catalog_table) {
-	bool has_equality_filter = false;
-	idx_t cardinality_after_filters = cardinality;
+	auto has_equality_filter = false;
+	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
 		if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
 			auto comparison_filter = (ConstantFilter &)*child_filter;
@@ -331,8 +329,8 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality,
                                                  idx_t column_index,
                                                  ConjunctionOrFilter *filter,
                                                  TableCatalogEntry *catalog_table) {
-	bool has_equality_filter = false;
-	idx_t cardinality_after_filters = cardinality;
+	auto has_equality_filter = false;
+	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
 		if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
 			auto comparison_filter = (ConstantFilter &)*child_filter;
@@ -358,11 +356,11 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	idx_t cardinality_after_filters = cardinality;
 	for (it = table_filters->filters.begin(); it != table_filters->filters.end(); it++) {
 		if (it->second->filter_type == TableFilterType::CONJUNCTION_AND) {
-			ConjunctionAndFilter &filter = (ConjunctionAndFilter &)*it->second;
+			auto &filter = (ConjunctionAndFilter &)*it->second;
 			idx_t cardinality_with_and_filter = InspectConjunctionAND(cardinality, it->first, &filter, catalog_table);
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it->second->filter_type == TableFilterType::CONJUNCTION_OR) {
-			ConjunctionOrFilter &filter = (ConjunctionOrFilter &)*it->second;
+			auto &filter = (ConjunctionOrFilter &)*it->second;
 			idx_t cardinality_with_or_filter = InspectConjunctionOR(cardinality, it->first, &filter, catalog_table);
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
@@ -380,7 +378,6 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node,
 														LogicalOperator *op) {
 	auto has_logical_filter = IsLogicalFilter(op);
 	auto table_filters = GetTableFilters(op);
-	// RunSampleFilter();
 
 	auto estimated_filter_card = node->cardinality;
 	// Logical Filter on a seq scan
