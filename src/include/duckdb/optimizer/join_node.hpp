@@ -27,11 +27,7 @@ public:
 	idx_t cost;
 	double cardinality;
 
-	unique_ptr<EstimatedProperties> Copy(unique_ptr<EstimatedProperties> estimated_props) {
-		cost = estimated_props->cost;
-		cardinality = estimated_props->cardinality;
-		return estimated_props;
-	}
+	unique_ptr<EstimatedProperties> Copy();
 private:
 };
 

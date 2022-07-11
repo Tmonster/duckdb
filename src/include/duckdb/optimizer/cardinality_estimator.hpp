@@ -10,6 +10,9 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "join_node.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
 
@@ -20,8 +23,8 @@ public:
 	//! A mapping of base table index -> all columns used to determine the join order
 	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
-	unordered_map<ColumnBinding, ColumnBinding> relation_column_to_original_column;
-	vector<unordered_set<ColumnBinding>> equivalent_relations;
+	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
+	vector<column_binding_set_t> equivalent_relations;
 	vector<idx_t> equivalent_relations_tdom_no_hll;
 	vector<idx_t> equivalent_relations_tdom_hll;
 	unordered_map<idx_t, std::string> relation_to_table_name;
@@ -47,6 +50,12 @@ private:
 	idx_t GetTDom(ColumnBinding binding);
 
 	TableFilterSet* GetTableFilters(LogicalOperator *op);
+
+	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index,
+	                            ConjunctionAndFilter *fil, TableCatalogEntry *catalog_table);
+	idx_t InspectConjunctionOR(idx_t cardinality,
+	                           idx_t column_index,
+	                           ConjunctionOrFilter *fil, TableCatalogEntry *catalog_table);
 	idx_t InspectTableFilters(idx_t cardinality,
 							 LogicalOperator *op,
 							 TableFilterSet *table_filters);

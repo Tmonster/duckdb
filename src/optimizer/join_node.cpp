@@ -8,6 +8,13 @@
 
 namespace duckdb {
 
+unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
+	auto result = make_unique<EstimatedProperties>();
+	result->cost = cost;
+	result->cardinality = cardinality;
+	return result;
+}
+
 void JoinNode::UpdateCost() {
 	cost = cardinality + left->cost + right->cost;
 

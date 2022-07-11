@@ -707,9 +707,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
-	result_operator->estimated_props = EstimatedProperties();
-	result_operator->estimated_props.cardinality = node->estimated_props->cardinality;
-	result_operator->estimated_props.cost = node->estimated_props->cost;
+	result_operator->estimated_props = node->estimated_props->Copy();
 
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
