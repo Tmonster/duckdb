@@ -17,7 +17,6 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 
 void JoinNode::UpdateCost() {
 	cost = cardinality + left->cost + right->cost;
-
 	estimated_props->cost = cost;
 }
 

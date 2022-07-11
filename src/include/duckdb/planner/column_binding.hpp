@@ -28,11 +28,3 @@ struct ColumnBinding {
 };
 } // namespace duckdb
 
-namespace std {
-template <>
-struct std::hash<duckdb::ColumnBinding> {
-	inline size_t operator()(const duckdb::ColumnBinding &binding) const {
-		return binding.table_index * 1000000 + binding.column_index;
-	}
-};
-} // namespace std

@@ -129,19 +129,21 @@ void CardinalityEstimator::InitTotalDomains() {
 idx_t CardinalityEstimator::GetTDom(ColumnBinding binding) {
 	idx_t use_ind = 0;
 	for (const column_binding_set_t &i_set : equivalent_relations) {
-		if (i_set.count(binding) == 1) {
-			auto tdom_hll = equivalent_relations_tdom_hll[use_ind];
-			if (tdom_hll > 0) {
-				return tdom_hll;
-			}
-			auto tdom_no_hll = equivalent_relations_tdom_no_hll[use_ind];
-			if (tdom_no_hll > 0) {
-				return tdom_no_hll;
-			}
+		if (i_set.count(binding) < 1) {
+			use_ind += 1;
+			continue;
 		}
-		use_ind += 1;
+		auto tdom_hll = equivalent_relations_tdom_hll[use_ind];
+		if (tdom_hll > 0) {
+			return tdom_hll;
+		}
+		auto tdom_no_hll = equivalent_relations_tdom_no_hll[use_ind];
+		if (tdom_no_hll > 0) {
+			return tdom_no_hll;
+		}
+		throw Exception("Total domain for Join relation was never initialized. Most likely a bug in InitTdoms");
 	}
-	throw NotImplementedException("Could not get Total domain of join. Most likely a bug in InitTdoms");
+	throw Exception("Could not get total domain of a join relations. Most likely a bug in InitTdoms");
 }
 
 void CardinalityEstimator::EstimateCardinality(JoinNode *node) {
@@ -339,14 +341,14 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	auto catalog_table = GetCatalogTableEntry(op);
 	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
 	idx_t cardinality_after_filters = cardinality;
-	for (it = table_filters->filters.begin(); it != table_filters->filters.end(); it++) {
-		if (it->second->filter_type == TableFilterType::CONJUNCTION_AND) {
-			auto &filter = (ConjunctionAndFilter &)*it->second;
-			idx_t cardinality_with_and_filter = InspectConjunctionAND(cardinality, it->first, &filter, catalog_table);
+	for (auto &it: table_filters->filters) {
+		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
+			auto &filter = (ConjunctionAndFilter &)*it.second;
+			idx_t cardinality_with_and_filter = InspectConjunctionAND(cardinality, it.first, &filter, catalog_table);
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
-		} else if (it->second->filter_type == TableFilterType::CONJUNCTION_OR) {
-			auto &filter = (ConjunctionOrFilter &)*it->second;
-			idx_t cardinality_with_or_filter = InspectConjunctionOR(cardinality, it->first, &filter, catalog_table);
+		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
+			auto &filter = (ConjunctionOrFilter &)*it.second;
+			idx_t cardinality_with_or_filter = InspectConjunctionOR(cardinality, it.first, &filter, catalog_table);
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
 	}

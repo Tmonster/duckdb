@@ -40,7 +40,6 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
-
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
@@ -48,7 +47,6 @@ private:
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 
-	unordered_set<idx_t> full_plans;
 	//! The set of filters extracted from the query graph
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
@@ -70,8 +68,6 @@ private:
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
 	                          LogicalOperator *parent = nullptr);
-
-	void InitEquivalentRelations();
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
@@ -102,8 +98,6 @@ private:
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
-
-	friend class CardinalityEstimator;
 };
 
 } // namespace duckdb

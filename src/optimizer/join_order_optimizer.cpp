@@ -6,12 +6,9 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include <algorithm>
-#include <iostream>
-#include <limits>
+#include "iostream"
 
 namespace duckdb {
-static const idx_t readable_offset = 10000000;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
@@ -253,15 +250,15 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
-void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_to_table_name) {
-	std::string res = "";
-	unordered_map<idx_t, std::string>::iterator it;
-	for (it = relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
-		res += "{ " + std::to_string(it->first) + ": " + it->second + "}," + "\n";
-	}
-	res += "-----------\n";
-	std::cout << res << std::endl;
-}
+//void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_to_table_name) {
+//	std::string res = "";
+//	unordered_map<idx_t, std::string>::iterator it;
+//	for (it = relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
+//		res += "{ " + std::to_string(it->first) + ": " + it->second + "}," + "\n";
+//	}
+//	res += "-----------\n";
+//	std::cout << res << std::endl;
+//}
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
@@ -313,9 +310,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	cardinality_estimator.EstimateCardinality(result.get());
 	result->UpdateCost();
 
-	//	std::cout << "cost to join " << left->set->ToString() << " and " << right->set->ToString() << " = " <<
-	//result->cost << std::endl; 	std::cout << "cardinality of join = " << result->cardinality << std::endl;
-
 	return result;
 }
 
@@ -337,8 +331,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		if (entry != plans.end()) {
 			if (result->cardinality + 0.1 < entry->second->cardinality ||
 			    result->cardinality - 0.1 > entry->second->cardinality) {
-				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
-				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
+//				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
+//				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
 				D_ASSERT(result->cardinality == entry->second->cardinality);
 			}
 		}
@@ -459,6 +453,7 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_
 	// recursively enumerate the sets
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); i++) {
+		// this line is necessary, need to remember why.
 		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
@@ -613,7 +608,6 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
-		//		std::cout << "solve approx" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
