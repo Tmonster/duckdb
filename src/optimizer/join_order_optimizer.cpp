@@ -250,16 +250,6 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 	}
 }
 
-//void printRelation2tableNameMapping(unordered_map<idx_t, std::string> relation_to_table_name) {
-//	std::string res = "";
-//	unordered_map<idx_t, std::string>::iterator it;
-//	for (it = relation_to_table_name.begin(); it != relation_to_table_name.end(); it++) {
-//		res += "{ " + std::to_string(it->first) + ": " + it->second + "}," + "\n";
-//	}
-//	res += "-----------\n";
-//	std::cout << res << std::endl;
-//}
-
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
                                                         JoinNode *right) {
@@ -278,10 +268,11 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
 			expected_cardinality = NumericLimits<double>::Maximum();
 		} else {
-			expected_cardinality = left->cardinality * right->cardinality;
+			expected_cardinality = left->estimated_props->cardinality * right->estimated_props->cardinality;
 		}
 		auto cost = 0;
 		auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+		result->estimated_props->cardinality = expected_cardinality;
 		result->UpdateCost();
 		return result;
 	}
@@ -293,6 +284,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 
+//	if (info->filters.size() > 1) {
+//		std::cout << "break here" << std::endl;
+//	}
 	D_ASSERT(info->filters.size() == 1);
 	for (idx_t it = 0; it < info->filters.size(); it++) {
 		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
@@ -319,6 +313,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto &right_plan = plans[right];
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
+
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
@@ -331,12 +326,11 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		if (entry != plans.end()) {
 			if (result->cardinality + 0.1 < entry->second->cardinality ||
 			    result->cardinality - 0.1 > entry->second->cardinality) {
-//				std::cout << "new result card = " << ceil(result->cardinality) << std::endl;
-//				std::cout << "entry cardinality = " << entry->second->cardinality << std::endl;
-				D_ASSERT(result->cardinality == entry->second->cardinality);
+				D_ASSERT(result->cardinality <= entry->second->cardinality);
 			}
 		}
 #endif
+
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -487,16 +481,57 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
+
+vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered_set<idx_t>> current, vector<idx_t> all_neighbors) {
+	vector<unordered_set<idx_t>> ret;
+	for (auto &neighbor: all_neighbors) {
+		for (auto &neighbor_set: current) {
+			auto max_val = max_element(neighbor_set.begin(), neighbor_set.end());
+			if (*max_val >= neighbor) {
+				continue;
+			}
+			if (neighbor_set.count(neighbor) == 0) {
+				unordered_set<idx_t> new_set;
+				for(auto &n: neighbor_set) {
+					new_set.insert(n);
+				}
+				new_set.insert(neighbor);
+				ret.push_back(new_set);
+			}
+		}
+	}
+	return ret;
+}
+
+vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set) {
+	vector<unordered_set<idx_t>> ret;
+	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	sort(neighbors.begin(), neighbors.end());
+	vector<unordered_set<idx_t>> added;
+	for (auto& neighbor: neighbors) {
+		added.push_back(unordered_set<idx_t>({neighbor}));
+		ret.push_back(unordered_set<idx_t>({neighbor}));
+	}
+	do {
+		added = AddGreaterSets(added, neighbors);
+		for (auto &d: added) {
+			ret.push_back(d);
+		}
+	} while(added.size() > 0);
+	return ret;
+}
+
+
 void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
-	// add this plan
 	auto new_set = new_plan->set;
 	// now update every plan that uses this plan
 	unordered_set<idx_t> exclusion_set;
 	for (idx_t i = 0; i < new_set->count; i++) {
 		exclusion_set.insert(new_set->relations[i]);
 	}
-	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-	for (auto neighbor : neighbors) {
+	auto all_neighbors = GetAllNeighborSets(new_set, exclusion_set);
+//	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	for (auto neighbor : all_neighbors) {
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto combined_set = set_manager.Union(new_set, neighbor_relation);
 
@@ -508,7 +543,13 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		auto combined_set_plan_cost = combined_set_plan->second->cost;
 		auto connection = query_graph.GetConnection(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
+		// only recurse on neighbor relations that have plans.
+		auto &right_plan = plans[neighbor_relation];
+		if (!right_plan) {
+			continue;
+		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connection);
+//		auto exclusion_set = unordered_set<idx_t>({neighbor_relation->});
 		if (updated_plan->cost < combined_set_plan_cost) {
 			UpdateDPTree(updated_plan);
 		}
@@ -536,7 +577,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				// check if we can connect these two relations
 				auto connection = query_graph.GetConnection(left, right);
 				if (connection) {
-					// we can! check the cost of this connection
+					// we can check the cost of this connection
 					auto node = EmitPair(left, right, connection);
 
 					// update the DP tree in case a future best connection uses an entry from the DP table
@@ -608,6 +649,7 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
+//		std::cout << "solving approximately" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }
