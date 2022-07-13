@@ -4,7 +4,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "iostream"
 
 namespace duckdb {
 

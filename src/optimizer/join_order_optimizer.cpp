@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise

@@ -33,15 +33,15 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	//! Filter on one relation, (i.e string or range filter on a column).
 	//! Grab the relation (should always be 1) and add it to the
 	//! the equivalence_relations
-	D_ASSERT(filter_info->set->count == 1);
+//	D_ASSERT(filter_info->set->count == 1);
 	for (const column_binding_set_t &i_set : equivalent_relations) {
 		if (i_set.count(filter_info->left_binding) > 0) {
 			// found an equivalent filter
 			return true;
 		}
 	}
-	D_ASSERT(filter_info->set->relations[0] == filter_info->left_binding.table_index);
-	auto key = ColumnBinding(filter_info->set->relations[0], filter_info->left_binding.column_index);
+//	D_ASSERT(filter_info->set->relations[0] == filter_info->left_binding.table_index);
+	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
 	column_binding_set_t tmp;
 	tmp.insert(key);
 	equivalent_relations.push_back(tmp);
@@ -302,8 +302,10 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 				if (has_equality_filter) {
 					cardinality_after_filters =
 					    MinValue((idx_t)ceil(cardinality / column_count), cardinality_after_filters);
-				} else {
+				} else if (column_count > 0){
 					cardinality_after_filters = ceil(cardinality / column_count);
+				} else {
+					cardinality_after_filters = 0;
 				}
 				has_equality_filter = true;
 			}
