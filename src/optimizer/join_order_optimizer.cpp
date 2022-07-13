@@ -74,6 +74,10 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, ColumnBinding
 		left_binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
 		return;
 	}
+	// TODO: handle inequality filters with functions.
+	// TODO: Don't overwrite the right binding. This fails silently right now
+	//  When enumerating the children, it's possible you overwrite the left_binding
+	//  if the right child is an expression with more children than the left child.
 	ExpressionIterator::EnumerateChildren(
 	    expression, [&](Expression &expr) { GetColumnBindings(expr, left_binding, right_binding); });
 }
@@ -283,26 +287,32 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 	double cost = 0;
 	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
+	auto old_cost = NumericLimits<double>::Maximum();
+	auto old_card = NumericLimits<double>::Maximum();
 
-//	if (info->filters.size() > 1) {
-//		std::cout << "break here" << std::endl;
-//	}
-	D_ASSERT(info->filters.size() == 1);
-	for (idx_t it = 0; it < info->filters.size(); it++) {
-		if (JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->left_set) &&
-		    JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->right_set)) {
-			result->right_binding = info->filters[it]->left_binding;
-			result->left_binding = info->filters[it]->right_binding;
-		} else if (JoinRelationSet::IsSubset(left_join_relations, info->filters[it]->left_set) &&
-		           JoinRelationSet::IsSubset(right_join_relations, info->filters[it]->right_set)) {
-			result->right_binding = info->filters[it]->right_binding;
-			result->left_binding = info->filters[it]->left_binding;
+	for (auto &filter: info->filters) {
+		if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
+		    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
+			result->right_binding = filter->left_binding;
+			result->left_binding = filter->right_binding;
+		} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
+		           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
+			result->right_binding = filter->right_binding;
+			result->left_binding = filter->left_binding;
 		}
-	}
 
-	// new cardinality estimation and cost
-	cardinality_estimator.EstimateCardinality(result.get());
-	result->UpdateCost();
+		// predict cardinality using most selective filter
+		cardinality_estimator.EstimateCardinality(result.get());
+		result->UpdateCost();
+		if (result->cost > old_cost) {
+			// don't need to update the bindings because those are no longer used.
+			// I thiiiiiink?
+			result->cost = old_cost;
+			result->cardinality = old_card;
+		}
+		old_cost = result->cost;
+		old_card = result->cardinality;
+	}
 
 	return result;
 }

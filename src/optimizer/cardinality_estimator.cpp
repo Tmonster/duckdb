@@ -203,7 +203,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.
 	unordered_set<idx_t>::iterator ite;
-	idx_t count = 0;
+	idx_t count = node->cardinality;
 
 	bool direct_filter = false;
 	for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
@@ -219,8 +219,19 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// Get HLL stats here
 			auto actual_binding = relation_column_to_original_column[key];
 
+			// sometimes base stats is null (test_709.test) returns null for base stats while
+			// there is still a catalog table. Anybody know anything about this?
 			auto base_stats = catalog_table->storage->GetStatistics(context, actual_binding.column_index);
-			count = base_stats->GetDistinctCount();
+			if (base_stats) {
+				count = base_stats->GetDistinctCount();
+//				if (base_stats->type == LogicalTypeId::INTEGER) {
+//					auto &numeric_stats = (NumericStatistics &)*base_stats;
+//					auto max_value = numeric_stats.max.GetValue<idx_t>();
+//					if (count > max_value) {
+//						count = max_value;
+//					}
+//				}
+			}
 
 			//! means you have a direct filter on a column. The count/total domain for the column
 			//! should be decreased to match the predicted total domain matching the filter.
@@ -236,13 +247,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// HLL messed up, count can't be greater than cardinality
 			if (count > node->cardinality) {
 				count = node->cardinality;
-			}
-			if (base_stats->type == LogicalTypeId::INTEGER) {
-				auto &numeric_stats = (NumericStatistics &)*base_stats;
-				auto max_value = numeric_stats.max.GetValue<idx_t>();
-				if (count > max_value) {
-					count = max_value;
-				}
 			}
 		} else {
 			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
