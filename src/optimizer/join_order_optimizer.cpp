@@ -290,7 +290,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	auto old_cost = NumericLimits<double>::Maximum();
 	auto old_card = NumericLimits<double>::Maximum();
 
-	for (auto &filter: info->filters) {
+	for (auto &filter : info->filters) {
 		if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
 			result->right_binding = filter->left_binding;
@@ -491,18 +491,18 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
-
-vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered_set<idx_t>> current, vector<idx_t> all_neighbors) {
+vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered_set<idx_t>> current,
+                                                                vector<idx_t> all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
-	for (auto &neighbor: all_neighbors) {
-		for (auto &neighbor_set: current) {
+	for (auto &neighbor : all_neighbors) {
+		for (auto &neighbor_set : current) {
 			auto max_val = max_element(neighbor_set.begin(), neighbor_set.end());
 			if (*max_val >= neighbor) {
 				continue;
 			}
 			if (neighbor_set.count(neighbor) == 0) {
 				unordered_set<idx_t> new_set;
-				for(auto &n: neighbor_set) {
+				for (auto &n : neighbor_set) {
 					new_set.insert(n);
 				}
 				new_set.insert(neighbor);
@@ -513,24 +513,24 @@ vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered
 	return ret;
 }
 
-vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set) {
+vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelationSet *new_set,
+                                                                    unordered_set<idx_t> &exclusion_set) {
 	vector<unordered_set<idx_t>> ret;
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
 	sort(neighbors.begin(), neighbors.end());
 	vector<unordered_set<idx_t>> added;
-	for (auto& neighbor: neighbors) {
+	for (auto &neighbor : neighbors) {
 		added.push_back(unordered_set<idx_t>({neighbor}));
 		ret.push_back(unordered_set<idx_t>({neighbor}));
 	}
 	do {
 		added = AddGreaterSets(added, neighbors);
-		for (auto &d: added) {
+		for (auto &d : added) {
 			ret.push_back(d);
 		}
-	} while(added.size() > 0);
+	} while (added.size() > 0);
 	return ret;
 }
-
 
 void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 	auto new_set = new_plan->set;
@@ -540,7 +540,6 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		exclusion_set.insert(new_set->relations[i]);
 	}
 	auto all_neighbors = GetAllNeighborSets(new_set, exclusion_set);
-//	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
 	for (auto neighbor : all_neighbors) {
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto combined_set = set_manager.Union(new_set, neighbor_relation);
@@ -559,7 +558,6 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 			continue;
 		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connection);
-//		auto exclusion_set = unordered_set<idx_t>({neighbor_relation->});
 		if (updated_plan->cost < combined_set_plan_cost) {
 			UpdateDPTree(updated_plan);
 		}
@@ -659,7 +657,6 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
-//		std::cout << "solving approximately" << std::endl;
 		SolveJoinOrderApproximately();
 	}
 }

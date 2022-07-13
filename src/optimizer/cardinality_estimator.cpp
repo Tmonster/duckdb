@@ -224,13 +224,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			auto base_stats = catalog_table->storage->GetStatistics(context, actual_binding.column_index);
 			if (base_stats) {
 				count = base_stats->GetDistinctCount();
-//				if (base_stats->type == LogicalTypeId::INTEGER) {
-//					auto &numeric_stats = (NumericStatistics &)*base_stats;
-//					auto max_value = numeric_stats.max.GetValue<idx_t>();
-//					if (count > max_value) {
-//						count = max_value;
-//					}
-//				}
 			}
 
 			//! means you have a direct filter on a column. The count/total domain for the column
