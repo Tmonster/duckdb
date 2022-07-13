@@ -496,7 +496,7 @@ vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered
 	vector<unordered_set<idx_t>> ret;
 	for (auto &neighbor : all_neighbors) {
 		for (auto &neighbor_set : current) {
-			auto max_val = max_element(neighbor_set.begin(), neighbor_set.end());
+			auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
 			if (*max_val >= neighbor) {
 				continue;
 			}
