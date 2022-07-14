@@ -179,7 +179,6 @@ static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
-
 static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	LogicalGet *get = nullptr;
 	switch (op->type) {
@@ -218,7 +217,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	idx_t count = node->cardinality;
 
 	bool direct_filter = false;
-	for (auto &column: relation_to_columns[relation_id]) {
+	for (auto &column : relation_to_columns[relation_id]) {
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);

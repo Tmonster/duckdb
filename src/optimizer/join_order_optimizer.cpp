@@ -167,7 +167,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			// save the relation bindings from the optimized child. These later all get added to the
 			// parent cardinality_estimator relation column binding map.
 			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
-			child_bindings_it+=1;
+			child_bindings_it += 1;
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations

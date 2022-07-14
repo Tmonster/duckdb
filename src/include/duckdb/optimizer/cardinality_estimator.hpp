@@ -20,12 +20,10 @@ static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 class CardinalityEstimator {
 public:
-
 	explicit CardinalityEstimator(ClientContext &context) : context(context) {
 	}
 
 private:
-
 	ClientContext &context;
 
 	//! A mapping of base table index -> all columns used to determine the join order
@@ -51,8 +49,6 @@ public:
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 
 private:
-
-
 	bool SingleColumnFilter(FilterInfo *filter_info);
 	//! Filter & bindings -> list of indexes into the equivalent_relations array.
 	// The column binding set at each index is an equivalence set.
