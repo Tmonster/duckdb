@@ -16,6 +16,13 @@
 
 namespace duckdb {
 
+struct RelationAttributes {
+	string original_name;
+	//! the relation columns used in join filters
+	// Needed when iterating over columns and initializing total domain values.
+	unordered_set<idx_t> columns;
+};
+
 static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 class CardinalityEstimator {
@@ -26,20 +33,35 @@ public:
 private:
 	ClientContext &context;
 
-	//! A mapping of base table index -> all columns used to determine the join order
-	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
+	//! A mapping of relation id -> RelationAttributes
+	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
+	//! vector of column binding sets that are equivalent in a join plan.
+	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
 	vector<column_binding_set_t> equivalent_relations;
+	//! vector of the same length as equivalent_relations with the total domains of each relation
+	//! These total domains are determined using hll
 	vector<idx_t> equivalent_relations_tdom_no_hll;
+	//! vector of the same length as equivalent_relations with the total domains of each relation
+	//! These total domains are determined without using
 	vector<idx_t> equivalent_relations_tdom_hll;
-	unordered_map<idx_t, std::string> relation_to_table_name;
 
 public:
+	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
+
 	void AssertEquivalentRelationSize();
+
+	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
+	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
+	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t table_index, idx_t column_index);
+	//! Dump all bindings in relation_column_to_original_column into the child_binding_map
+	// If you have a non-reorderable join, this function is used to keep track of bindings
+	// in the child join plan.
 	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
+	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
 
 	void InitTotalDomains();
 	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos);

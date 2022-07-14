@@ -28,16 +28,14 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 		return false;
 	}
 	//! Filter on one relation, (i.e string or range filter on a column).
-	//! Grab the relation (should always be 1) and add it to the
-	//! the equivalence_relations
-	//	D_ASSERT(filter_info->set->count == 1);
+	//! Grab the first relation and add it to the the equivalence_relations
+	D_ASSERT(filter_info->set->count >= 1);
 	for (const column_binding_set_t &i_set : equivalent_relations) {
 		if (i_set.count(filter_info->left_binding) > 0) {
 			// found an equivalent filter
 			return true;
 		}
 	}
-	//	D_ASSERT(filter_info->set->relations[0] == filter_info->left_binding.table_index);
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
 	column_binding_set_t tmp;
 	tmp.insert(key);
@@ -103,7 +101,7 @@ void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &
 }
 
 void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t column_index) {
-	relation_to_columns[table_index].insert(column_index);
+	relation_attributes[table_index].columns.insert(column_index);
 }
 
 void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos) {
@@ -121,6 +119,14 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 
 		matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
+	}
+}
+
+void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
+	if (result->cardinality != entry->cardinality) {
+		// Currently it's possible that some entries are cartesian joins.
+		// When this is the case, you don't always have symmetry
+		D_ASSERT(result->cardinality <= entry->cardinality);
 	}
 }
 
@@ -203,6 +209,21 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	return get;
 }
 
+void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
+                                         vector<column_binding_map_t<ColumnBinding>> &child_binding_maps) {
+	for (auto &map_set : child_binding_maps) {
+		for (auto &mapping : map_set) {
+			ColumnBinding relation_bindings = mapping.first;
+			ColumnBinding actual_bindings = mapping.second;
+
+			if (actual_bindings.table_index == binding_index) {
+				auto key = ColumnBinding(relation_id, relation_bindings.column_index);
+				AddRelationToColumnMapping(key, actual_bindings);
+			}
+		}
+	}
+}
+
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op,
                                               vector<unique_ptr<FilterInfo>> *filter_infos) {
 	auto relation_id = node->set->relations[0];
@@ -217,7 +238,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	idx_t count = node->cardinality;
 
 	bool direct_filter = false;
-	for (auto &column : relation_to_columns[relation_id]) {
+	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
@@ -225,7 +246,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		// TODO: Go through table filters and find if there is a direct filter
 		//  on a join filter
 		if (catalog_table) {
-			relation_to_table_name[node->set->relations[0]] = catalog_table->name;
+			relation_attributes[relation_id].original_name = catalog_table->name;
 			// Get HLL stats here
 			auto actual_binding = relation_column_to_original_column[key];
 

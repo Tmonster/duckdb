@@ -17,20 +17,11 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/optimizer/estimated_properties.hpp"
 
 namespace duckdb {
 
 class JoinOrderOptimizer;
-
-class EstimatedProperties {
-public:
-	idx_t cost;
-	double cardinality;
-
-	unique_ptr<EstimatedProperties> Copy();
-
-private:
-};
 
 class JoinNode {
 public:

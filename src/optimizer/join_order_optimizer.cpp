@@ -181,17 +181,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation_id = relations.size();
 		// Add binding information from the nonreorderable join to this relation.
 		for (idx_t it : bindings) {
-			for (auto &map_set : child_binding_maps) {
-				for (auto &mapping : map_set) {
-					ColumnBinding relation_bindings = mapping.first;
-					ColumnBinding actual_bindings = mapping.second;
+			cardinality_estimator.MergeBindings(it, relation_id, child_binding_maps);
 
-					if (actual_bindings.table_index == it) {
-						auto key = ColumnBinding(relation_id, relation_bindings.column_index);
-						cardinality_estimator.AddRelationToColumnMapping(key, actual_bindings);
-					}
-				}
-			}
 			relation_mapping[it] = relation_id;
 		}
 		relations.push_back(move(relation));
@@ -330,15 +321,10 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
-#ifdef DEBUG
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
-			if (result->cardinality + 0.1 < entry->second->cardinality ||
-			    result->cardinality - 0.1 > entry->second->cardinality) {
-				D_ASSERT(result->cardinality <= entry->second->cardinality);
-			}
+			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
-#endif
 
 		plans[new_set] = move(new_plan);
 		return result;
@@ -981,8 +967,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 
 	cardinality_estimator.AssertEquivalentRelationSize();
-
-	//	printRelation2tableNameMapping(cardinality_estimator.relation_to_table_name);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found
