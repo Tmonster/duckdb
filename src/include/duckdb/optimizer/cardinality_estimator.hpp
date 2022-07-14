@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/table_filter_stats.hpp
+// duckdb/optimizer/cardinality_estimator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,6 +20,14 @@ static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 class CardinalityEstimator {
 public:
+
+	explicit CardinalityEstimator(ClientContext &context) : context(context) {
+	}
+
+private:
+
+	ClientContext &context;
+
 	//! A mapping of base table index -> all columns used to determine the join order
 	unordered_map<idx_t, unordered_set<idx_t>> relation_to_columns;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
@@ -29,8 +37,11 @@ public:
 	vector<idx_t> equivalent_relations_tdom_hll;
 	unordered_map<idx_t, std::string> relation_to_table_name;
 
-	explicit CardinalityEstimator(ClientContext &context) : context(context) {
-	}
+public:
+	void AssertEquivalentRelationSize();
+	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
+	void AddColumnToRelationMap(idx_t table_index, idx_t column_index);
+	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
 
 	void InitTotalDomains();
 	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos);
@@ -40,16 +51,19 @@ public:
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 
 private:
-	ClientContext &context;
 
-	//! ********* HELPERS FOR INIT TOTAL DOMAINS ***********
+
 	bool SingleColumnFilter(FilterInfo *filter_info);
+	//! Filter & bindings -> list of indexes into the equivalent_relations array.
+	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
+
+	//! Given a filter, add the column bindings to the matching equivalent set at the index
+	//! given in matching equivalent sets.
+	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
-	//! ********* END HELPERS ***********
 
 	idx_t GetTDom(ColumnBinding binding);
-
 	TableFilterSet *GetTableFilters(LogicalOperator *op);
 
 	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,

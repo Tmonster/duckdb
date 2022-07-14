@@ -27,8 +27,9 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		cardinality_estimator.relation_to_columns[relation_mapping[colref.binding.table_index]].insert(
-		    colref.binding.column_index);
+		auto catalog_table = relation_mapping[colref.binding.table_index];
+		auto column_index = colref.binding.column_index;
+		cardinality_estimator.AddColumnToRelationMap(catalog_table, column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -163,9 +164,10 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
-			for (auto &rc_2_oc : optimizer.cardinality_estimator.relation_column_to_original_column) {
-				child_binding_maps.at(child_bindings_it)[rc_2_oc.first] = rc_2_oc.second;
-			}
+			// save the relation bindings from the optimized child. These later all get added to the
+			// parent cardinality_estimator relation column binding map.
+			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
+			child_bindings_it+=1;
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations
@@ -186,7 +188,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 					if (actual_bindings.table_index == it) {
 						auto key = ColumnBinding(relation_id, relation_bindings.column_index);
-						cardinality_estimator.relation_column_to_original_column[key] = actual_bindings;
+						cardinality_estimator.AddRelationToColumnMapping(key, actual_bindings);
 					}
 				}
 			}
@@ -212,9 +214,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		for (idx_t it = 0; it < get->column_ids.size(); it++) {
 			auto key = ColumnBinding(relation_id, it);
 			auto value = ColumnBinding(get->table_index, get->column_ids[it]);
-			cardinality_estimator.relation_column_to_original_column[key] = value;
+			cardinality_estimator.AddRelationToColumnMapping(key, value);
 		}
-
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
@@ -979,10 +980,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		cardinality_estimator.UpdateTotalDomains(join_node, relations[i]->op, &filter_infos);
 	}
 
-	D_ASSERT(cardinality_estimator.equivalent_relations.size() ==
-	         cardinality_estimator.equivalent_relations_tdom_hll.size());
-	D_ASSERT(cardinality_estimator.equivalent_relations.size() ==
-	         cardinality_estimator.equivalent_relations_tdom_no_hll.size());
+	cardinality_estimator.AssertEquivalentRelationSize();
+
 	//	printRelation2tableNameMapping(cardinality_estimator.relation_to_table_name);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

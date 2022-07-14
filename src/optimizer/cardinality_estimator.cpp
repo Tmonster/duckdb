@@ -1,6 +1,3 @@
-//
-// Created by Tom Ebergen on 7/6/22.
-//
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
@@ -90,9 +87,28 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 	}
 }
 
+void CardinalityEstimator::AssertEquivalentRelationSize() {
+	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_hll.size());
+	D_ASSERT(equivalent_relations.size() == equivalent_relations_tdom_no_hll.size());
+}
+
+void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
+	relation_column_to_original_column[key] = value;
+}
+
+void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map) {
+	for (auto &binding_map : relation_column_to_original_column) {
+		child_binding_map[binding_map.first] = binding_map.second;
+	}
+}
+
+void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t column_index) {
+	relation_to_columns[table_index].insert(column_index);
+}
+
 void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos) {
-	//! For each filter, we fill keep track of the index of the equivalent relation set
-	//! the left and right relation needs to be added to.
+	// For each filter, we fill keep track of the index of the equivalent relation set
+	// the left and right relation needs to be added to.
 	vector<idx_t> matching_equivalent_sets;
 	for (auto &filter : *filter_infos) {
 		matching_equivalent_sets.clear();
@@ -100,10 +116,8 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 		if (SingleColumnFilter(filter.get())) {
 			continue;
 		}
-		//! assuming filters are only on one column in the left set
-		//! and one column in the right set.
-		D_ASSERT(filter->left_set->count == 1);
-		D_ASSERT(filter->right_set->count == 1);
+		D_ASSERT(filter->left_set->count >= 1);
+		D_ASSERT(filter->right_set->count >= 1);
 
 		matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
@@ -165,36 +179,34 @@ static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
-static bool IsLogicalGet(LogicalOperator *op) {
-	return op->type == LogicalOperatorType::LOGICAL_GET;
-}
 
 static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	LogicalGet *get = nullptr;
-	if (IsLogicalGet(op)) {
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_GET:
 		get = (LogicalGet *)op;
-	} else if (IsLogicalFilter(op)) {
-		auto child = op->children.at(0).get();
-		if (IsLogicalGet(child)) {
-			get = (LogicalGet *)child;
+		break;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		get = GetLogicalGet(op->children.at(0).get());
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
+		if (join->join_type == JoinType::MARK) {
+			auto child = join->children.at(0).get();
+			get = GetLogicalGet(child);
 		}
-		// if there are mark joins below the filter relations, get the catalog table for
-		// the underlying sequential scan.
-		if (child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			LogicalComparisonJoin *join = (LogicalComparisonJoin *)child;
-			if (join->join_type == JoinType::MARK) {
-				child = join->children[0].get();
-				return GetLogicalGet(child);
-			}
-		}
+		break;
+	}
+	default:
+		// return null pointer, maybe there is no logical get under this child
+		break;
 	}
 	return get;
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op,
                                               vector<unique_ptr<FilterInfo>> *filter_infos) {
-	idx_t relation_id = node->set->relations[0];
-
+	auto relation_id = node->set->relations[0];
 	TableCatalogEntry *catalog_table = nullptr;
 	auto get = GetLogicalGet(op);
 	if (get) {
@@ -206,11 +218,10 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	idx_t count = node->cardinality;
 
 	bool direct_filter = false;
-	for (ite = relation_to_columns[relation_id].begin(); ite != relation_to_columns[relation_id].end(); ite++) {
-
+	for (auto &column: relation_to_columns[relation_id]) {
 		//! for every column in the relation, get the count via either HLL, or assume it to be
 		//! the cardinality
-		ColumnBinding key = ColumnBinding(relation_id, *ite);
+		ColumnBinding key = ColumnBinding(relation_id, column);
 
 		// TODO: Go through table filters and find if there is a direct filter
 		//  on a join filter
@@ -226,10 +237,10 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 				count = base_stats->GetDistinctCount();
 			}
 
-			//! means you have a direct filter on a column. The count/total domain for the column
-			//! should be decreased to match the predicted total domain matching the filter.
-			//! We decrease the total domain for all columns in the equivalence set because filter pushdown
-			//! will mean all columns are affected.
+			// means you have a direct filter on a column. The count/total domain for the column
+			// should be decreased to match the predicted total domain matching the filter.
+			// We decrease the total domain for all columns in the equivalence set because filter pushdown
+			// will mean all columns are affected.
 			if (direct_filter) {
 				count = count * DEFAULT_SELECTIVITY;
 				if (count < 1) {
