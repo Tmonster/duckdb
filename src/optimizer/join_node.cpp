@@ -47,5 +47,5 @@ string JoinNode::ToString() {
 		result += right->ToString();
 	}
 	return result;
-};
+}
 } // namespace duckdb
