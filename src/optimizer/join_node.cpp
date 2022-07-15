@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/optimizer/join_node.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -19,10 +18,6 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 void JoinNode::UpdateCost() {
 	cost = cardinality + left->cost + right->cost;
 	estimated_props->cost = cost;
-}
-
-void JoinNode::PrintJoinNode() {
-	std::cout << ToString() << std::endl;
 }
 
 string JoinNode::ToString() {
