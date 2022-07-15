@@ -64,9 +64,7 @@ public:
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
-
 	void AddChild(unique_ptr<LogicalOperator> child);
-	
 	virtual idx_t EstimateCardinality(ClientContext &context);
 
 protected:
