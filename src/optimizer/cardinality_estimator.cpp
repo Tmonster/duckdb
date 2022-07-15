@@ -125,8 +125,11 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
 	if (result->cardinality != entry->cardinality) {
 		// Currently it's possible that some entries are cartesian joins.
-		// When this is the case, you don't always have symmetry
-		D_ASSERT(result->cardinality <= entry->cardinality);
+		// When this is the case, you don't always have symmetry, but
+		// if the cost of the result is less, then just assure the cardinality
+		// is also less, then you have the same effect of symmetry.
+		D_ASSERT(ceil(result->cardinality) <= ceil(entry->cardinality));
+		D_ASSERT(ceil(result->estimated_props->cardinality) <= ceil(entry->estimated_props->cardinality));
 	}
 }
 
@@ -184,6 +187,8 @@ void CardinalityEstimator::EstimateCardinality(JoinNode *node) {
 static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
+
+class LogicalComparisonJoin;
 
 static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	LogicalGet *get = nullptr;

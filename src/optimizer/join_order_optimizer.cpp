@@ -161,7 +161,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
+			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
 			// save the relation bindings from the optimized child. These later all get added to the
@@ -298,7 +298,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 			// don't need to update the bindings because those are no longer used.
 			// I thiiiiiink?
 			result->cost = old_cost;
+			result->estimated_props->cost = old_cost;
 			result->cardinality = old_card;
+			result->estimated_props->cardinality = old_card;
 		}
 		old_cost = result->cost;
 		old_card = result->cardinality;
@@ -477,7 +479,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 }
 
 vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered_set<idx_t>> current,
-                                                                vector<idx_t> all_neighbors) {
+                                                                const vector<idx_t> &all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
 	for (auto &neighbor : all_neighbors) {
 		for (auto &neighbor_set : current) {
@@ -513,7 +515,7 @@ vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelation
 		for (auto &d : added) {
 			ret.push_back(d);
 		}
-	} while (added.size() > 0);
+	} while (!added.empty());
 	return ret;
 }
 

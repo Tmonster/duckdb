@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/optimizer/join_node.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -20,22 +21,31 @@ void JoinNode::UpdateCost() {
 	estimated_props->cost = cost;
 }
 
-//! ******************************************************
-//! *          START OF DEBUGGING FUNCTIONS              *
-//! ******************************************************
-bool JoinNode::DesiredRelationSet(JoinRelationSet *relation_set, unordered_set<idx_t> o_set) {
-	for (idx_t it = 0; it < relation_set->count; it++) {
-		if (o_set.find(relation_set->relations[it]) == o_set.end()) {
-			return false;
-		}
-	}
-	return relation_set->count == o_set.size();
+void JoinNode::PrintJoinNode() {
+	std::cout << ToString() << std::endl;
 }
 
-bool JoinNode::DesiredJoin(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
-                           unordered_set<idx_t> desired_right) {
-	bool left_is_left = DesiredRelationSet(left, desired_left) && DesiredRelationSet(right, desired_right);
-	bool right_is_left = DesiredRelationSet(right, desired_left) && DesiredRelationSet(left, desired_right);
-	return left_is_left || right_is_left;
-}
+string JoinNode::ToString() {
+	if (!set) {
+		return "";
+	}
+	string result = "-------------------------------\n";
+	result += set->ToString() + "\n";
+	result += "card = " + to_string(estimated_props->cardinality) + "\n";
+	bool is_cartesian = false;
+	if (left && right) {
+		is_cartesian = (cardinality == left->estimated_props->cardinality * right->estimated_props->cardinality);
+	}
+	result += "cartesian = " + to_string(is_cartesian) + "\n";
+	result += "cost = " + to_string(estimated_props->cost) + "\n";
+	result += "left = \n";
+	if (left) {
+		result += left->ToString();
+	}
+	result += "right = \n";
+	if (right) {
+		result += right->ToString();
+	}
+	return result;
+};
 } // namespace duckdb

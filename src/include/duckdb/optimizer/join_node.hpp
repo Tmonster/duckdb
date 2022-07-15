@@ -59,11 +59,8 @@ public:
 
 public:
 	void UpdateCost();
-
-	//! debugging functions
-	static bool DesiredRelationSet(JoinRelationSet *relation_set, unordered_set<idx_t> o_set);
-	static bool DesiredJoin(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> desired_left,
-	                        unordered_set<idx_t> desired_right);
+	void PrintJoinNode();
+	string ToString();
 };
 
 } // namespace duckdb
