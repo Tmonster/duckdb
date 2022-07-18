@@ -44,13 +44,13 @@ public:
 	JoinNode(JoinRelationSet *set, double cardinality)
 	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr),
 	      left_binding(), right_binding() {
-		estimated_props = make_unique<EstimatedProperties>();
+		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
 	}
 	//! Create an intermediate node in the join tree
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, double cardinality, double cost)
 	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right),
 	      left_binding(), right_binding() {
-		estimated_props = make_unique<EstimatedProperties>();
+		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
 	}
 
 	static idx_t hash_table_col(idx_t table, idx_t col);
@@ -58,7 +58,7 @@ public:
 	void check_all_table_keys_forwarded();
 
 public:
-	void UpdateCost();
+	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
 	void PrintJoinNode();
 	string ToString();
 };

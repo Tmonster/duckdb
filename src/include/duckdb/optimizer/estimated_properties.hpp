@@ -22,9 +22,10 @@ namespace duckdb {
 
 class EstimatedProperties {
 public:
-	idx_t cost;
 	double cardinality;
-
+	double cost;
+	EstimatedProperties(double cardinality, idx_t cost) : cardinality(cardinality), cost(cost) {};
+	EstimatedProperties() : cardinality(0), cost(0) {};
 	unique_ptr<EstimatedProperties> Copy();
 
 private:

@@ -15,9 +15,9 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 	return result;
 }
 
-void JoinNode::UpdateCost() {
-	cost = cardinality + left->cost + right->cost;
-	estimated_props->cost = cost;
+double JoinNode::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
+	double cost = expected_cardinality + left->cost + right->cost;
+	return cost;
 }
 
 string JoinNode::ToString() {

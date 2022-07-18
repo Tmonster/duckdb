@@ -23,12 +23,23 @@ struct RelationAttributes {
 	unordered_set<idx_t> columns;
 };
 
+struct NodeOp {
+	unique_ptr<JoinNode> node;
+	LogicalOperator *op;
+
+	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
+};
+
 static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 class CardinalityEstimator {
 public:
 	explicit CardinalityEstimator(ClientContext &context) : context(context) {
 	}
+
+	//! When calculating the cost of a join. Multiple filters may be present.
+	//! These values keep track of the lowest cost join
+	double lowest_card;
 
 private:
 	ClientContext &context;
@@ -62,13 +73,19 @@ public:
 	// in the child join plan.
 	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
 	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
+	void AddRelationColumnMapping(LogicalGet *get, idx_t relation_id);
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op, vector<unique_ptr<FilterInfo>> *filter_infos);
+	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
 
-	void EstimateCardinality(JoinNode *node);
+	void InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
+	double EstimateCardinality(double left_card, double right_card, ColumnBinding left_binding,
+	                           ColumnBinding right_binding);
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
+	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
+	void ResetCard();
+	void UpdateLowestcard(double old_card);
 
 private:
 	bool SingleColumnFilter(FilterInfo *filter_info);

@@ -182,7 +182,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// Add binding information from the nonreorderable join to this relation.
 		for (idx_t it : bindings) {
 			cardinality_estimator.MergeBindings(it, relation_id, child_binding_maps);
-
 			relation_mapping[it] = relation_id;
 		}
 		relations.push_back(move(relation));
@@ -202,18 +201,17 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
-		for (idx_t it = 0; it < get->column_ids.size(); it++) {
-			auto key = ColumnBinding(relation_id, it);
-			auto value = ColumnBinding(get->table_index, get->column_ids[it]);
-			cardinality_estimator.AddRelationToColumnMapping(key, value);
-		}
+		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalExpressionGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[get->table_index] = relations.size();
+		idx_t relation_id = relations.size();
+		//! make sure the optimizer has knowledge of the exact column bindings as well.
+		auto table_index = get->table_index;
+		relation_mapping[table_index] = relation_id;
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
@@ -251,61 +249,43 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
+	double expected_cardinality = 0;
 	if (left->cardinality < right->cardinality) {
 		return CreateJoinTree(set, info, right, left);
 	}
-	// the expected cardinality is the max of the child cardinalities
-	// FIXME: we should obviously use better cardinality estimation here
-	double expected_cardinality = 0;
 	if (info->filters.empty()) {
 		// cross product
-		if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
-			expected_cardinality = NumericLimits<double>::Maximum();
-		} else {
-			expected_cardinality = left->estimated_props->cardinality * right->estimated_props->cardinality;
-		}
-		auto cost = 0;
-		auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
-		result->estimated_props->cardinality = expected_cardinality;
-		result->UpdateCost();
-		return result;
+		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
 	}
 
 	// normal join, expect foreign key join
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
 
-	double cost = 0;
-	auto result = make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
-	auto old_cost = NumericLimits<double>::Maximum();
-	auto old_card = NumericLimits<double>::Maximum();
+	// Reset lowest card to be maximum.
+	cardinality_estimator.ResetCard();
+	ColumnBinding right_binding, left_binding;
+	auto left_card = left->estimated_props->cardinality;
+	auto right_card = right->estimated_props->cardinality;
 
 	for (auto &filter : info->filters) {
 		if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
-			result->right_binding = filter->left_binding;
-			result->left_binding = filter->right_binding;
+			right_binding = filter->left_binding;
+			left_binding = filter->right_binding;
 		} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
 		           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
-			result->right_binding = filter->right_binding;
-			result->left_binding = filter->left_binding;
+			right_binding = filter->right_binding;
+			left_binding = filter->left_binding;
 		}
 
 		// predict cardinality using most selective filter
-		cardinality_estimator.EstimateCardinality(result.get());
-		result->UpdateCost();
-		if (result->cost > old_cost) {
-			// don't need to update the bindings because those are no longer used.
-			// I thiiiiiink?
-			result->cost = old_cost;
-			result->estimated_props->cost = old_cost;
-			result->cardinality = old_card;
-			result->estimated_props->cardinality = old_card;
-		}
-		old_cost = result->cost;
-		old_card = result->cardinality;
+		auto expected_cardinality =
+		    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
+		cardinality_estimator.UpdateLowestcard(expected_cardinality);
 	}
-
+	auto cost = JoinNode::ComputeCost(left, right, cardinality_estimator.lowest_card);
+	auto result = make_unique<JoinNode>(set, info, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
 }
 
@@ -339,11 +319,15 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	if (pairs >= 10000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
-		// at 20K pairs stop searching exactly and switch to heuristic
+		// at 10K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
 	EmitPair(left, right, info);
 	return true;
+}
+
+bool ReverseSort(idx_t a, idx_t b) {
+	return b <= a;
 }
 
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
@@ -363,14 +347,11 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	}
 
 	//! Neighbors should be reversed when iterating over them.
-	vector<idx_t> neighbors_reversed(neighbors.size());
-	std::reverse_copy(neighbors.begin(), neighbors.end(), std::begin(neighbors_reversed));
-	std::sort(neighbors_reversed.begin(), neighbors_reversed.end());
-	std::reverse(neighbors_reversed.begin(), neighbors_reversed.end());
-	for (idx_t i = 0; i < neighbors_reversed.size() - 1; i++) {
-		D_ASSERT(neighbors_reversed[i] >= neighbors_reversed[i + 1]);
+	std::sort(neighbors.begin(), neighbors.end(), ReverseSort);
+	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
+		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
 	}
-	for (auto neighbor : neighbors_reversed) {
+	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
@@ -478,8 +459,8 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
-vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered_set<idx_t>> current,
-                                                                const vector<idx_t> &all_neighbors) {
+static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
+                                                 const vector<idx_t> &all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
 	for (auto &neighbor : all_neighbors) {
 		for (auto &neighbor_set : current) {
@@ -500,10 +481,12 @@ vector<unordered_set<idx_t>> JoinOrderOptimizer::AddGreaterSets(vector<unordered
 	return ret;
 }
 
-vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelationSet *new_set,
-                                                                    unordered_set<idx_t> &exclusion_set) {
+// works by first creating all sets with cardinality 1
+// then iterates over each previously create group of subsets and will only add a neighbor if the neighbor
+// is greater than all relations in the set.
+static vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set,
+                                                       vector<idx_t> neighbors) {
 	vector<unordered_set<idx_t>> ret;
-	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
 	sort(neighbors.begin(), neighbors.end());
 	vector<unordered_set<idx_t>> added;
 	for (auto &neighbor : neighbors) {
@@ -511,11 +494,26 @@ vector<unordered_set<idx_t>> JoinOrderOptimizer::GetAllNeighborSets(JoinRelation
 		ret.push_back(unordered_set<idx_t>({neighbor}));
 	}
 	do {
-		added = AddGreaterSets(added, neighbors);
+		added = AddSuperSets(added, neighbors);
 		for (auto &d : added) {
 			ret.push_back(d);
 		}
 	} while (!added.empty());
+#if DEBUG
+	// drive by test to make sure we have an accurate amount of
+	// subsets, and that each neighbor is in a correct amount
+	// of those subsets.
+	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
+	for (auto &n : neighbors) {
+		idx_t count = 0;
+		for (auto &set : ret) {
+			if (set.count(n) >= 1) {
+				count += 1;
+			}
+		}
+		D_ASSERT(count == pow(2, neighbors.size() - 1));
+	}
+#endif
 	return ret;
 }
 
@@ -526,7 +524,8 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 	for (idx_t i = 0; i < new_set->count; i++) {
 		exclusion_set.insert(new_set->relations[i]);
 	}
-	auto all_neighbors = GetAllNeighborSets(new_set, exclusion_set);
+	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	auto all_neighbors = duckdb::GetAllNeighborSets(new_set, exclusion_set, neighbors);
 	for (auto neighbor : all_neighbors) {
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto combined_set = set_manager.Union(new_set, neighbor_relation);
@@ -575,10 +574,9 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					// we can check the cost of this connection
 					auto node = EmitPair(left, right, connection);
 
-					// update the DP tree in case a future best connection uses an entry from the DP table
-					// that uses the node that was potentially just updated. The above call to EmitPair
-					// will cause a nullptr error if future plans rely on the old node that was just
-					// replaced.
+					// update the DP tree in case a plan created by the DP algorithm uses the node
+					// that was potentially just updated by EmitPair. You will get a use-after-free
+					// error if future plans rely on the old node that was just replaced.
 					UpdateDPTree(node);
 
 					if (!best_connection || node->cost < best_connection->cost) {
@@ -944,30 +942,18 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	vector<NodeOp> nodes_ops;
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		if (rel.op->type == LogicalOperatorType::LOGICAL_FILTER &&
-		    rel.op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			auto cardinality = rel.op->children[0]->EstimateCardinality(context);
-			plans[node] = make_unique<JoinNode>(node, cardinality);
-			rel.op->estimated_cardinality = cardinality;
-			rel.op->has_estimated_cardinality = true;
-		} else {
-			plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
-		}
+		nodes_ops.push_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
 	}
 
-	cardinality_estimator.InitEquivalentRelations(&filter_infos);
-	cardinality_estimator.InitTotalDomains();
-	for (idx_t i = 0; i < relations.size(); i++) {
-		auto node = set_manager.GetJoinRelation(i);
-		auto join_node = plans[node].get();
-		cardinality_estimator.EstimateBaseTableCardinality(join_node, relations[i]->op);
-		cardinality_estimator.UpdateTotalDomains(join_node, relations[i]->op, &filter_infos);
-	}
+	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);
 
-	cardinality_estimator.AssertEquivalentRelationSize();
+	for (auto &node_op : nodes_ops) {
+		plans[node_op.node->set] = move(node_op.node);
+	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

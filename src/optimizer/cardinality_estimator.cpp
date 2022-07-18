@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
@@ -170,25 +171,50 @@ idx_t CardinalityEstimator::GetTDom(ColumnBinding binding) {
 	throw Exception("Could not get total domain of a join relations. Most likely a bug in InitTdoms");
 }
 
-void CardinalityEstimator::EstimateCardinality(JoinNode *node) {
-	idx_t tdom_join_right = GetTDom(node->right_binding);
+void CardinalityEstimator::ResetCard() {
+	lowest_card = NumericLimits<double>::Maximum();
+}
+
+void CardinalityEstimator::UpdateLowestcard(double new_card) {
+	if (new_card < lowest_card) {
+		lowest_card = new_card;
+	}
+}
+
+double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const JoinNode *right) {
+	auto expected_cardinality = 0;
+	if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
+		expected_cardinality = NumericLimits<double>::Maximum();
+	} else {
+		expected_cardinality = left->estimated_props->cardinality * right->estimated_props->cardinality;
+	}
+	return expected_cardinality;
+}
+
+void CardinalityEstimator::AddRelationColumnMapping(LogicalGet *get, idx_t relation_id) {
+	for (idx_t it = 0; it < get->column_ids.size(); it++) {
+		auto key = ColumnBinding(relation_id, it);
+		auto value = ColumnBinding(get->table_index, get->column_ids[it]);
+		AddRelationToColumnMapping(key, value);
+	}
+}
+
+double CardinalityEstimator::EstimateCardinality(double left_card, double right_card, ColumnBinding left_binding,
+                                                 ColumnBinding right_binding) {
+	idx_t tdom_join_right = GetTDom(right_binding);
 #ifdef DEBUG
-	idx_t tdom_join_left = GetTDom(node->left_binding);
+	idx_t tdom_join_left = GetTDom(left_binding);
 	D_ASSERT(tdom_join_left == tdom_join_right);
 #endif
-	auto left_card = node->left->estimated_props->cardinality;
-	auto right_card = node->right->estimated_props->cardinality;
 	D_ASSERT(tdom_join_right != 0);
 	D_ASSERT(tdom_join_right != NumericLimits<idx_t>::Maximum());
-	node->cardinality = (left_card * right_card) / tdom_join_right;
-	node->estimated_props->cardinality = node->cardinality;
+	auto expected_cardinality = (left_card * right_card) / tdom_join_right;
+	return expected_cardinality;
 }
 
 static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
-
-class LogicalComparisonJoin;
 
 static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	LogicalGet *get = nullptr;
@@ -229,8 +255,22 @@ void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
 	}
 }
 
-void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op,
-                                              vector<unique_ptr<FilterInfo>> *filter_infos) {
+void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops,
+                                                         vector<unique_ptr<FilterInfo>> *filter_infos) {
+	InitEquivalentRelations(filter_infos);
+	InitTotalDomains();
+	for (idx_t i = 0; i < node_ops->size(); i++) {
+		auto join_node = (*node_ops)[i].node.get();
+		auto op = (*node_ops)[i].op;
+		join_node->cardinality = op->EstimateCardinality(context);
+		EstimateBaseTableCardinality(join_node, op);
+		UpdateTotalDomains(join_node, op);
+	}
+
+	AssertEquivalentRelationSize();
+}
+
+void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
 	TableCatalogEntry *catalog_table = nullptr;
 	auto get = GetLogicalGet(op);
