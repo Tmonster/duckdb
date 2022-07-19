@@ -40,14 +40,12 @@ public:
 	//! set cost to 0 because leaf nodes/base table already exist
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, double cardinality)
-	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr)
-	      {
+	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr) {
 		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
 	}
 	//! Create an intermediate node in the join tree
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, double cardinality, double cost)
-	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right)
-	      {
+	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right) {
 		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
 	}
 

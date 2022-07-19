@@ -256,34 +256,34 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	if (info->filters.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
-	}
+		cardinality_estimator.lowest_card = expected_cardinality;
+	} else {
+		// normal join, expect foreign key join
+		JoinRelationSet *left_join_relations = left->set;
+		JoinRelationSet *right_join_relations = right->set;
 
-	// normal join, expect foreign key join
-	JoinRelationSet *left_join_relations = left->set;
-	JoinRelationSet *right_join_relations = right->set;
+		cardinality_estimator.ResetCard();
+		ColumnBinding right_binding, left_binding;
+		auto left_card = left->estimated_props->cardinality;
+		auto right_card = right->estimated_props->cardinality;
+		for (auto &filter : info->filters) {
+			if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
+			    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
+				right_binding = filter->left_binding;
+				left_binding = filter->right_binding;
+			} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
+			           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
+				right_binding = filter->right_binding;
+				left_binding = filter->left_binding;
+			}
 
-	cardinality_estimator.ResetCard();
-	ColumnBinding right_binding, left_binding;
-	auto left_card = left->estimated_props->cardinality;
-	auto right_card = right->estimated_props->cardinality;
-
-	D_ASSERT(info->filters.size() >= 1);
-	for (auto &filter : info->filters) {
-		if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
-		    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
-			right_binding = filter->left_binding;
-			left_binding = filter->right_binding;
-		} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
-		           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
-			right_binding = filter->right_binding;
-			left_binding = filter->left_binding;
+			// predict cardinality using most selective filter
+			expected_cardinality =
+			    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
+			cardinality_estimator.UpdateLowestcard(expected_cardinality);
 		}
-
-		// predict cardinality using most selective filter
-		expected_cardinality =
-		    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
-		cardinality_estimator.UpdateLowestcard(expected_cardinality);
 	}
+
 	auto cost = JoinNode::ComputeCost(left, right, cardinality_estimator.lowest_card);
 	auto result = make_unique<JoinNode>(set, info, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
