@@ -182,7 +182,9 @@ void CardinalityEstimator::UpdateLowestcard(double new_card) {
 }
 
 double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const JoinNode *right) {
-	auto expected_cardinality = 0;
+	// need to explicity use double here, otherwise auto converts it to an int, then
+	// there is an autocast in the return.
+	double expected_cardinality = 0;
 	if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
 		expected_cardinality = NumericLimits<double>::Maximum();
 	} else {
