@@ -262,12 +262,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	JoinRelationSet *left_join_relations = left->set;
 	JoinRelationSet *right_join_relations = right->set;
 
-	// Reset lowest card to be maximum.
 	cardinality_estimator.ResetCard();
 	ColumnBinding right_binding, left_binding;
 	auto left_card = left->estimated_props->cardinality;
 	auto right_card = right->estimated_props->cardinality;
 
+	D_ASSERT(info->filters.size() >= 1);
 	for (auto &filter : info->filters) {
 		if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
 		    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
@@ -280,7 +280,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 
 		// predict cardinality using most selective filter
-		auto expected_cardinality =
+		expected_cardinality =
 		    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
 		cardinality_estimator.UpdateLowestcard(expected_cardinality);
 	}
