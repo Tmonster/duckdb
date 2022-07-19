@@ -249,7 +249,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
-	double expected_cardinality = 0;
+	double expected_cardinality;
 	if (left->cardinality < right->cardinality) {
 		return CreateJoinTree(set, info, right, left);
 	}
