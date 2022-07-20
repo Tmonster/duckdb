@@ -28,7 +28,8 @@ public:
 	//! Represents a node in the join plan
 	JoinRelationSet *set;
 	NeighborInfo *info;
-	double cardinality;
+	//! If the JoinNode is a base table, then base_cardinality is the cardinality before filters
+	//! estimated_props.cardinality will be the cardinality after filters. With no filters, the two are equal
 	double cost;
 	bool has_filter;
 	JoinNode *left;
@@ -39,22 +40,27 @@ public:
 	//! Create a leaf node in the join tree
 	//! set cost to 0 because leaf nodes/base table already exist
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet *set, double cardinality)
-	    : set(set), info(nullptr), cardinality(cardinality), cost(0), has_filter(false), left(nullptr), right(nullptr) {
-		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
+	JoinNode(JoinRelationSet *set, const double base_cardinality)
+	    : set(set), info(nullptr), cost(0), has_filter(false), left(nullptr), right(nullptr),
+	      base_cardinality(base_cardinality) {
+		estimated_props = make_unique<EstimatedProperties>(base_cardinality, cost);
 	}
-	//! Create an intermediate node in the join tree
-	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, double cardinality, double cost)
-	    : set(set), info(info), cardinality(cardinality), cost(cost), has_filter(false), left(left), right(right) {
-		estimated_props = make_unique<EstimatedProperties>(cardinality, cost);
+	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
+	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, const double base_cardinality,
+	         double cost)
+	    : set(set), info(info), cost(cost), has_filter(false), left(left), right(right),
+	      base_cardinality(base_cardinality) {
+		estimated_props = make_unique<EstimatedProperties>(base_cardinality, cost);
 	}
 
-	static idx_t hash_table_col(idx_t table, idx_t col);
-
-	void check_all_table_keys_forwarded();
+private:
+	double base_cardinality;
 
 public:
-	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
+	double GetCardinality() const;
+	double GetBaseTableCardinality();
+	void SetBaseTableCardinality(double base_card);
+	void SetEstimatedCardinality(double estimated_card);
 	void PrintJoinNode();
 	string ToString();
 };

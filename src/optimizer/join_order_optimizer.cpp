@@ -250,13 +250,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
-	if (left->cardinality < right->cardinality) {
+	if (left->GetCardinality() < right->GetCardinality()) {
 		return CreateJoinTree(set, info, right, left);
 	}
 	if (info->filters.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
-		cardinality_estimator.lowest_card = expected_cardinality;
 	} else {
 		// normal join, expect foreign key join
 		JoinRelationSet *left_join_relations = left->set;
@@ -264,8 +263,8 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 
 		cardinality_estimator.ResetCard();
 		ColumnBinding right_binding, left_binding;
-		auto left_card = left->estimated_props->cardinality;
-		auto right_card = right->estimated_props->cardinality;
+		auto left_card = left->GetCardinality();
+		auto right_card = right->GetCardinality();
 		for (auto &filter : info->filters) {
 			if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
 			    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
@@ -284,7 +283,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		}
 	}
 
-	auto cost = JoinNode::ComputeCost(left, right, cardinality_estimator.lowest_card);
+	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
 	auto result = make_unique<JoinNode>(set, info, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
 }
@@ -598,7 +597,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				auto current_plan = plans[join_relations[i]].get();
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
-					if (!smallest_plans[j] || smallest_plans[j]->cardinality > current_plan->cardinality) {
+					if (!smallest_plans[j] || smallest_plans[j]->GetCardinality() > current_plan->GetCardinality()) {
 						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
@@ -731,7 +730,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
 
-	result_operator->estimated_cardinality = node->cardinality;
+	result_operator->estimated_cardinality = node->GetCardinality();
 	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
 
@@ -946,7 +945,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		nodes_ops.push_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
+		nodes_ops.emplace_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);

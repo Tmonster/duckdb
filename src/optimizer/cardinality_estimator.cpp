@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
@@ -50,7 +51,6 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 	//! eri = equivalent relation index
 	bool added_to_eri;
 
-	vector<unordered_set<idx_t>>::iterator it;
 	for (const column_binding_set_t &i_set : equivalent_relations) {
 		added_to_eri = false;
 		if (i_set.count(filter_info->left_binding) > 0) {
@@ -124,30 +124,33 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 }
 
 void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
-	if (result->cardinality != entry->cardinality) {
+	if (result->GetCardinality() != entry->GetCardinality()) {
 		// Currently it's possible that some entries are cartesian joins.
 		// When this is the case, you don't always have symmetry, but
 		// if the cost of the result is less, then just assure the cardinality
 		// is also less, then you have the same effect of symmetry.
-		D_ASSERT(ceil(result->cardinality) <= ceil(entry->cardinality));
-		D_ASSERT(ceil(result->estimated_props->cardinality) <= ceil(entry->estimated_props->cardinality));
+		D_ASSERT(ceil(result->GetCardinality()) <= ceil(entry->GetCardinality()));
 	}
 }
 
 void CardinalityEstimator::InitTotalDomains() {
 	vector<column_binding_set_t>::iterator it;
-	//! erase empty equivalent relation sets
-	for (it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
-		if (it->empty()) {
-			equivalent_relations.erase(it);
-		}
-	}
-	//! initialize equivalent relation tdom vector to have the same size as the
-	//! equivalent relations.
-	for (it = equivalent_relations.begin(); it != equivalent_relations.end(); it++) {
+	// erase empty equivalent relation sets. cast to void because we don't use
+	// the returned iterator. Clang-tidy will also complain
+	(void)std::remove_if(equivalent_relations.begin(), equivalent_relations.end(),
+	                     [](column_binding_set_t &equivalent_rel) { return equivalent_rel.empty(); });
+
+	// initialize equivalent relation tdom vector to have the same size as the
+	// equivalent relations.
+	for (auto _ : equivalent_relations) {
 		equivalent_relations_tdom_hll.push_back(0);
 		equivalent_relations_tdom_no_hll.push_back(NumericLimits<idx_t>::Maximum());
 	}
+}
+
+double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
+	double cost = expected_cardinality + left->cost + right->cost;
+	return cost;
 }
 
 idx_t CardinalityEstimator::GetTDom(ColumnBinding binding) {
@@ -185,11 +188,12 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const Jo
 	// need to explicity use double here, otherwise auto converts it to an int, then
 	// there is an autocast in the return.
 	double expected_cardinality = 0;
-	if (left->cardinality >= (NumericLimits<double>::Maximum() / right->cardinality)) {
+	if (left->GetCardinality() >= (NumericLimits<double>::Maximum() / right->GetCardinality())) {
 		expected_cardinality = NumericLimits<double>::Maximum();
 	} else {
-		expected_cardinality = left->estimated_props->cardinality * right->estimated_props->cardinality;
+		expected_cardinality = left->GetCardinality() * right->GetCardinality();
 	}
+	lowest_card = MinValue(expected_cardinality, lowest_card);
 	return expected_cardinality;
 }
 
@@ -264,7 +268,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *
 	for (idx_t i = 0; i < node_ops->size(); i++) {
 		auto join_node = (*node_ops)[i].node.get();
 		auto op = (*node_ops)[i].op;
-		join_node->cardinality = op->EstimateCardinality(context);
+		join_node->SetBaseTableCardinality(op->EstimateCardinality(context));
 		EstimateBaseTableCardinality(join_node, op);
 		UpdateTotalDomains(join_node, op);
 	}
@@ -282,7 +286,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.
 	unordered_set<idx_t>::iterator ite;
-	idx_t count = node->cardinality;
+	idx_t count = node->GetBaseTableCardinality();
 
 	bool direct_filter = false;
 	for (auto &column : relation_attributes[relation_id].columns) {
@@ -309,23 +313,20 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// We decrease the total domain for all columns in the equivalence set because filter pushdown
 			// will mean all columns are affected.
 			if (direct_filter) {
-				count = count * DEFAULT_SELECTIVITY;
-				if (count < 1) {
-					count = 1;
-				}
+				count = node->GetCardinality();
 			}
 
-			// HLL messed up, count can't be greater than cardinality
-			if (count > node->cardinality) {
-				count = node->cardinality;
+			// HLL has estimation error, count can't be greater than cardinality of the table before filters
+			if (count > node->GetBaseTableCardinality()) {
+				count = node->GetBaseTableCardinality();
 			}
 		} else {
 			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
 			// otherwise assume the total domain is still the cardinality
 			if (direct_filter) {
-				count = node->estimated_props->cardinality;
+				count = node->GetCardinality();
 			} else {
-				count = node->cardinality;
+				count = node->GetBaseTableCardinality();
 			}
 		}
 
@@ -377,11 +378,13 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 				auto column_count = base_stats->GetDistinctCount();
+				// we want the ceil of cardinality/column_count. We also want ot
+				// avoid compiler errors
+				auto filtered_card = (cardinality + column_count - 1) / column_count;
 				if (has_equality_filter) {
-					cardinality_after_filters =
-					    MinValue((idx_t)ceil(cardinality / column_count), cardinality_after_filters);
+					cardinality_after_filters = MinValue(filtered_card, cardinality_after_filters);
 				} else if (column_count > 0) {
-					cardinality_after_filters = ceil(cardinality / column_count);
+					cardinality_after_filters = filtered_card;
 				} else {
 					cardinality_after_filters = 0;
 				}
@@ -402,7 +405,7 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 				auto column_count = base_stats->GetDistinctCount();
-				auto increment = ceil(cardinality / column_count);
+				auto increment = (cardinality + column_count - 1) / column_count;
 				if (has_equality_filter) {
 					cardinality_after_filters += increment;
 				} else {
@@ -443,15 +446,15 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	auto has_logical_filter = IsLogicalFilter(op);
 	auto table_filters = GetTableFilters(op);
 
-	auto estimated_filter_card = node->cardinality;
+	auto card_after_filters = node->GetBaseTableCardinality();
 	// Logical Filter on a seq scan
 	if (has_logical_filter) {
-		estimated_filter_card = node->cardinality * DEFAULT_SELECTIVITY;
+		card_after_filters *= DEFAULT_SELECTIVITY;
 	} else if (table_filters) {
-		estimated_filter_card =
-		    MinValue((double)InspectTableFilters(node->cardinality, op, table_filters), (double)estimated_filter_card);
+		card_after_filters =
+		    MinValue((double)InspectTableFilters(card_after_filters, op, table_filters), (double)card_after_filters);
 	}
-	node->estimated_props->cardinality = estimated_filter_card;
+	node->SetEstimatedCardinality(card_after_filters);
 }
 
 } // namespace duckdb

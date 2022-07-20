@@ -9,15 +9,27 @@
 namespace duckdb {
 
 unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
-	auto result = make_unique<EstimatedProperties>();
-	result->cost = cost;
-	result->cardinality = cardinality;
+	auto result = make_unique<EstimatedProperties>(cardinality, cost);
 	return result;
 }
 
-double JoinNode::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
-	double cost = expected_cardinality + left->cost + right->cost;
-	return cost;
+double JoinNode::GetCardinality() const {
+	return estimated_props->GetCardinality();
+}
+
+double JoinNode::GetBaseTableCardinality() {
+	if (set->count > 1) {
+		throw InvalidInputException("Cannot call get base table cardinality on intermediate join node");
+	}
+	return base_cardinality;
+}
+
+void JoinNode::SetBaseTableCardinality(double base_card) {
+	base_cardinality = base_card;
+}
+
+void JoinNode::SetEstimatedCardinality(double estimated_card) {
+	estimated_props->SetCardinality(estimated_card);
 }
 
 string JoinNode::ToString() {
@@ -26,13 +38,13 @@ string JoinNode::ToString() {
 	}
 	string result = "-------------------------------\n";
 	result += set->ToString() + "\n";
-	result += "card = " + to_string(estimated_props->cardinality) + "\n";
+	result += "card = " + to_string(GetCardinality()) + "\n";
 	bool is_cartesian = false;
 	if (left && right) {
-		is_cartesian = (cardinality == left->estimated_props->cardinality * right->estimated_props->cardinality);
+		is_cartesian = (GetCardinality() == left->GetCardinality() * right->GetCardinality());
 	}
 	result += "cartesian = " + to_string(is_cartesian) + "\n";
-	result += "cost = " + to_string(estimated_props->cost) + "\n";
+	result += "cost = " + to_string(estimated_props->GetCost()) + "\n";
 	result += "left = \n";
 	if (left) {
 		result += left->ToString();

@@ -1,10 +1,10 @@
 //===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/optimizer/cardinality_estimator.hpp
-//
-//
-//===----------------------------------------------------------------------===//
+////                         DuckDB
+////
+//// duckdb/optimizer/cardinality_estimator.hpp
+////
+////
+////===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -29,8 +29,6 @@ struct NodeOp {
 
 	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
 };
-
-static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 class CardinalityEstimator {
 public:
@@ -57,6 +55,8 @@ private:
 	//! vector of the same length as equivalent_relations with the total domains of each relation
 	//! These total domains are determined without using
 	vector<idx_t> equivalent_relations_tdom_hll;
+
+	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
 	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
@@ -85,6 +85,7 @@ public:
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
 	void ResetCard();
+	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
 	void UpdateLowestcard(double old_card);
 
 private:
