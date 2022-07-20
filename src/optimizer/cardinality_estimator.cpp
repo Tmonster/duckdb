@@ -378,15 +378,14 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 				auto column_count = base_stats->GetDistinctCount();
-				// we want the ceil of cardinality/column_count. We also want ot
-				// avoid compiler errors
-				auto filtered_card = (cardinality + column_count - 1) / column_count;
+				auto filtered_card = cardinality;
+				if (column_count > 0) {
+					// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
+					filtered_card = (cardinality + column_count - 1) / column_count;
+					cardinality_after_filters = filtered_card;
+				}
 				if (has_equality_filter) {
 					cardinality_after_filters = MinValue(filtered_card, cardinality_after_filters);
-				} else if (column_count > 0) {
-					cardinality_after_filters = filtered_card;
-				} else {
-					cardinality_after_filters = 0;
 				}
 				has_equality_filter = true;
 			}
