@@ -150,7 +150,7 @@ void CardinalityEstimator::InitTotalDomains() {
 }
 
 double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
-	double cost = expected_cardinality + left->cost + right->cost;
+	double cost = expected_cardinality + left->GetCost() + right->GetCost();
 	return cost;
 }
 
@@ -215,7 +215,7 @@ double CardinalityEstimator::EstimateCardinality(double left_card, double right_
 #endif
 	D_ASSERT(tdom_join_right != 0);
 	D_ASSERT(tdom_join_right != NumericLimits<idx_t>::Maximum());
-	auto expected_cardinality = MaxValue((left_card * right_card) / tdom_join_right, (double)1);
+	auto expected_cardinality = (left_card * right_card) / tdom_join_right;
 	return expected_cardinality;
 }
 
@@ -450,13 +450,12 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 
 	auto card_after_filters = node->GetBaseTableCardinality();
 	// Logical Filter on a seq scan
-//	if (has_logical_filter) {
-//		card_after_filters *= DEFAULT_SELECTIVITY;
-//	} else if (table_filters) {
-//		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
-//		card_after_filters =
-//		    MinValue(inspect_result, (double)card_after_filters);
-//	}
+	if (has_logical_filter) {
+		card_after_filters *= DEFAULT_SELECTIVITY;
+	} else if (table_filters) {
+		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
+		card_after_filters = MinValue(inspect_result, (double)card_after_filters);
+	}
 	node->SetEstimatedCardinality(card_after_filters);
 }
 

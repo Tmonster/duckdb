@@ -31,7 +31,7 @@ public:
 
 private:
 	double cardinality;
-	const double cost;
+	double cost;
 
 public:
 	unique_ptr<EstimatedProperties> Copy();

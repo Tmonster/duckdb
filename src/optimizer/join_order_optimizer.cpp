@@ -235,7 +235,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	return false;
 }
 
-//! Update the exclusion set with all entries in the subgraph
+//! the exclusion set with all entries in the subgraph
 static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	for (idx_t i = 0; i < node->count; i++) {
 		exclusion_set.insert(node->relations[i]);
@@ -301,7 +301,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 
-	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
+	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
 		//! make sure plans are symmetric for cardinality estimation
@@ -536,7 +536,7 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 			continue;
 		}
 
-		auto combined_set_plan_cost = combined_set_plan->second->cost;
+		double combined_set_plan_cost = combined_set_plan->second->GetCost();
 		auto connection = query_graph.GetConnection(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
@@ -545,7 +545,9 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 			continue;
 		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connection);
-		if (updated_plan->cost < combined_set_plan_cost) {
+		// <= because the child node has already been replaced. You need to
+		// replace the parent node as well in this case
+		if (updated_plan->GetCost() < combined_set_plan_cost) {
 			UpdateDPTree(updated_plan);
 		}
 	}
@@ -580,7 +582,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					// error if future plans rely on the old node that was just replaced.
 					UpdateDPTree(node);
 
-					if (!best_connection || node->cost < best_connection->cost) {
+					if (!best_connection || node->GetCost() < best_connection->GetCost()) {
 						// best pair found so far
 						best_connection = node;
 						best_left = i;
@@ -622,6 +624,8 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			best_connection = EmitPair(left, right, connection);
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
+
+			UpdateDPTree(best_connection);
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
 				std::swap(best_left, best_right);

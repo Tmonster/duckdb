@@ -30,7 +30,6 @@ public:
 	NeighborInfo *info;
 	//! If the JoinNode is a base table, then base_cardinality is the cardinality before filters
 	//! estimated_props.cardinality will be the cardinality after filters. With no filters, the two are equal
-	double cost;
 	bool has_filter;
 	JoinNode *left;
 	JoinNode *right;
@@ -38,18 +37,17 @@ public:
 	unique_ptr<EstimatedProperties> estimated_props;
 
 	//! Create a leaf node in the join tree
-	//! set cost to 0 because leaf nodes/base table already exist
+	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
 	JoinNode(JoinRelationSet *set, const double base_cardinality)
-	    : set(set), info(nullptr), cost(0), has_filter(false), left(nullptr), right(nullptr),
+	    : set(set), info(nullptr), has_filter(false), left(nullptr), right(nullptr),
 	      base_cardinality(base_cardinality) {
-		estimated_props = make_unique<EstimatedProperties>(base_cardinality, cost);
+		estimated_props = make_unique<EstimatedProperties>(base_cardinality, 0);
 	}
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
 	JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, const double base_cardinality,
 	         double cost)
-	    : set(set), info(info), cost(cost), has_filter(false), left(left), right(right),
-	      base_cardinality(base_cardinality) {
+	    : set(set), info(info), has_filter(false), left(left), right(right), base_cardinality(base_cardinality) {
 		estimated_props = make_unique<EstimatedProperties>(base_cardinality, cost);
 	}
 
@@ -58,6 +56,7 @@ private:
 
 public:
 	double GetCardinality() const;
+	double GetCost();
 	double GetBaseTableCardinality();
 	void SetBaseTableCardinality(double base_card);
 	void SetEstimatedCardinality(double estimated_card);
