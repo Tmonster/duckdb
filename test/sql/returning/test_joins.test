@@ -1,0 +1,10 @@
+# name: test/sql/returning/test_joins.test
+# description: Test returning with top level INSERT statement
+# group: [returning]
+
+statement ok
+CREATE TABLE t1 (a INTEGER, b INTEGER);
+
+query II
+SELECT table1.a, table1.b from t1 as table1, t1 as table2 where table1.a=table2.a;
+----

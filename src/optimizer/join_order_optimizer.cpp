@@ -254,6 +254,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	if (left->GetCardinality() < right->GetCardinality()) {
 		return CreateJoinTree(set, info, right, left);
 	}
+	cardinality_estimator.ResetCard();
 	if (info->filters.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
@@ -262,7 +263,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		JoinRelationSet *left_join_relations = left->set;
 		JoinRelationSet *right_join_relations = right->set;
 
-		cardinality_estimator.ResetCard();
 		ColumnBinding right_binding, left_binding;
 		auto left_card = left->GetCardinality();
 		auto right_card = right->GetCardinality();

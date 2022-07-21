@@ -129,7 +129,8 @@ void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
 		// When this is the case, you don't always have symmetry, but
 		// if the cost of the result is less, then just assure the cardinality
 		// is also less, then you have the same effect of symmetry.
-		D_ASSERT(ceil(result->GetCardinality()) <= ceil(entry->GetCardinality()));
+		D_ASSERT(ceil(result->GetCardinality()) <= ceil(entry->GetCardinality()) ||
+		         floor(result->GetCardinality()) <= floor(entry->GetCardinality()));
 	}
 }
 
@@ -214,7 +215,7 @@ double CardinalityEstimator::EstimateCardinality(double left_card, double right_
 #endif
 	D_ASSERT(tdom_join_right != 0);
 	D_ASSERT(tdom_join_right != NumericLimits<idx_t>::Maximum());
-	auto expected_cardinality = (left_card * right_card) / tdom_join_right;
+	auto expected_cardinality = MaxValue((left_card * right_card) / tdom_join_right, (double)1);
 	return expected_cardinality;
 }
 
@@ -449,13 +450,13 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 
 	auto card_after_filters = node->GetBaseTableCardinality();
 	// Logical Filter on a seq scan
-	if (has_logical_filter) {
-		card_after_filters *= DEFAULT_SELECTIVITY;
-	} else if (table_filters) {
-		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
-		card_after_filters =
-		    MinValue(inspect_result, (double)card_after_filters);
-	}
+//	if (has_logical_filter) {
+//		card_after_filters *= DEFAULT_SELECTIVITY;
+//	} else if (table_filters) {
+//		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
+//		card_after_filters =
+//		    MinValue(inspect_result, (double)card_after_filters);
+//	}
 	node->SetEstimatedCardinality(card_after_filters);
 }
 
