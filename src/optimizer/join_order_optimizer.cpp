@@ -250,6 +250,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
+	D_ASSERT(left->GetCardinality() > 0 && right->GetCardinality() > 0);
 	if (left->GetCardinality() < right->GetCardinality()) {
 		return CreateJoinTree(set, info, right, left);
 	}
@@ -284,6 +285,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	}
 
 	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
+	D_ASSERT(cost > 0);
 	auto result = make_unique<JoinNode>(set, info, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
 }

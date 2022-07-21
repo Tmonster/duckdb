@@ -1,10 +1,10 @@
 //===----------------------------------------------------------------------===//
-////                         DuckDB
-////
-//// duckdb/optimizer/cardinality_estimator.hpp
-////
-////
-////===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/optimizer/cardinality_estimator.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

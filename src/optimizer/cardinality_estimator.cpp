@@ -391,6 +391,7 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 			}
 		}
 	}
+	D_ASSERT(cardinality_after_filters > 0);
 	return cardinality_after_filters;
 }
 
@@ -404,7 +405,7 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 				auto column_count = base_stats->GetDistinctCount();
-				auto increment = (cardinality + column_count - 1) / column_count;
+				auto increment = MaxValue((idx_t)((cardinality + column_count - 1) / column_count), (idx_t)1);
 				if (has_equality_filter) {
 					cardinality_after_filters += increment;
 				} else {
@@ -414,6 +415,7 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 			}
 		}
 	}
+	D_ASSERT(cardinality_after_filters > 0);
 	return cardinality_after_filters;
 }
 
@@ -436,7 +438,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	// and there are other table filters, use default selectivity.
 	bool has_equality_filter = (cardinality_after_filters != cardinality);
 	if (!has_equality_filter && !table_filters->filters.empty()) {
-		cardinality_after_filters = cardinality * DEFAULT_SELECTIVITY;
+		cardinality_after_filters = MaxValue((idx_t)(cardinality * DEFAULT_SELECTIVITY), (idx_t)1);
 	}
 	return cardinality_after_filters;
 }
@@ -450,8 +452,9 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	if (has_logical_filter) {
 		card_after_filters *= DEFAULT_SELECTIVITY;
 	} else if (table_filters) {
+		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
 		card_after_filters =
-		    MinValue((double)InspectTableFilters(card_after_filters, op, table_filters), (double)card_after_filters);
+		    MinValue(inspect_result, (double)card_after_filters);
 	}
 	node->SetEstimatedCardinality(card_after_filters);
 }
