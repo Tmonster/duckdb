@@ -100,10 +100,9 @@ private:
 
 	void UpdateDPTree(JoinNode *new_plan);
 
-	pp
+	void UpdateJoinNodesInFullPlan(JoinNode *node);
 
-	    vector<unordered_set<idx_t>>
-	    GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set);
+	vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set);
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>

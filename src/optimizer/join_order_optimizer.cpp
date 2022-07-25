@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise
@@ -676,12 +674,6 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
-		unordered_set<idx_t> bindings;
-		for (idx_t i = 0; i < relations.size(); i++) {
-			bindings.insert(i);
-		}
-		auto total_relation = set_manager.GetJoinRelation(bindings);
-		auto final_plan = plans.find(total_relation);
 		SolveJoinOrderApproximately();
 	}
 }
