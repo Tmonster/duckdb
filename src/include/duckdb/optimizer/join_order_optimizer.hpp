@@ -24,7 +24,8 @@ namespace duckdb {
 
 class JoinOrderOptimizer {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context) : context(context), cardinality_estimator(context) {
+	explicit JoinOrderOptimizer(ClientContext &context)
+	    : context(context), cardinality_estimator(context), full_plan_found(false), must_update_full_plan(false) {
 	}
 
 	//! Perform join reordering inside a plan
@@ -57,6 +58,10 @@ private:
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	CardinalityEstimator cardinality_estimator;
+
+	bool full_plan_found;
+	bool must_update_full_plan;
+	unordered_set<string> join_nodes_in_full_plan;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
@@ -95,7 +100,10 @@ private:
 
 	void UpdateDPTree(JoinNode *new_plan);
 
-	vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set);
+	pp
+
+	    vector<unordered_set<idx_t>>
+	    GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set);
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>

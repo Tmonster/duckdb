@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise
@@ -290,13 +292,26 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 	return result;
 }
 
+void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
+	if (!node) {
+		return;
+	}
+	if (node->set->count == relations.size()) {
+		join_nodes_in_full_plan.clear();
+	}
+	if (node->set->count < relations.size()) {
+		join_nodes_in_full_plan.insert(node->set->ToString());
+	}
+	UpdateJoinNodesInFullPlan(node->left);
+	UpdateJoinNodesInFullPlan(node->right);
+}
+
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
-
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
@@ -309,6 +324,17 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
 
+		if (full_plan_found && join_nodes_in_full_plan.count(new_set->ToString()) > 0) {
+			must_update_full_plan = true;
+		}
+		if (new_set->count == relations.size()) {
+			full_plan_found = true;
+			UpdateJoinNodesInFullPlan(result);
+			if (must_update_full_plan) {
+				must_update_full_plan = false;
+			}
+		}
+
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -317,7 +343,10 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 
 bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	pairs++;
-	if (pairs >= 10000) {
+	// If a full plan is created, it's possible a child not gets updated. When this happens, make sure you keep
+	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
+	// our symmetry guarantees.
+	if (pairs >= 10000 && !must_update_full_plan) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic
@@ -647,6 +676,12 @@ void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
+		unordered_set<idx_t> bindings;
+		for (idx_t i = 0; i < relations.size(); i++) {
+			bindings.insert(i);
+		}
+		auto total_relation = set_manager.GetJoinRelation(bindings);
+		auto final_plan = plans.find(total_relation);
 		SolveJoinOrderApproximately();
 	}
 }
