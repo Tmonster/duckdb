@@ -392,7 +392,6 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 			}
 		}
 	}
-	D_ASSERT(cardinality_after_filters > 0);
 	return cardinality_after_filters;
 }
 
