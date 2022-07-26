@@ -57,7 +57,7 @@ public:
 	//! Create an edge in the edge_set
 	void CreateEdge(JoinRelationSet *left, JoinRelationSet *right, FilterInfo *info);
 	//! Returns a connection if there is an edge that connects these two sets, or nullptr otherwise
-	NeighborInfo *GetConnection(JoinRelationSet *node, JoinRelationSet *other);
+	vector<NeighborInfo *> GetConnections(JoinRelationSet *node, JoinRelationSet *other);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
 	vector<idx_t> GetNeighbors(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);

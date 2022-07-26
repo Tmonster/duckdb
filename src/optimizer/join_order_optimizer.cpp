@@ -243,18 +243,20 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 }
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
-unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left,
+unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
+                                                        vector<NeighborInfo *> possible_connections, JoinNode *left,
                                                         JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
+	NeighborInfo *best_connection = nullptr;
 	if (left->GetCardinality() < right->GetCardinality()) {
-		return CreateJoinTree(set, info, right, left);
+		return CreateJoinTree(set, possible_connections, right, left);
 	}
 	cardinality_estimator.ResetCard();
-	if (info->filters.empty()) {
+	if (possible_connections.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
 	} else {
@@ -265,27 +267,35 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set, Ne
 		ColumnBinding right_binding, left_binding;
 		auto left_card = left->GetCardinality();
 		auto right_card = right->GetCardinality();
-		for (auto &filter : info->filters) {
-			if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
-			    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
-				right_binding = filter->left_binding;
-				left_binding = filter->right_binding;
-			} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
-			           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
-				right_binding = filter->right_binding;
-				left_binding = filter->left_binding;
+		for (auto &info : possible_connections) {
+			if (!best_connection) {
+				best_connection = info;
 			}
+			for (auto &filter : info->filters) {
+				if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
+				    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
+					right_binding = filter->left_binding;
+					left_binding = filter->right_binding;
+				} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
+				           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
+					right_binding = filter->right_binding;
+					left_binding = filter->left_binding;
+				}
 
-			// predict cardinality using most selective filter
-			expected_cardinality =
-			    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
-			cardinality_estimator.UpdateLowestcard(expected_cardinality);
+				// predict cardinality using most selective filter
+				expected_cardinality =
+				    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
+				if (expected_cardinality < cardinality_estimator.lowest_card) {
+					best_connection = info;
+				}
+				cardinality_estimator.UpdateLowestcard(expected_cardinality);
+			}
 		}
 	}
 
 	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
 	D_ASSERT(cost >= 0);
-	auto result = make_unique<JoinNode>(set, info, left, right, cardinality_estimator.lowest_card, cost);
+	auto result = make_unique<JoinNode>(set, best_connection, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
 }
 
@@ -303,7 +313,7 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	UpdateJoinNodesInFullPlan(node->right);
 }
 
-JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
+JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
@@ -338,7 +348,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	return entry->second.get();
 }
 
-bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
+bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info) {
 	pairs++;
 	// If a full plan is created, it's possible a child not gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
@@ -382,8 +392,8 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
-		auto connection = query_graph.GetConnection(node, neighbor_relation);
-		if (connection) {
+		auto connection = query_graph.GetConnections(node, neighbor_relation);
+		if (!connection.empty()) {
 			if (!TryEmitPair(node, neighbor_relation, connection)) {
 				return false;
 			}
@@ -409,9 +419,9 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 		// emit the combinations of this node and its neighbors
 		auto combined_set = set_manager.Union(right, neighbor);
 		if (combined_set->count > right->count && plans.find(combined_set) != plans.end()) {
-			auto connection = query_graph.GetConnection(left, combined_set);
-			if (connection) {
-				if (!TryEmitPair(left, combined_set, connection)) {
+			auto connections = query_graph.GetConnections(left, combined_set);
+			if (!connections.empty()) {
+				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
 				}
 			}
@@ -563,14 +573,14 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		}
 
 		double combined_set_plan_cost = combined_set_plan->second->GetCost();
-		auto connection = query_graph.GetConnection(new_set, neighbor_relation);
+		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
 		auto &right_plan = plans[neighbor_relation];
 		if (!right_plan) {
 			continue;
 		}
-		auto updated_plan = EmitPair(new_set, neighbor_relation, connection);
+		auto updated_plan = EmitPair(new_set, neighbor_relation, connections);
 		// <= because the child node has already been replaced. You need to
 		// replace the parent node as well in this case
 		if (updated_plan->GetCost() < combined_set_plan_cost) {
@@ -598,8 +608,8 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
 				auto right = join_relations[j];
 				// check if we can connect these two relations
-				auto connection = query_graph.GetConnection(left, right);
-				if (connection) {
+				auto connection = query_graph.GetConnections(left, right);
+				if (!connection.empty()) {
 					// we can check the cost of this connection
 					auto node = EmitPair(left, right, connection);
 
@@ -644,10 +654,10 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph.CreateEdge(left, right, nullptr);
 			// now emit the pair and continue with the algorithm
-			auto connection = query_graph.GetConnection(left, right);
-			D_ASSERT(connection);
+			auto connections = query_graph.GetConnections(left, right);
+			D_ASSERT(!connections.empty());
 
-			best_connection = EmitPair(left, right, connection);
+			best_connection = EmitPair(left, right, connections);
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
 

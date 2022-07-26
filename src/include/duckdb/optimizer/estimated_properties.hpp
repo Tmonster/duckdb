@@ -10,7 +10,6 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"

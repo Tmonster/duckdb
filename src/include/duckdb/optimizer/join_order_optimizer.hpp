@@ -31,7 +31,8 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right);
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, vector<NeighborInfo *> possible_connections,
+	                                    JoinNode *left, JoinNode *right);
 
 private:
 	ClientContext &context;
@@ -76,10 +77,10 @@ private:
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
+	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
+	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info);
 
 	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node

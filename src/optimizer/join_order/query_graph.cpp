@@ -116,20 +116,15 @@ vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet *node, unordered_set<idx_
 	return neighbors;
 }
 
-NeighborInfo *QueryGraph::GetConnection(JoinRelationSet *node, JoinRelationSet *other) {
-	NeighborInfo *connection = nullptr;
+vector<NeighborInfo *> QueryGraph::GetConnections(JoinRelationSet *node, JoinRelationSet *other) {
+	vector<NeighborInfo *> connections;
 	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (JoinRelationSet::IsSubset(other, info->neighbor)) {
-			if (!connection) {
-				connection = info;
-			}
-			if (info->filters.size() > connection->filters.size()) {
-				connection = info;
-			}
+			connections.push_back(info);
 		}
 		return false;
 	});
-	return connection;
+	return connections;
 }
 
 } // namespace duckdb
