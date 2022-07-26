@@ -120,8 +120,12 @@ NeighborInfo *QueryGraph::GetConnection(JoinRelationSet *node, JoinRelationSet *
 	NeighborInfo *connection = nullptr;
 	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (JoinRelationSet::IsSubset(other, info->neighbor)) {
-			connection = info;
-			return true;
+			if (!connection) {
+				connection = info;
+			}
+			if (info->filters.size() > connection->filters.size()) {
+				connection = info;
+			}
 		}
 		return false;
 	});

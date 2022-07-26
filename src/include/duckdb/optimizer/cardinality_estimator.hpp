@@ -18,7 +18,7 @@ namespace duckdb {
 
 struct RelationAttributes {
 	string original_name;
-	//! the relation columns used in join filters
+	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
 	unordered_set<idx_t> columns;
 };

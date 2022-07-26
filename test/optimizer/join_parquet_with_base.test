@@ -45,6 +45,8 @@ CREATE view region AS SELECT * FROM read_parquet('__TEST_DIR__/region.parquet');
 statement ok
 CREATE view supplier AS SELECT * FROM read_parquet('__TEST_DIR__/supplier.parquet');
 
+# part, supplier, region are all parquet
+# partsupp, nation are base tables
 query IIIIIIII
 SELECT
     s_acctbal,
@@ -93,6 +95,8 @@ LIMIT 100;
 352 values hashing to 0181c015a8153f9a73438d3cb00c43ff
 
 
+# order is parquet
+# lineitem and customer are base table
 query IIII
 SELECT
     l_orderkey,
@@ -121,6 +125,8 @@ LIMIT 10;
 40 values hashing to a1c87f7b3328789f2731d5b01a56f3fb
 
 # q05 from tpch
+# orders, supplier, region is parquet
+# customer, lineitem, supplier, and nation are base
 query II
 SELECT
     n_name,
@@ -151,6 +157,8 @@ ORDER BY
 
 
 # q07 from tpch
+# orders, supplier, region is parquet
+# customer, lineitem, and supplier are base
 query IIII
 SELECT
     supp_nation,
@@ -237,7 +245,6 @@ ORDER BY
 ----
 4 values hashing to cb33653d5ee28769aa37a65e2d3c12a1
 
-
 #q09 from tpch
 query III
 SELECT
@@ -272,7 +279,6 @@ ORDER BY
     o_year DESC;
 ----
 525 values hashing to 7c1675c102bc27f328bc6f40512bc9c7
-
 
 #q10
 query IIIIIIII
