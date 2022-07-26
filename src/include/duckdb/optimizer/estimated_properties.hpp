@@ -21,7 +21,7 @@ namespace duckdb {
 
 class EstimatedProperties {
 public:
-	EstimatedProperties(double cardinality, idx_t cost) : cardinality(cardinality), cost(cost) {};
+	EstimatedProperties(double cardinality, double cost) : cardinality(cardinality), cost(cost) {};
 	EstimatedProperties() : cardinality(0), cost(0) {};
 
 	double GetCardinality();
