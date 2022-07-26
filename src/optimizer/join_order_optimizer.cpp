@@ -772,7 +772,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
 
-	result_operator->estimated_cardinality = node->GetCardinality();
+	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
+	result_operator->estimated_cardinality = (idx_t)MinValue(node->GetCardinality(), (double)max_idx_t);
 	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
 

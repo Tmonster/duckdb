@@ -420,9 +420,12 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 }
 
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
+	idx_t cardinality_after_filters = cardinality;
 	auto catalog_table = GetCatalogTableEntry(op);
 	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
-	idx_t cardinality_after_filters = cardinality;
+	if (!catalog_table) {
+		return cardinality_after_filters;
+	}
 	for (auto &it : table_filters->filters) {
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
