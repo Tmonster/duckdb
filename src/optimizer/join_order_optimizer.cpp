@@ -244,7 +244,7 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
-                                                        vector<NeighborInfo *> possible_connections, JoinNode *left,
+                                                        const vector<NeighborInfo *> &possible_connections, JoinNode *left,
                                                         JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
@@ -313,13 +313,13 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	UpdateJoinNodesInFullPlan(node->right);
 }
 
-JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info) {
+JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
-	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
+	auto new_plan = CreateJoinTree(new_set, move(info), left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 
@@ -359,7 +359,7 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 		// at 10K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
-	EmitPair(left, right, info);
+	EmitPair(left, right, move(info));
 	return true;
 }
 
