@@ -244,8 +244,8 @@ static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &excl
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
-                                                        const vector<NeighborInfo *> &possible_connections, JoinNode *left,
-                                                        JoinNode *right) {
+                                                        const vector<NeighborInfo *> &possible_connections,
+                                                        JoinNode *left, JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
@@ -313,7 +313,8 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	UpdateJoinNodesInFullPlan(node->right);
 }
 
-JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> info) {
+JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right,
+                                       const vector<NeighborInfo *> info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
