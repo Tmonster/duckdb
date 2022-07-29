@@ -1,6 +1,3 @@
-//
-// Created by Tom Ebergen on 5/16/22.
-//
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"

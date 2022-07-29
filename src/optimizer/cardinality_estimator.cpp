@@ -169,10 +169,10 @@ idx_t CardinalityEstimator::GetTDom(ColumnBinding binding) {
 		if (tdom_no_hll > 0) {
 			return tdom_no_hll;
 		}
-		// The total domain was initialized to 0 (happens in a few test cases)
+		// The total domain was initialized to 0 (possible when joining with empty tables)
 		return 1;
 	}
-	throw Exception("Could not get total domain of a join relations. Most likely a bug in InitTdoms");
+	throw InternalException("Could not get total domain of a join relations. Most likely a bug in InitTdoms");
 }
 
 void CardinalityEstimator::ResetCard() {
