@@ -77,10 +77,10 @@ private:
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> info);
+	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info);
+	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
 
 	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
@@ -103,9 +103,6 @@ private:
 
 	void UpdateJoinNodesInFullPlan(JoinNode *node);
 
-	vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set);
-
-	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 };

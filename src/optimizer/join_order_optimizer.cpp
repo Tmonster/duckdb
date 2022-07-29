@@ -314,13 +314,13 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 }
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right,
-                                       const vector<NeighborInfo *> info) {
+                                       const vector<NeighborInfo *> &info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
-	auto new_plan = CreateJoinTree(new_set, move(info), left_plan.get(), right_plan.get());
+	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 
@@ -349,7 +349,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	return entry->second.get();
 }
 
-bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, vector<NeighborInfo *> info) {
+bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right,
+                                     const vector<NeighborInfo *> &info) {
 	pairs++;
 	// If a full plan is created, it's possible a child not gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
@@ -360,7 +361,7 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 		// at 10K pairs stop searching exactly and switch to heuristic
 		return false;
 	}
-	EmitPair(left, right, move(info));
+	EmitPair(left, right, info);
 	return true;
 }
 
@@ -563,7 +564,7 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		exclusion_set.insert(new_set->relations[i]);
 	}
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-	auto all_neighbors = duckdb::GetAllNeighborSets(new_set, exclusion_set, neighbors);
+	auto all_neighbors = GetAllNeighborSets(new_set, exclusion_set, neighbors);
 	for (auto neighbor : all_neighbors) {
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto combined_set = set_manager.Union(new_set, neighbor_relation);
