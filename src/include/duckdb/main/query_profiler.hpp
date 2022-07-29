@@ -164,8 +164,6 @@ public:
 	DUCKDB_API void StartPhase(string phase);
 	DUCKDB_API void EndPhase();
 
-	DUCKDB_API double GetPhaseTiming(string desired_phase) const;
-
 	DUCKDB_API void Initialize(PhysicalOperator *root);
 
 	DUCKDB_API string QueryTreeToString(bool print_optimizer_output = false) const;

@@ -516,18 +516,6 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << string(depth * 3, ' ') << " }\n";
 }
 
-double QueryProfiler::GetPhaseTiming(string desired_phase) const {
-	double total_time = 0;
-	for (auto &phase: phase_timings) {
-		if (phase.first.compare(desired_phase) == 0) {
-			total_time = phase.second;
-			break;
-		}
-	}
-	return total_time;
-}
-
-
 string QueryProfiler::ToJSON() const {
 	if (!IsEnabled()) {
 		return "{ \"result\": \"disabled\" }\n";
@@ -542,8 +530,6 @@ string QueryProfiler::ToJSON() const {
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"optimizer\": " + to_string((double)GetPhaseTiming("optimizer")) + ",\n";
-	ss << "   \"optimizer is this rebuilding?\" : \"yes\",\n";
 	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
 	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
 	// JSON cannot have literal control characters in string literals
