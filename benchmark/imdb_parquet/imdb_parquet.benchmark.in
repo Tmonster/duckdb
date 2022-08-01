@@ -7,10 +7,6 @@ group imdb
 
 require parquet
 
-init
-PRAGMA enable_profiling='json';
-PRAGMA profile_output='imdb_benchmark_results/json_output_q${QUERY_NUMBER_PADDED}.json';
-
 run extension/imdb_parquet/queries/q${QUERY_NUMBER_PADDED}.sql
 
 result extension/imdb/answers/q${QUERY_NUMBER_PADDED}.csv

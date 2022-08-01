@@ -125,8 +125,7 @@ for q_file in query_files:
     fo = open(full_filename, "w+")
     fo.write(f"""# name: benchmark/imdb_parquet/{full_filename}
 # description: Run query {q_description_name} from the IMDB benchmark (single-threaded)
-# group: [imdb]
-
+# group: [imdb_parquet]
 
 template benchmark/imdb_parquet/imdb_parquet.benchmark.in
 QUERY_NUMBER={actual_num}

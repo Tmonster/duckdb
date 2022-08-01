@@ -5,9 +5,11 @@
 name Q${QUERY_NUMBER_PADDED}
 group imdb
 
-require parquet
+connect benchmark/imdb/job.duckdb
 
-load benchmark/imdb/load.sql
+init
+PRAGMA enable_profiling='json';
+PRAGMA profile_output='imdb_benchmark_results/json_output_q${QUERY_NUMBER_PADDED}.json';
 
 run extension/imdb/queries/q${QUERY_NUMBER_PADDED}.sql
 

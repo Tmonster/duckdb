@@ -123,7 +123,7 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
-	//	result+="EC="+ std::to_string(estimated_cardinality)+"\n";
+	result += "\nEC=" + std::to_string(estimated_cardinality) + "\n";
 	return result;
 }
 
