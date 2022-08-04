@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "iostream"
 
 #include <algorithm>
 namespace duckdb {
@@ -252,6 +253,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
+	double highest_tdom = 0;
 	NeighborInfo *best_connection = nullptr;
 	if (left->GetCardinality() < right->GetCardinality()) {
 		return CreateJoinTree(set, possible_connections, right, left);
@@ -264,7 +266,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 		// normal join, expect foreign key join
 		JoinRelationSet *left_join_relations = left->set;
 		JoinRelationSet *right_join_relations = right->set;
-
 		ColumnBinding right_binding, left_binding;
 		auto left_card = left->GetCardinality();
 		auto right_card = right->GetCardinality();
@@ -283,9 +284,12 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 					left_binding = filter->left_binding;
 				}
 
-				// predict cardinality using most selective filter
+//				 predict cardinality using most selective filter
 				expected_cardinality =
 				    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
+//
+
+				highest_tdom = MaxValue(right_card * left_card / expected_cardinality, highest_tdom);
 				if (expected_cardinality < cardinality_estimator.lowest_card) {
 					best_connection = info;
 				}
@@ -294,10 +298,17 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 		}
 	}
 
-	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
-	D_ASSERT(cost >= cardinality_estimator.lowest_card);
-	auto result = make_unique<JoinNode>(set, best_connection, left, right, cardinality_estimator.lowest_card, cost);
-	return result;
+	auto cost = CardinalityEstimator::ComputeCost(left, right, expected_cardinality);
+	D_ASSERT(cost >= expected_cardinality);
+	auto result = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
+
+	auto expected_cardinality_set = cardinality_estimator.EstimateCardinalityWithSet(set);
+	auto cost2 = CardinalityEstimator::ComputeCost(left, right, expected_cardinality_set);
+	auto result2 = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality_set, cost2);
+	
+	result->SetTDom(highest_tdom);
+	result2->SetTDom(highest_tdom);
+	return result2;
 }
 
 void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
@@ -324,13 +335,12 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-
 	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
-			cardinality_estimator.VerifySymmetry(result, entry->second.get());
+//			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
 
 		if (full_plan_found && join_nodes_in_full_plan.count(new_set->ToString()) > 0) {
@@ -395,9 +405,9 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
-		auto connection = query_graph.GetConnections(node, neighbor_relation);
-		if (!connection.empty()) {
-			if (!TryEmitPair(node, neighbor_relation, connection)) {
+		auto connections = query_graph.GetConnections(node, neighbor_relation);
+		if (!connections.empty()) {
+			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
 			}
 		}

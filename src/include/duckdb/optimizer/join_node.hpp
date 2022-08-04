@@ -53,12 +53,17 @@ public:
 
 private:
 	double base_cardinality;
+	//! used for debugging/printing join nodes and understanding what tdom was used to
+	//! determine a nodes cardinality.
+	double tdom_used;
 
 public:
 	double GetCardinality() const;
 	double GetCost();
 	void SetCost(double cost);
 	double GetBaseTableCardinality();
+	void SetTDom(double tdom);
+	double GetTdom();
 	void SetBaseTableCardinality(double base_card);
 	void SetEstimatedCardinality(double estimated_card);
 	void PrintJoinNode();

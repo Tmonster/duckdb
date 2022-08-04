@@ -21,6 +21,16 @@ struct RelationAttributes {
 	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
 	unordered_set<idx_t> columns;
+	double cardinality;
+};
+
+struct RelationsToTDom {
+	column_binding_set_t equivalent_relations;
+	idx_t tdom_hll;
+	idx_t tdom_no_hll;
+	vector<FilterInfo*> filters;
+
+	RelationsToTDom(column_binding_set_t columnBindingSet) : equivalent_relations(columnBindingSet), tdom_hll(0), tdom_no_hll(0) {};
 };
 
 struct NodeOp {
@@ -28,6 +38,14 @@ struct NodeOp {
 	LogicalOperator *op;
 
 	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
+};
+
+
+struct oneMoreStruct {
+	unordered_set<idx_t> relations;
+	double denom;
+
+	oneMoreStruct() : relations(), denom(1) {};
 };
 
 class CardinalityEstimator {
@@ -56,6 +74,8 @@ private:
 	//! These total domains are determined without using
 	vector<idx_t> equivalent_relations_tdom_hll;
 
+	vector<RelationsToTDom> relations_to_tdoms;
+
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
@@ -82,6 +102,7 @@ public:
 	void InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
 	double EstimateCardinality(double left_card, double right_card, ColumnBinding left_binding,
 	                           ColumnBinding right_binding);
+	double EstimateCardinalityWithSet(JoinRelationSet *new_set);
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
 	void ResetCard();
