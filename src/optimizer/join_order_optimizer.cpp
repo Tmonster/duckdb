@@ -253,62 +253,26 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
-	double highest_tdom = 0;
 	NeighborInfo *best_connection = nullptr;
-	if (left->GetCardinality() < right->GetCardinality()) {
-		return CreateJoinTree(set, possible_connections, right, left);
-	}
-	cardinality_estimator.ResetCard();
-	if (possible_connections.empty()) {
+	auto plan = plans.find(set);
+	// if we have already calculated an expected cardinality for this set,
+	// just re-use that cardinality
+	if (plan != plans.end()) {
+		expected_cardinality = plan->second->GetCardinality();
+		best_connection = possible_connections.back();
+	} else if (possible_connections.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
 	} else {
 		// normal join, expect foreign key join
-		JoinRelationSet *left_join_relations = left->set;
-		JoinRelationSet *right_join_relations = right->set;
-		ColumnBinding right_binding, left_binding;
-		auto left_card = left->GetCardinality();
-		auto right_card = right->GetCardinality();
-		for (auto &info : possible_connections) {
-			if (!best_connection) {
-				best_connection = info;
-			}
-			for (auto &filter : info->filters) {
-				if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
-				    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
-					right_binding = filter->left_binding;
-					left_binding = filter->right_binding;
-				} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
-				           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
-					right_binding = filter->right_binding;
-					left_binding = filter->left_binding;
-				}
-
-//				 predict cardinality using most selective filter
-				expected_cardinality =
-				    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
-//
-
-				highest_tdom = MaxValue(right_card * left_card / expected_cardinality, highest_tdom);
-				if (expected_cardinality < cardinality_estimator.lowest_card) {
-					best_connection = info;
-				}
-				cardinality_estimator.UpdateLowestcard(expected_cardinality);
-			}
-		}
+		expected_cardinality = cardinality_estimator.EstimateCardinalityWithSet(set);
+		best_connection = possible_connections.back();
 	}
 
 	auto cost = CardinalityEstimator::ComputeCost(left, right, expected_cardinality);
-	D_ASSERT(cost >= expected_cardinality);
 	auto result = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
-
-	auto expected_cardinality_set = cardinality_estimator.EstimateCardinalityWithSet(set);
-	auto cost2 = CardinalityEstimator::ComputeCost(left, right, expected_cardinality_set);
-	auto result2 = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality_set, cost2);
-	
-	result->SetTDom(highest_tdom);
-	result2->SetTDom(highest_tdom);
-	return result2;
+	D_ASSERT(cost >= expected_cardinality);
+	return result;
 }
 
 void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
@@ -340,7 +304,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		auto result = new_plan.get();
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
-//			cardinality_estimator.VerifySymmetry(result, entry->second.get());
+			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
 
 		if (full_plan_found && join_nodes_in_full_plan.count(new_set->ToString()) > 0) {
