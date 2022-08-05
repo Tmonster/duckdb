@@ -32,11 +32,12 @@ struct RelationsToTDom {
 	idx_t tdom_hll;
 	//! the estimated total domains of each relation without using HLL
 	idx_t tdom_no_hll;
-	//
 	bool has_tdom_hll;
-	vector<FilterInfo*> filters;
+	vector<FilterInfo *> filters;
 
-	RelationsToTDom(column_binding_set_t columnBindingSet) : equivalent_relations(columnBindingSet), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()), has_tdom_hll(false) {};
+	RelationsToTDom(column_binding_set_t columnBindingSet)
+	    : equivalent_relations(columnBindingSet), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
+	      has_tdom_hll(false) {};
 };
 
 struct NodeOp {
@@ -46,11 +47,11 @@ struct NodeOp {
 	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
 };
 
-struct relationSetToDenominator {
+struct Subgraph2Denominator {
 	unordered_set<idx_t> relations;
 	double denom;
 
-	relationSetToDenominator() : relations(), denom(1) {};
+	Subgraph2Denominator() : relations(), denom(1) {};
 };
 
 class CardinalityEstimator {
@@ -69,8 +70,6 @@ private:
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
-
-
 
 	vector<RelationsToTDom> relations_to_tdoms;
 

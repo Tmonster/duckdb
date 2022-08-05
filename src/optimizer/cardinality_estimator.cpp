@@ -7,8 +7,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
@@ -42,9 +40,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 		}
 	}
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
-	column_binding_set_t tmp;
-	tmp.insert(key);
-//	equivalent_relations.push_back(tmp);
+	column_binding_set_t tmp({key});
 	relations_to_tdoms.push_back(RelationsToTDom(tmp));
 	return true;
 }
@@ -73,6 +69,7 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 }
 
 void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets) {
+	D_ASSERT(matching_equivalent_sets.size() <= 2);
 	if (matching_equivalent_sets.size() > 1) {
 		// an equivalence relation is connecting to sets of equivalence relations
 		// so push all relations from the second set into the first. Later we will delete
@@ -96,7 +93,6 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		relations_to_tdoms.back().filters.push_back(filter_info);
 	}
 }
-
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
 	relation_column_to_original_column[key] = value;
@@ -143,16 +139,14 @@ void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
 
 void CardinalityEstimator::InitTotalDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
-	                     [](RelationsToTDom &R2TDom) { return R2TDom.equivalent_relations.empty(); });
+	                                   [](RelationsToTDom &R2TDom) { return R2TDom.equivalent_relations.empty(); });
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
-
 }
 
 double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
 	double cost = expected_cardinality + left->GetCost() + right->GetCost();
 	return cost;
 }
-
 
 double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const JoinNode *right) {
 	// need to explicity use double here, otherwise auto converts it to an int, then
@@ -174,7 +168,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalGet *get, idx_t relat
 	}
 }
 
-void UpdateDenom(relationSetToDenominator *relation_2_denom, RelationsToTDom *relation_to_tdom) {
+void UpdateDenom(Subgraph2Denominator *relation_2_denom, RelationsToTDom *relation_to_tdom) {
 	if (relation_to_tdom->has_tdom_hll) {
 		relation_2_denom->denom *= relation_to_tdom->tdom_hll;
 	} else {
@@ -182,12 +176,12 @@ void UpdateDenom(relationSetToDenominator *relation_2_denom, RelationsToTDom *re
 	}
 }
 
-
-void FindMatchAndMerge(relationSetToDenominator &merge_to, idx_t find_me, vector<relationSetToDenominator>::iterator subgraph,
-                       vector<relationSetToDenominator>::iterator end) {
+void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
+                               vector<Subgraph2Denominator>::iterator subgraph,
+                               vector<Subgraph2Denominator>::iterator end) {
 	for (; subgraph != end; subgraph++) {
 		if (subgraph->relations.count(find_me) >= 1) {
-			for (auto &relation: subgraph->relations) {
+			for (auto &relation : subgraph->relations) {
 				merge_to.relations.insert(relation);
 			}
 			subgraph->relations.clear();
@@ -204,7 +198,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 		numerator *= relation_attributes[new_set->relations[i]].cardinality;
 		actual_set.insert(new_set->relations[i]);
 	}
-	vector<relationSetToDenominator> graph_match;
+	vector<Subgraph2Denominator> subgraphs;
 	bool done = false;
 	bool found_match = false;
 
@@ -212,24 +206,24 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 	// Then loop through all filters that have that tdom and see if both the left and right relations are
 	// in the new set, if so you can use that filter.
 	// You must also make sure that the filters are eventually connected however, so we need to keep track of
-	// the graph of filters via our graph_match variable, which employs a set of relations, and the tdoms that
+	// the graph of filters via our subgraphs variable, which employs a set of relations, and the tdoms that
 	// they encompass.
 
 	// relations_to_tdoms has already been sorted.
-	for (auto &r2Tdom: relations_to_tdoms) {
+	for (auto &r2Tdom : relations_to_tdoms) {
 		// loop through each filter in the tdom.
 		if (done) {
 			break;
 		}
-		for (auto &filter: r2Tdom.filters) {
+		for (auto &filter : r2Tdom.filters) {
 			if (actual_set.count(filter->left_binding.table_index) == 0 ||
 			    actual_set.count(filter->right_binding.table_index) == 0) {
 				continue;
 			}
 			// the join filter is on relations in the new set.
 			found_match = false;
-			vector<relationSetToDenominator>::iterator it;
-			for (it = graph_match.begin(); it != graph_match.end(); it++) {
+			vector<Subgraph2Denominator>::iterator it;
+			for (it = subgraphs.begin(); it != subgraphs.end(); it++) {
 				auto left_in = it->relations.count(filter->left_binding.table_index);
 				auto right_in = it->relations.count(filter->right_binding.table_index);
 				// if both left and right bindings are in the subgraph, continue
@@ -240,14 +234,13 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 				idx_t find_table;
 				if (left_in) {
 					find_table = filter->right_binding.table_index;
-				}
-				else {
+				} else {
 					D_ASSERT(right_in);
 					find_table = filter->left_binding.table_index;
 				}
 				auto next_subgraph = it + 1;
 				// iterate through other subgraphs and merge.
-				FindMatchAndMerge(*it, find_table, next_subgraph, graph_match.end());
+				FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
 				// Now insert the right binding and update denominator with the
 				// tdom of the filter
 				it->relations.insert(find_table);
@@ -256,21 +249,19 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 				break;
 			}
 			// means that the filter joins relations in the given set, but there is no
-			// connection to any subgraph in graph_match. Add a new subgraph, and maybe later there will be
+			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
 			// a connection.
 			if (!found_match) {
-				graph_match.push_back(relationSetToDenominator());
-				graph_match.back().relations.insert(filter->left_binding.table_index);
-				graph_match.back().relations.insert(filter->right_binding.table_index);
-				UpdateDenom(&graph_match.back(), &r2Tdom);
+				subgraphs.push_back(Subgraph2Denominator());
+				subgraphs.back().relations.insert(filter->left_binding.table_index);
+				subgraphs.back().relations.insert(filter->right_binding.table_index);
+				UpdateDenom(&subgraphs.back(), &r2Tdom);
 			}
-			auto remove_start = std::remove_if(graph_match.begin(), graph_match.end(),
-									 [](relationSetToDenominator &s) {
-										 return s.relations.empty();
-									 });
-			graph_match.erase(remove_start, graph_match.end());
+			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
+			                                   [](Subgraph2Denominator &s) { return s.relations.empty(); });
+			subgraphs.erase(remove_start, subgraphs.end());
 
-			if (graph_match.size() == 1 && graph_match.at(0).relations.size() == new_set->count) {
+			if (subgraphs.size() == 1 && subgraphs.at(0).relations.size() == new_set->count) {
 				// You have found enough filters to connect the relations. These are guaranteed
 				// to be the filters with the highest Tdoms.
 				done = true;
@@ -279,7 +270,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 		}
 	}
 	double denom = 1;
-	for (auto &match: graph_match) {
+	for (auto &match : subgraphs) {
 		if (match.relations.size() == new_set->count) {
 			denom = match.denom;
 		}
@@ -345,9 +336,7 @@ bool SortTdoms(RelationsToTDom a, RelationsToTDom b) {
 		return a.tdom_no_hll > b.tdom_hll;
 	}
 	return a.tdom_no_hll > b.tdom_no_hll;
-
 }
-
 
 void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops,
                                                          vector<unique_ptr<FilterInfo>> *filter_infos) {

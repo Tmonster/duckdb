@@ -37,15 +37,6 @@ void JoinNode::SetEstimatedCardinality(double estimated_card) {
 	estimated_props->SetCardinality(estimated_card);
 }
 
-double JoinNode::GetTdom() {
-	return tdom_used;
-}
-
-void JoinNode::SetTDom(double tdom) {
-	tdom_used = tdom;
-}
-
-
 string JoinNode::ToString() {
 	if (!set) {
 		return "";
@@ -53,7 +44,6 @@ string JoinNode::ToString() {
 	string result = "-------------------------------\n";
 	result += set->ToString() + "\n";
 	result += "card = " + to_string(GetCardinality()) + "\n";
-	result += "tdom = " + to_string(GetTdom()) + "\n";
 	bool is_cartesian = false;
 	if (left && right) {
 		is_cartesian = (GetCardinality() == left->GetCardinality() * right->GetCardinality());
