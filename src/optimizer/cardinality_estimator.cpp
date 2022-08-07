@@ -41,7 +41,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	}
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
 	column_binding_set_t tmp({key});
-	relations_to_tdoms.push_back(RelationsToTDom(tmp));
+	relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
 	return true;
 }
 
@@ -89,7 +89,7 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		column_binding_set_t tmp;
 		tmp.insert(filter_info->left_binding);
 		tmp.insert(filter_info->right_binding);
-		relations_to_tdoms.push_back(RelationsToTDom(tmp));
+		relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
 		relations_to_tdoms.back().filters.push_back(filter_info);
 	}
 }
@@ -139,7 +139,7 @@ void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
 
 void CardinalityEstimator::InitTotalDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
-	                                   [](RelationsToTDom &R2TDom) { return R2TDom.equivalent_relations.empty(); });
+	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
 }
 
@@ -210,12 +210,12 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 	// they encompass.
 
 	// relations_to_tdoms has already been sorted.
-	for (auto &r2Tdom : relations_to_tdoms) {
+	for (auto &relation_2_tdom : relations_to_tdoms) {
 		// loop through each filter in the tdom.
 		if (done) {
 			break;
 		}
-		for (auto &filter : r2Tdom.filters) {
+		for (auto &filter : relation_2_tdom.filters) {
 			if (actual_set.count(filter->left_binding.table_index) == 0 ||
 			    actual_set.count(filter->right_binding.table_index) == 0) {
 				continue;
@@ -244,7 +244,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 				// Now insert the right binding and update denominator with the
 				// tdom of the filter
 				it->relations.insert(find_table);
-				UpdateDenom(&(*it), &r2Tdom);
+				UpdateDenom(&(*it), &relation_2_tdom);
 				found_match = true;
 				break;
 			}
@@ -252,10 +252,10 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
 			// a connection.
 			if (!found_match) {
-				subgraphs.push_back(Subgraph2Denominator());
+				subgraphs.emplace_back(Subgraph2Denominator());
 				subgraphs.back().relations.insert(filter->left_binding.table_index);
 				subgraphs.back().relations.insert(filter->right_binding.table_index);
-				UpdateDenom(&subgraphs.back(), &r2Tdom);
+				UpdateDenom(&subgraphs.back(), &relation_2_tdom);
 			}
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return s.relations.empty(); });
@@ -325,7 +325,7 @@ void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
 	}
 }
 
-bool SortTdoms(RelationsToTDom a, RelationsToTDom b) {
+bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	if (a.has_tdom_hll && b.has_tdom_hll) {
 		return a.tdom_hll > b.tdom_hll;
 	}
@@ -421,24 +421,24 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			}
 		}
 
-		for (auto &relation2Tdom : relations_to_tdoms) {
-			column_binding_set_t i_set = relation2Tdom.equivalent_relations;
+		for (auto &relation_to_tdom : relations_to_tdoms) {
+			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.count(key) == 1) {
 				if (catalog_table) {
-					if (relation2Tdom.tdom_hll < count) {
-						relation2Tdom.tdom_hll = count;
-						relation2Tdom.has_tdom_hll = true;
+					if (relation_to_tdom.tdom_hll < count) {
+						relation_to_tdom.tdom_hll = count;
+						relation_to_tdom.has_tdom_hll = true;
 					}
-					if (relation2Tdom.tdom_no_hll > count) {
-						relation2Tdom.tdom_no_hll = count;
+					if (relation_to_tdom.tdom_no_hll > count) {
+						relation_to_tdom.tdom_no_hll = count;
 					}
 				} else {
 					// Here we don't have catalog statistics, and the following is how we determine
 					// the tdom
 					// 1. If there is any hll data in the equivalence set, use that
 					// 2. Otherwise, use the table with the smallest cardinality
-					if (relation2Tdom.tdom_no_hll > count && !relation2Tdom.has_tdom_hll) {
-						relation2Tdom.tdom_no_hll = count;
+					if (relation_to_tdom.tdom_no_hll > count && !relation_to_tdom.has_tdom_hll) {
+						relation_to_tdom.tdom_no_hll = count;
 					}
 				}
 				break;

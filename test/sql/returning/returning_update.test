@@ -175,9 +175,9 @@ FROM (SELECT sum(a5) as sum_a, c5 FROM table5 GROUP BY c5) as temp_table
 WHERE table4.c4 = temp_table.c5
 RETURNING *;
 ----
-3	3	0
-2	7	1
 1	11	2
+2	7	1
+3	3	0
 
 # update using a window function
 query III
