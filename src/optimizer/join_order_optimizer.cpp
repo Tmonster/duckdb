@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include "iostream"
+
 #include <algorithm>
 namespace duckdb {
 
@@ -256,6 +258,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	auto plan = plans.find(set);
 	// if we have already calculated an expected cardinality for this set,
 	// just re-use that cardinality
+	if (left->GetCardinality() < right->GetCardinality()) {
+		return CreateJoinTree(set, possible_connections, right, left);
+	}
 	if (plan != plans.end()) {
 		expected_cardinality = plan->second->GetCardinality();
 		best_connection = possible_connections.back();
@@ -286,6 +291,15 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	}
 	UpdateJoinNodesInFullPlan(node->left);
 	UpdateJoinNodesInFullPlan(node->right);
+}
+
+bool TrulyDifferent(JoinNode *plan_a, JoinNode *plan_b) {
+	auto plan_a_left = plan_a->left;
+	auto plan_a_right = plan_a->right;
+	auto plan_b_left = plan_b->left;
+	auto plan_b_right = plan_b->right;
+	return ((plan_a_left == plan_b_left && plan_a_right == plan_b_right) ||
+	        (plan_a_left == plan_b_right && plan_a_right == plan_b_left));
 }
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right,
@@ -738,6 +752,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			result_operator = move(join);
 		}
 		left_node = left.first;
+		right_node = right.first;
 		right_node = right.first;
 		result_relation = set_manager.Union(left_node, right_node);
 	} else {
