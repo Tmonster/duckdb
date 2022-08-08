@@ -62,7 +62,6 @@ public:
 	void SetBaseTableCardinality(double base_card);
 	void SetEstimatedCardinality(double estimated_card);
 	void PrintJoinNode();
-	unordered_set<string> GetNodeSets();
 	string ToString();
 };
 

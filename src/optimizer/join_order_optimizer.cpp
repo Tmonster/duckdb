@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include "iostream"
-
 #include <algorithm>
 namespace duckdb {
 
@@ -291,15 +289,6 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	}
 	UpdateJoinNodesInFullPlan(node->left);
 	UpdateJoinNodesInFullPlan(node->right);
-}
-
-bool TrulyDifferent(JoinNode *plan_a, JoinNode *plan_b) {
-	auto plan_a_left = plan_a->left;
-	auto plan_a_right = plan_a->right;
-	auto plan_b_left = plan_b->left;
-	auto plan_b_right = plan_b->right;
-	return ((plan_a_left == plan_b_left && plan_a_right == plan_b_right) ||
-	        (plan_a_left == plan_b_right && plan_a_right == plan_b_left));
 }
 
 JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right,
