@@ -202,12 +202,13 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 	bool done = false;
 	bool found_match = false;
 
-	// finding the right denominator is tricky. You need to go through the tdoms in decreasing order
-	// Then loop through all filters that have that tdom and see if both the left and right relations are
-	// in the new set, if so you can use that filter.
-	// You must also make sure that the filters are eventually connected however, so we need to keep track of
-	// the graph of filters via our subgraphs variable, which employs a set of relations, and the tdoms that
-	// they encompass.
+	// Finding the denominator is tricky. You need to go through the tdoms in decreasing order
+	// Then loop through all filters in the equivalence set of the tdom to see if both the
+	// left and right relations are in the new set, if so you can use that filter.
+	// You must also make sure that the filters all relations in the given set, so we use subgraphs
+	// that should eventually merge into one connected graph that joins all the relations
+	// TODO: Don't implement a method to cache subgraphs so you don't have to build them up every
+	// time the cardinality of a new set is requested
 
 	// relations_to_tdoms has already been sorted.
 	for (auto &relation_2_tdom : relations_to_tdoms) {
@@ -386,7 +387,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		ColumnBinding key = ColumnBinding(relation_id, column);
 
 		// TODO: Go through table filters and find if there is a direct filter
-		//  on a join filter
+		//  on a column used in a join
 		if (catalog_table) {
 			relation_attributes[relation_id].original_name = catalog_table->name;
 			// Get HLL stats here
