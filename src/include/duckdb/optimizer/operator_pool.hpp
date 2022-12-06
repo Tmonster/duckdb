@@ -16,13 +16,13 @@ namespace duckdb {
 class OperatorPool {
 public:
 	OperatorPool() {
-		seen_operators = unordered_set<unique_ptr<LogicalOperator>>();
+		seen_operators = unordered_set<idx_t>();
 	}
 
-	unique_ptr<LogicalOperator> AddOperator(unique_ptr<LogicalOperator> op);
-	bool InPool(unique_ptr<LogicalOperator> op);
+	void AddOperator(LogicalOperator *op);
+	bool InPool(LogicalOperator *op);
 
 private:
-	unordered_set<unique_ptr<LogicalOperator>> seen_operators;
+	unordered_set<idx_t> seen_operators;
 };
 }

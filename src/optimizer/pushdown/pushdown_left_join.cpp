@@ -8,6 +8,8 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
@@ -120,6 +122,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	});
 	right_pushdown.GenerateFilters();
+
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return FinishPushdown(move(op));
