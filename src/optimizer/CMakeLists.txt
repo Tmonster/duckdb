@@ -17,7 +17,6 @@ add_library_unity(
   filter_pushdown.cpp
   filter_pullup.cpp
   in_clause_rewriter.cpp
-  cardinality_estimator.cpp
   optimizer.cpp
   expression_rewriter.cpp
   regex_range_filter.cpp

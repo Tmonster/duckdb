@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_optimizer_join_order
   OBJECT
   query_graph.cpp
+  cardinality_estimator.cpp
   join_relation_set.cpp
   join_node.cpp
   estimated_properties.cpp
