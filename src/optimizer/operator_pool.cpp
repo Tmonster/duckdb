@@ -6,14 +6,13 @@
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> OperatorPool::AddOperator(unique_ptr<LogicalOperator> op) {
+void OperatorPool::AddOperator(LogicalOperator *op) {
 	D_ASSERT(!InPool(op));
-	seen_operators.insert(op);
-	return move(op);
+	seen_operators.insert((idx_t)op);
 }
 
-bool OperatorPool::InPool(unique_ptr<LogicalOperator> op) {
-	auto it = seen_operators.find(op);
+bool OperatorPool::InPool(LogicalOperator *op) {
+	auto it = seen_operators.find((idx_t)op);
 	return it != seen_operators.end();
 }
 
