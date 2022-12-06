@@ -6,20 +6,23 @@
 //
 //===----------------------------------------------------------------------===//
 
+#pragma once
+
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/unordered_set.hpp"
+
 namespace duckdb {
-
-struct LogicalOperatorIdentifier {
-	LogicalOperatorType type;
-	string name;
-
-};
 
 class OperatorPool {
 public:
-	void AddOperator(unique_ptr<LogicalOperator> op);
+	OperatorPool() {
+		seen_operators = unordered_set<unique_ptr<LogicalOperator>>();
+	}
+
+	unique_ptr<LogicalOperator> AddOperator(unique_ptr<LogicalOperator> op);
 	bool InPool(unique_ptr<LogicalOperator> op);
 
 private:
-	unordered_set<LogicalOperatorIdentifier> seen_operators;
+	unordered_set<unique_ptr<LogicalOperator>> seen_operators;
 };
 }

@@ -11,6 +11,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/optimizer/operator_pool.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,7 @@ public:
 private:
 	vector<unique_ptr<Filter>> filters;
 	Optimizer &optimizer;
+	OperatorPool seen_operators;
 
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
