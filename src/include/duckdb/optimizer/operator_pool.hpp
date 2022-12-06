@@ -21,6 +21,7 @@ public:
 
 	void AddOperator(LogicalOperator *op);
 	bool InPool(LogicalOperator *op);
+	void EmptyOperatorPool();
 
 private:
 	unordered_set<idx_t> seen_operators;

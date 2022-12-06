@@ -125,6 +125,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
+	// Need to add the operators here because they are optimized with different
+	// filter_pushdown objects (i.e. left_pushdown and right_pushdown)
 	return FinishPushdown(move(op));
 }
 

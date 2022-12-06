@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/optimizer/operator_pool.hpp"
 
 #include <functional>
 
@@ -24,11 +25,16 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
+
+
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
+	OperatorPool seen_operators;
 
 private:
+
+
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
 

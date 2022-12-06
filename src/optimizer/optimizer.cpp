@@ -26,7 +26,8 @@
 
 namespace duckdb {
 
-Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
+Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context),
+seen_operators() {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
@@ -60,6 +61,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 	profiler.StartPhase(OptimizerTypeToString(type));
 	callback();
 	profiler.EndPhase();
+	seen_operators.EmptyOperatorPool();
 	if (plan) {
 		Verify(*plan);
 	}
