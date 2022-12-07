@@ -26,8 +26,8 @@
 
 namespace duckdb {
 
-Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context),
-seen_operators() {
+Optimizer::Optimizer(Binder &binder, ClientContext &context)
+    : context(context), binder(binder), rewriter(context), seen_operators() {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
@@ -76,9 +76,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	this->plan = move(plan_p);
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
-	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {
-		rewriter.VisitOperator(*plan);
-	});
+	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
 
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {

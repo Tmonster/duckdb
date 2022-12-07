@@ -25,16 +25,12 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-
-
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
 	OperatorPool seen_operators;
 
 private:
-
-
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
 

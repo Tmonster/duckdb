@@ -20,4 +20,4 @@ void OperatorPool::EmptyOperatorPool() {
 	seen_operators.clear();
 }
 
-}
+} // namespace duckdb
