@@ -8,8 +8,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;

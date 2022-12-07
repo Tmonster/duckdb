@@ -5,8 +5,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
