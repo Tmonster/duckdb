@@ -16,4 +16,8 @@ bool OperatorPool::InPool(LogicalOperator *op) {
 	return it != seen_operators.end();
 }
 
+void OperatorPool::EmptyOperatorPool() {
+	seen_operators.clear();
 }
+
+} // namespace duckdb

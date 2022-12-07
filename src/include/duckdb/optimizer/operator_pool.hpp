@@ -25,4 +25,4 @@ public:
 private:
 	unordered_set<idx_t> seen_operators;
 };
-}
+} // namespace duckdb
