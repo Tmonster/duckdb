@@ -19,7 +19,7 @@ public:
 		seen_operators = unordered_set<idx_t>();
 	}
 
-	void AddOperator(LogicalOperator *op);
+	void CheckNotOptimized(LogicalOperator *op);
 	bool InPool(LogicalOperator *op);
 
 private:

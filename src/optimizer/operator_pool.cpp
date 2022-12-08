@@ -6,9 +6,11 @@
 
 namespace duckdb {
 
-void OperatorPool::AddOperator(LogicalOperator *op) {
+void OperatorPool::CheckNotOptimized(LogicalOperator *op) {
 	D_ASSERT(!InPool(op));
+#ifdef DEBUG
 	seen_operators.insert((idx_t)op);
+#endif
 }
 
 bool OperatorPool::InPool(LogicalOperator *op) {
