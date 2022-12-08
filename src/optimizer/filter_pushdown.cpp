@@ -13,16 +13,8 @@ FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), see
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
-<<<<<<< HEAD
-	if (seen_operators.InPool(op.get())) {
-		// We've already optimized this operator, so just return.
-		return move(op);
-	}
-	seen_operators.AddOperator(op.get());
-=======
 	// throws error in debug if operator has already been optimized with the current optimizer.
 	optimizer.seen_operators.CheckNotOptimized(op.get());
->>>>>>> ea15a377ae (add operator pool to throw error in debug when reoptimizing a operator)
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:

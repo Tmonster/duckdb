@@ -1,7 +1,3 @@
-//
-// Created by Tom Ebergen on 06/12/2022.
-//
-
 #include "duckdb/optimizer/operator_pool.hpp"
 
 namespace duckdb {
