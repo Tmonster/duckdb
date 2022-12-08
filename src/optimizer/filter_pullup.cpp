@@ -4,7 +4,6 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op) {
-	optimizer.seen_operators.CheckNotOptimized(op.get());
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 		return PullupFilter(move(op));

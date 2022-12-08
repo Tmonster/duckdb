@@ -107,7 +107,6 @@ void DeliminatorPlanUpdater::VisitExpression(unique_ptr<Expression> *expression)
 }
 
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
-	optimizer.seen_operators.CheckNotOptimized(op.get());
 	vector<unique_ptr<LogicalOperator> *> candidates;
 	FindCandidates(&op, candidates);
 
