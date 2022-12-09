@@ -1,4 +1,4 @@
-#include "duckdb/storage/table/row_group_collection.hpp"
+ #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"

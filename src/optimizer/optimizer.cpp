@@ -61,6 +61,8 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 	profiler.StartPhase(OptimizerTypeToString(type));
 	callback();
 	profiler.EndPhase();
+	seen_operators.EmptyOperatorPool();
+
 	if (plan) {
 		Verify(*plan);
 	}
@@ -68,6 +70,10 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 
 void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
+}
+
+void Optimizer::AssertNotOptimized(LogicalOperator *op) {
+	seen_operators.AssertNotInPool(op);
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {

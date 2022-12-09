@@ -10,12 +10,12 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 FilterPushdown::FilterPushdown(Optimizer &optimizer)
-    : optimizer(optimizer), seen_operators(), combiner(optimizer.context) {
+    : optimizer(optimizer), combiner(optimizer.context) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	// throws error in debug if operator has already been optimized with the current optimizer.
-	optimizer.seen_operators.CheckNotOptimized(op.get());
+	optimizer.AssertNotOptimized(op.get());
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:

@@ -19,8 +19,9 @@ public:
 		seen_operators = unordered_set<idx_t>();
 	}
 
-	void CheckNotOptimized(LogicalOperator *op);
+	void AssertNotInPool(LogicalOperator *op);
 	bool InPool(LogicalOperator *op);
+	void EmptyOperatorPool();
 
 private:
 	unordered_set<idx_t> seen_operators;

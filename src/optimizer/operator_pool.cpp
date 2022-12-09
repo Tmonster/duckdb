@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-void OperatorPool::CheckNotOptimized(LogicalOperator *op) {
+void OperatorPool::AssertNotInPool(LogicalOperator *op) {
 	D_ASSERT(!InPool(op));
 #ifdef DEBUG
 	seen_operators.insert((idx_t)op);
