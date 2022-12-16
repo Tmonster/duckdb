@@ -26,6 +26,7 @@ public:
 
 	void ReplaceElement();
 
+
 	//! The random generator
 	RandomEngine random;
 	//! Priority queue of [random element, index] for each of the elements in the sample
@@ -52,7 +53,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
-	virtual unique_ptr<DataChunk> GetChunk() = 0;
+	virtual unique_ptr<DataChunk> GetChunkAt(idx_t i) = 0;
 
 protected:
 	//! The reservoir sampling
@@ -70,7 +71,9 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunk() override;
+	//! made this no longer destructive.
+	unique_ptr<DataChunk> GetChunkAt(idx_t i) override;
+	idx_t ChunkCount();
 
 private:
 	//! Replace a single element of the input
@@ -83,7 +86,7 @@ private:
 	//! The size of the reservoir sample
 	idx_t sample_count;
 	//! The current reservoir
-	ColumnDataCollection reservoir;
+	vector<Vector> reservoir;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
@@ -98,7 +101,8 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunk() override;
+	unique_ptr<DataChunk> GetChunkAt(idx_t i) override;
+	idx_t ChunkCount();
 
 private:
 	void Finalize();

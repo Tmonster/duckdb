@@ -39,23 +39,43 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSample::GetChunk() {
+unique_ptr<DataChunk> ReservoirSample::GetChunkAt(idx_t i) {
 	//? what chunk here
-
+	unique_ptr<DataChunk> chunk;
+	reservoir.FetchChunk(i, *chunk);
+	return chunk;
 }
+
+/*
+ * void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
+	// replace the entry in the reservoir
+	// 8. The item in R with the minimum key is replaced by item vi
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		reservoir.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
+    	chunks[LocateChunk(base_reservoir_sample.min_entry)]->SetValue(col_idx, base_reservoir_sample.min_entry % STANDARD_VECTOR_SIZE, input.GetValue(...));
+	}
+	base_reservoir_sample.ReplaceElement();
+}
+ */
+
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
-	for (auto &row : reservoir.Rows()) {
-		if (row.row_index == index_in_chunk) {
+	idx_t index = base_reservoir_sample.min_entry;
+	idx_t result = index / STANDARD_VECTOR_SIZE;
+	// result is now the chunk that needs to be inserted into
+	D_ASSERT(result < reservoir.ChunkCount());
+	idx_t chunk_index = 0;
+	for (auto &chunk : reservoir.Chunks()) {
+		if (chunk_index == result) {
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-				row.chunk.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
+				chunk.SetValue(col_idx, index, input.GetValue(col_idx, index_in_chunk));
 			}
+			break;
 		}
+		chunk_index += 1;
 	}
-
-	base_reservoir_sample.ReplaceElement();
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
@@ -139,18 +159,28 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
+idx_t ReservoirSample::ChunkCount() {
+	return reservoir.ChunkCount();
+}
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAt(idx_t i) {
 	if (!is_finalized) {
 		Finalize();
 	}
-	while (!finished_samples.empty()) {
-		auto &front = finished_samples.front();
-		auto chunk = front->GetChunk();
+	auto finished_samples_index = 0;
+	auto num_chunks_seen = 0;
+	while (finished_samples_index < finished_samples.size()) {
+		auto front = finished_samples.at(finished_samples_index).get();
+		while (i > num_chunks_seen + front->ChunkCount()) {
+			num_chunks_seen += front->ChunkCount();
+			finished_samples_index += 1;
+			front = finished_samples.at(finished_samples_index).get();
+		}
+		auto chunk = front->GetChunkAt(i);
 		if (chunk && chunk->size() > 0) {
 			return chunk;
 		}
 		// move to the next sample
-		finished_samples.erase(finished_samples.begin());
 	}
 	return nullptr;
 }
@@ -161,15 +191,18 @@ void ReservoirSamplePercentage::Finalize() {
 		// create a new sample
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
-		while (true) {
-			auto chunk = current_sample->GetChunk();
+		auto chunk_num = 0;
+		while (chunk_num < current_sample->ChunkCount()) {
+			auto chunk = current_sample->GetChunkAt(chunk_num);
 			if (!chunk || chunk->size() == 0) {
 				break;
 			}
 			new_sample->AddToReservoir(*chunk);
+			chunk_num += 1;
 		}
 		finished_samples.push_back(move(new_sample));
 	}
+	// do something to delete all of the samples
 	is_finalized = true;
 }
 
