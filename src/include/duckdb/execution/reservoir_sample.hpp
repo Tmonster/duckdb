@@ -31,13 +31,14 @@ public:
 	//! Priority queue of [random element, index] for each of the elements in the sample
 	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
 	//! The next element to sample
-	idx_t next_index;
+	idx_t next_index_to_sample;
 	//! The reservoir threshold of the current min entry
-	double min_threshold;
+	double min_weight_threshold;
 	//! The reservoir index of the current min entry
-	idx_t min_entry;
+	idx_t min_weighted_entry;
 	//! The current count towards next index (i.e. we will replace an entry in next_index - current_count tuples)
-	idx_t current_count;
+	//! The number of entries "seen" before choosing one that will go in our reservoir sample.
+	idx_t num_seen_entries;
 };
 
 class BlockingSample {
@@ -52,7 +53,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
-	virtual unique_ptr<DataChunk> GetChunk() = 0;
+	virtual void GetChunk() = 0;
 
 protected:
 	//! The reservoir sampling
@@ -70,20 +71,24 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunk() override;
+	void GetChunk() override;
 
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk);
-
+	idx_t SamplesInReservoir();
+	void ReservoirMergeChunk(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
 private:
+	idx_t num_added_samples;
 	//! The size of the reservoir sample
 	idx_t sample_count;
+	vector<LogicalType> types;
 	//! The current reservoir
-	ChunkCollection reservoir;
+	vector<Vector> reservoir;
+	DataChunk reservoir_dchunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
@@ -113,7 +118,7 @@ private:
 	unique_ptr<ReservoirSample> current_sample;
 	//! The set of finished samples of the reservoir sample
 	vector<unique_ptr<ReservoirSample>> finished_samples;
-	//! The amount of tuples that have been processed so far
+	//! The amount of tuples that have been processed so far (I think this means seen).
 	idx_t current_count = 0;
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
 	bool is_finalized;
