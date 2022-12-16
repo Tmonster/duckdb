@@ -15,20 +15,20 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
 	// first we need to check if the reservoir already has "m" elements
-	if (reservoir.Count() < sample_count) {
+	if (num_added_samples < sample_count) {
 		if (FillReservoir(input) == 0) {
 			// entire chunk was consumed by reservoir
 			return;
 		}
 	}
-	// find the position of next_index relative to current_count
+	// find the position of next_index_to_sample relative to number of seen entries (num_seen_entries)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset = base_reservoir_sample.next_index - base_reservoir_sample.current_count;
+		idx_t offset = base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_seen_entries;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
-			base_reservoir_sample.current_count += remaining;
+			base_reservoir_sample.num_seen_entries += remaining;
 			return;
 		}
 		// in this chunk! replace the element
@@ -39,17 +39,59 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	return reservoir.Fetch();
+void ReservoirSample::GetChunk() {
+	//TODO: The calling functions need to be updated because maybe we don't want to delete everything?
+	return make_unique<DataChunk>(reservoir);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		reservoir.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
+		// TODO: Make this vectorized in some way. IDK how yet.
+		reservoir_dchunk.SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement();
+}
+
+idx_t ReservoirSample::SamplesInReservoir() {
+	return num_added_samples;
+}
+
+
+void ReservoirSample::ReservoirMergeChunk(DataChunk &input) {
+	if (input.size() == 0) {
+		return;
+	}
+	input.Verify();
+	D_ASSERT(types.size() == input.ColumnCount());
+	auto new_types = input.GetTypes();
+	for (idx_t i = 0; i < types.size(); i++) {
+		if (new_types[i] != types[i]) {
+			throw TypeMismatchException(new_types[i], types[i], "Reservoir Sampler type mismatch when combining rows");
+		}
+		// TODO: handel this
+		if (types[i].InternalType() == PhysicalType::LIST) {
+			// need to check all the chunks because they can have only-null list entries
+//			for (auto &chunk : chunks) {
+//				auto &chunk_vec = chunk->data[i];
+//				auto &new_vec = new_chunk.data[i];
+//				auto &chunk_type = chunk_vec.GetType();
+//				auto &new_type = new_vec.GetType();
+//				if (chunk_type != new_type) {
+//					throw TypeMismatchException(chunk_type, new_type, "Type mismatch when combining lists");
+//				}
+//			}
+		}
+		// TODO check structs, too
+	}
+	for (idx_t i = 0; i < new_types.size(); i++) {
+		D_ASSERT(reservoir[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(input.data[i], reservoir[i], input.size(), num_added_samples, input.size());
+	}
+	num_added_samples += input.size();
+	D_ASSERT(num_added_samples <= sample_count);
+
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
@@ -58,18 +100,21 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 
 	// we have not: append to the reservoir
 	idx_t required_count;
-	if (reservoir.Count() + chunk_count >= sample_count) {
+	idx_t added_samples = SamplesInReservoir();
+	if (added_samples + chunk_count >= sample_count) {
 		// have to limit the count of the chunk
-		required_count = sample_count - reservoir.Count();
+		required_count = sample_count - added_samples;
 	} else {
 		// we copy the entire chunk
 		required_count = chunk_count;
 	}
 	// instead of copying we just change the pointer in the current chunk
 	input.SetCardinality(required_count);
-	reservoir.Append(input);
+	// TODO: here we need to fix how data is appended
+//	ReservoirMergeChunk(input);
+	reservoir_dchunk.Append(input, false);
 
-	base_reservoir_sample.InitializeReservoir(reservoir.Count(), sample_count);
+	base_reservoir_sample.InitializeReservoir(SamplesInReservoir(), sample_count);
 
 	// check if there are still elements remaining
 	// this happens if we are on a boundary
@@ -168,10 +213,10 @@ void ReservoirSamplePercentage::Finalize() {
 }
 
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
-	next_index = 0;
-	min_threshold = 0;
-	min_entry = 0;
-	current_count = 0;
+	next_index_to_sample = 0;
+	min_weight_threshold = 0;
+	min_weighted_entry = 0;
+	num_seen_entries = 0;
 }
 
 BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(-1) {
@@ -201,10 +246,10 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! 5. From the current item vc skip items until item vi , such that:
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
-	min_threshold = t_w;
-	min_entry = min_key.second;
-	next_index = MaxValue<idx_t>(1, idx_t(round(x_w)));
-	current_count = 0;
+	min_weight_threshold = t_w;
+	min_weighted_entry = min_key.second;
+	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
+	num_seen_entries = 0;
 }
 
 void BaseReservoirSampling::ReplaceElement() {
@@ -214,10 +259,10 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! now update the reservoir
 	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
 	//! 9. The new threshold Tw is the new minimum key of R
-	//! we generate a random number between (min_threshold, 1)
-	double r2 = random.NextRandom(min_threshold, 1);
+	//! we generate a random number between (min_weight_threshold, 1)
+	double r2 = random.NextRandom(min_weight_threshold, 1);
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_entry));
+	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry));
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }
