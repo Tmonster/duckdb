@@ -40,15 +40,21 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	return reservoir.Fetch();
+	//? what chunk here
+
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
-	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		reservoir.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
+	for (auto &row : reservoir.Rows()) {
+		if (row.row_index == index_in_chunk) {
+			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+				row.chunk.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
+			}
+		}
 	}
+
 	base_reservoir_sample.ReplaceElement();
 }
 

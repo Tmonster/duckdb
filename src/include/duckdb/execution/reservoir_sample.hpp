@@ -83,7 +83,7 @@ private:
 	//! The size of the reservoir sample
 	idx_t sample_count;
 	//! The current reservoir
-	ChunkCollection reservoir;
+	ColumnDataCollection reservoir;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
