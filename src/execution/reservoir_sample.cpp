@@ -4,7 +4,7 @@
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), sample_count(sample_count), reservoir(allocator) {
+    : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count), reservoir_initialized(false) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -39,9 +39,37 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void ReservoirSample::GetChunk() {
+
+
+
+
+unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	//TODO: The calling functions need to be updated because maybe we don't want to delete everything?
-	return make_unique<DataChunk>(reservoir);
+	if (num_added_samples == 0) {
+		return nullptr;
+	}
+
+	if (reservoir_dchunk->size() > STANDARD_VECTOR_SIZE) {
+		// get from the back
+		auto ret = make_unique<DataChunk>();
+		auto samples_remaining = num_added_samples - STANDARD_VECTOR_SIZE;
+		auto reservoir_types = reservoir_dchunk->GetTypes();
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		for (idx_t i = samples_remaining; i < num_added_samples; i++) {
+			sel.set_index(i - samples_remaining, i);
+		}
+		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
+		reservoir_dchunk->Slice(*ret, sel, STANDARD_VECTOR_SIZE);
+		ret->SetCardinality(STANDARD_VECTOR_SIZE);
+		// reduce capacity and cardinality of the sample data chunk
+		reservoir_dchunk->SetCardinality(samples_remaining);
+		reservoir_dchunk->SetCapacity(samples_remaining);
+		num_added_samples = samples_remaining;
+		return ret;
+
+	}
+	num_added_samples = 0;
+	return move(reservoir_dchunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
@@ -49,7 +77,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// 8. The item in R with the minimum key is replaced by item vi
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		// TODO: Make this vectorized in some way. IDK how yet.
-		reservoir_dchunk.SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
+		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement();
 }
@@ -58,66 +86,41 @@ idx_t ReservoirSample::SamplesInReservoir() {
 	return num_added_samples;
 }
 
-
-void ReservoirSample::ReservoirMergeChunk(DataChunk &input) {
-	if (input.size() == 0) {
-		return;
-	}
-	input.Verify();
-	D_ASSERT(types.size() == input.ColumnCount());
-	auto new_types = input.GetTypes();
-	for (idx_t i = 0; i < types.size(); i++) {
-		if (new_types[i] != types[i]) {
-			throw TypeMismatchException(new_types[i], types[i], "Reservoir Sampler type mismatch when combining rows");
-		}
-		// TODO: handel this
-		if (types[i].InternalType() == PhysicalType::LIST) {
-			// need to check all the chunks because they can have only-null list entries
-//			for (auto &chunk : chunks) {
-//				auto &chunk_vec = chunk->data[i];
-//				auto &new_vec = new_chunk.data[i];
-//				auto &chunk_type = chunk_vec.GetType();
-//				auto &new_type = new_vec.GetType();
-//				if (chunk_type != new_type) {
-//					throw TypeMismatchException(chunk_type, new_type, "Type mismatch when combining lists");
-//				}
-//			}
-		}
-		// TODO check structs, too
-	}
-	for (idx_t i = 0; i < new_types.size(); i++) {
-		D_ASSERT(reservoir[i].GetVectorType() == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(input.data[i], reservoir[i], input.size(), num_added_samples, input.size());
-	}
-	num_added_samples += input.size();
-	D_ASSERT(num_added_samples <= sample_count);
-
+void ReservoirSample::InitializeReservoir(DataChunk &input) {
+	reservoir_dchunk = make_unique<DataChunk>();
+	reservoir_dchunk->Initialize(allocator, input.GetTypes(), sample_count);
+	reservoir_initialized = true;
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
 	input.Flatten();
+	D_ASSERT(num_added_samples <= sample_count);
 
 	// we have not: append to the reservoir
 	idx_t required_count;
-	idx_t added_samples = SamplesInReservoir();
-	if (added_samples + chunk_count >= sample_count) {
+	if (num_added_samples + chunk_count >= sample_count) {
 		// have to limit the count of the chunk
-		required_count = sample_count - added_samples;
+		required_count = sample_count - num_added_samples;
 	} else {
 		// we copy the entire chunk
 		required_count = chunk_count;
 	}
-	// instead of copying we just change the pointer in the current chunk
 	input.SetCardinality(required_count);
-	// TODO: here we need to fix how data is appended
-//	ReservoirMergeChunk(input);
-	reservoir_dchunk.Append(input, false);
 
-	base_reservoir_sample.InitializeReservoir(SamplesInReservoir(), sample_count);
+	// initialize the reservoir
+	if (!reservoir_initialized) {
+		InitializeReservoir(input);
+	}
+	reservoir_dchunk->Append(input, false, nullptr, required_count);
+	base_reservoir_sample.InitializeReservoir(reservoir_dchunk->size(), sample_count);
 
-	// check if there are still elements remaining
-	// this happens if we are on a boundary
+	num_added_samples += required_count;
+	reservoir_dchunk->SetCardinality(num_added_samples);
+
+
+	// check if there are still elements remaining in the Input data chunk that should be
+	// randomly sampled and potentially added. This happens if we are on a boundary
 	// for example, input.size() is 1024, but our sample size is 10
 	if (required_count == chunk_count) {
 		// we are done here
