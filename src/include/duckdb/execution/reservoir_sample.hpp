@@ -53,7 +53,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
-	virtual void GetChunk() = 0;
+	virtual unique_ptr<DataChunk> GetChunk() = 0;
 
 protected:
 	//! The reservoir sampling
@@ -71,24 +71,24 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	void GetChunk() override;
+	unique_ptr<DataChunk> GetChunk() override;
 
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk);
+	void InitializeReservoir(DataChunk &input);
 	idx_t SamplesInReservoir();
-	void ReservoirMergeChunk(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
 private:
+	Allocator &allocator;
 	idx_t num_added_samples;
 	//! The size of the reservoir sample
 	idx_t sample_count;
-	vector<LogicalType> types;
+	bool reservoir_initialized;
 	//! The current reservoir
-	vector<Vector> reservoir;
-	DataChunk reservoir_dchunk;
+	unique_ptr<DataChunk> reservoir_dchunk ;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size

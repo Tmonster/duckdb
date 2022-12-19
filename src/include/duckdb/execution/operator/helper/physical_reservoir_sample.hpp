@@ -13,7 +13,9 @@
 
 namespace duckdb {
 
-//! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
+//! PhysicalReservoirSample represents a sample taken using reservoir sampling,
+//! which is a blocking sampling method
+
 class PhysicalReservoirSample : public PhysicalOperator {
 public:
 	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
