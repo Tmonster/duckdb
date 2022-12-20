@@ -86,7 +86,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 //	}
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		// TODO: Make this vectorized in some way. IDK how yet.
-		reservoir_dchunk->SetValue(col_idx, replacing_index, input.GetValue(col_idx, index_in_chunk));
+		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
 	}
 //	std::cout << "done replacing" << std::endl;
 	base_reservoir_sample.ReplaceElement();
