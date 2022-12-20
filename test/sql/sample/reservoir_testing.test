@@ -10,9 +10,6 @@ CALL dbgen(sf=0.1);
 statement ok
 PRAGMA enable_verification;
 
-statement ok
-PRAGMA threads=1;
-
 query I
 SELECT COUNT(*) FROM lineitem USING SAMPLE 4096 ROWS
 ----

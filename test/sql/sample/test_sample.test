@@ -32,6 +32,8 @@ SELECT COUNT(*) FROM test USING SAMPLE 3
 ----
 3
 
+
+
 # sample size exceeds input
 query I
 SELECT COUNT(*) FROM test USING SAMPLE 10
