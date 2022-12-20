@@ -1,6 +1,7 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/pair.hpp"
 
+#include "iostream"
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
@@ -63,7 +64,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		reservoir_dchunk->SetCardinality(samples_remaining);
-		reservoir_dchunk->SetCapacity(samples_remaining);
+//		reservoir_dchunk->SetCapacity(samples_remaining);
 		num_added_samples = samples_remaining;
 		return ret;
 
@@ -74,11 +75,20 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
-	// 8. The item in R with the minimum key is replaced by item vi
+	// 8. The item in R with the minimum key is replaced by item
+	D_ASSERT(input.ColumnCount() == reservoir_dchunk->ColumnCount());
+//	std::cout << "replacing element at " << base_reservoir_sample.min_weighted_entry << std::endl;
+//	std::cout << "index_in_chunk = " << index_in_chunk << std::endl;
+
+//	auto replacing_index = base_reservoir_sample.min_weighted_entry;
+//	if (replacing_index >= 2048) {
+//		replacing_index = 2000;
+//	}
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		// TODO: Make this vectorized in some way. IDK how yet.
-		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
+		reservoir_dchunk->SetValue(col_idx, replacing_index, input.GetValue(col_idx, index_in_chunk));
 	}
+//	std::cout << "done replacing" << std::endl;
 	base_reservoir_sample.ReplaceElement();
 }
 
