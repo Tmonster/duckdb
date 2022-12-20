@@ -80,23 +80,11 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// 8. The item in R with the minimum key is replaced by item
 	D_ASSERT(input.ColumnCount() == reservoir_dchunk->ColumnCount());
 	D_ASSERT(reservoir_dchunk->GetCapacity() == sample_count);
-	std::cout << "replacing element at " << base_reservoir_sample.min_weighted_entry << std::endl;
-	std::cout << "index_in_chunk = " << index_in_chunk << std::endl;
-
-//	auto replacing_index = base_reservoir_sample.min_weighted_entry;
-//	if (replacing_index >= 2048) {
-//		replacing_index = 2000;
-//	}
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		D_ASSERT(reservoir_dchunk->GetCapacity() == sample_count);
 		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
 	}
-	std::cout << "done replacing" << std::endl;
 	base_reservoir_sample.ReplaceElement();
-}
-
-idx_t ReservoirSample::SamplesInReservoir() {
-	return num_added_samples;
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -219,16 +207,7 @@ void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
 	if (current_count > 0) {
 		// create a new sample
-		auto new_sample_size = idx_t(round(sample_percentage * current_count));
-		auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
-		while (true) {
-			auto chunk = current_sample->GetChunk();
-			if (!chunk || chunk->size() == 0) {
-				break;
-			}
-			new_sample->AddToReservoir(*chunk);
-		}
-		finished_samples.push_back(move(new_sample));
+		finished_samples.push_back(move(current_sample));
 	}
 	is_finalized = true;
 }
