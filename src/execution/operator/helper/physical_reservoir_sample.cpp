@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -43,10 +45,19 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
 	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
+	if (input.size() == 0) {
+		std::cout << "received input of size 0" << std::endl;
+	}
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.sample->AddToReservoir(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
+
+void PhysicalReservoirSample::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
+	std::cout << "physical reservoir sample combine called" << std::endl;
+}
+
+
 
 //===--------------------------------------------------------------------===//
 // Source
