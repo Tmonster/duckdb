@@ -65,6 +65,13 @@ SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
 ----
 5
 
+
+# sample on a larger data set over RESERVOIR_THRESHOLD = 100000
+query I
+SELECT COUNT(*) FROM range(1000000) USING SAMPLE 100000
+----
+100000
+
 # test sample with multiple columns
 # we insert the same data in the entire column
 statement ok
