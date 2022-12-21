@@ -11,6 +11,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/optimizer/operator_pool.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,9 @@ private:
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively
 	// pushing down into its children (if any)
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
+	// This function is used when child operations are optimized with an optimizer that has
+	// should only
+	unique_ptr<LogicalOperator> FinishPushdownNoChildOptimization(unique_ptr<LogicalOperator> op);
 	//! Adds a filter to the set of filters. Returns FilterResult::UNSATISFIABLE if the subtree should be stripped, or
 	//! FilterResult::SUCCESS otherwise
 	FilterResult AddFilter(unique_ptr<Expression> expr);

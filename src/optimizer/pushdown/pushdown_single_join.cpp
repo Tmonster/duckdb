@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 	}
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
-	return FinishPushdown(move(op));
+	return FinishPushdownNoChildOptimization(move(op));
 }
 
 } // namespace duckdb

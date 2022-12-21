@@ -111,5 +111,3 @@ left join t5 ttt7 on (ttt6.c6=ttt7.c7)
 inner join t3 on (t2.c2=t3.c1)
 left join t4 tt4 on (t47.c1=tt4.c3)
 left join t4 tt5 on (tt4.c4=tt5.c5);
-
-result I
