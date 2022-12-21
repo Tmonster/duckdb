@@ -87,7 +87,7 @@ private:
 	idx_t sample_count;
 	bool reservoir_initialized;
 	//! The current reservoir
-	unique_ptr<DataChunk> reservoir_dchunk ;
+	unique_ptr<DataChunk> reservoir_dchunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size

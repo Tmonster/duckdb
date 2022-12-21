@@ -5,7 +5,8 @@
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count), reservoir_initialized(false) {
+    : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count),
+      reservoir_initialized(false) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -42,12 +43,8 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-
-
-
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	//TODO: The calling functions need to be updated because maybe we don't want to delete everything?
+	// TODO: The calling functions need to be updated because maybe we don't want to delete everything?
 	if (num_added_samples == 0) {
 		return nullptr;
 	}
@@ -66,10 +63,9 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		reservoir_dchunk->SetCardinality(samples_remaining);
-//		reservoir_dchunk->SetCapacity(samples_remaining);
+		//		reservoir_dchunk->SetCapacity(samples_remaining);
 		num_added_samples = samples_remaining;
 		return ret;
-
 	}
 	num_added_samples = 0;
 	return move(reservoir_dchunk);
@@ -82,7 +78,8 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	D_ASSERT(reservoir_dchunk->GetCapacity() == sample_count);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		D_ASSERT(reservoir_dchunk->GetCapacity() == sample_count);
-		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry, input.GetValue(col_idx, index_in_chunk));
+		reservoir_dchunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry,
+		                           input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement();
 }
@@ -122,7 +119,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	num_added_samples += required_count;
 	D_ASSERT(reservoir_dchunk->GetCapacity() == sample_count);
 	reservoir_dchunk->SetCardinality(num_added_samples);
-
 
 	// check if there are still elements remaining in the Input data chunk that should be
 	// randomly sampled and potentially added. This happens if we are on a boundary
@@ -203,7 +199,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	return nullptr;
 }
 
-//if (current_count > 0) {
+// if (current_count > 0) {
 //	// create a new sample
 //	auto new_sample_size = idx_t(round(sample_percentage * current_count));
 //	auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
@@ -215,8 +211,8 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 //		new_sample->AddToReservoir(*chunk);
 //	}
 //	finished_samples.push_back(move(new_sample));
-//}
-//is_finalized = true;
+// }
+// is_finalized = true;
 
 void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
@@ -227,7 +223,8 @@ void ReservoirSamplePercentage::Finalize() {
 	// otherwise we can just push the current sample back
 	// Imagine sampling 70% of 100 rows (so 70 rows). We allocate sample_percentage * RESERVOIR_THRESHOLD
 	// -----------------------------------------
-	auto sampled_more_than_required = current_count < sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
+	auto sampled_more_than_required =
+	    current_count < sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
 	if (current_count > 0 && sampled_more_than_required) {
 		// create a new sample
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));

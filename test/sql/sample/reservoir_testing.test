@@ -1,4 +1,4 @@
-# name: test/sql/sample/test_sample.test
+# name: test/sql/sample/reservoir_testing.test
 # description: Test SAMPLE keyword
 # group: [sample]
 
