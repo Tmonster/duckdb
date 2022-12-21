@@ -203,10 +203,44 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	return nullptr;
 }
 
+//if (current_count > 0) {
+//	// create a new sample
+//	auto new_sample_size = idx_t(round(sample_percentage * current_count));
+//	auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
+//	while (true) {
+//		auto chunk = current_sample->GetChunk();
+//		if (!chunk || chunk->size() == 0) {
+//			break;
+//		}
+//		new_sample->AddToReservoir(*chunk);
+//	}
+//	finished_samples.push_back(move(new_sample));
+//}
+//is_finalized = true;
+
 void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
-	if (current_count > 0) {
+	// we are finializing, so we are starting to return chunks. Our last chunk has
+	// sample_percentage * RESERVOIR_THRESHOLD entries that hold samples.
+	// if our current count is less than the sample_percentage * RESERVOIR_THRESHOLD
+	// then we have sampled too much for the current_sample and we need to redo the sample
+	// otherwise we can just push the current sample back
+	// Imagine sampling 70% of 100 rows (so 70 rows). We allocate sample_percentage * RESERVOIR_THRESHOLD
+	// -----------------------------------------
+	auto sampled_more_than_required = current_count < sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
+	if (current_count > 0 && sampled_more_than_required) {
 		// create a new sample
+		auto new_sample_size = idx_t(round(sample_percentage * current_count));
+		auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
+		while (true) {
+			auto chunk = current_sample->GetChunk();
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+			new_sample->AddToReservoir(*chunk);
+		}
+		finished_samples.push_back(move(new_sample));
+	} else {
 		finished_samples.push_back(move(current_sample));
 	}
 	is_finalized = true;

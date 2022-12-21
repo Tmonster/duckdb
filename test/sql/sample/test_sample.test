@@ -131,6 +131,8 @@ endloop
 # specify as sample_size, with reservoir sampling this should give us an exact count (i.e. always 10)
 loop i 0 10
 
+
+
 query I
 select count(*) from range(100) using sample 10% (reservoir)
 ----
