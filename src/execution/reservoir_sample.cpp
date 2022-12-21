@@ -1,7 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/pair.hpp"
 
-#include "iostream"
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
