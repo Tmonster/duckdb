@@ -45,8 +45,6 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/common/http_stats.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 struct ActiveQueryContext {
@@ -786,7 +784,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
-	std::cout << "running query " << query << std::endl;
+
 	PreservedError error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {

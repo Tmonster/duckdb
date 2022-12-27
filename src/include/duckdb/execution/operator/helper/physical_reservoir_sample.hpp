@@ -44,8 +44,6 @@ public:
 		return true;
 	}
 
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
-
 	string ParamsToString() const override;
 };
 
