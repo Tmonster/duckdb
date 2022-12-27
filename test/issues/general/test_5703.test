@@ -1,0 +1,7 @@
+# name: test/issues/general/test_5703.test
+# description: Issue 5703: INTERNAL Error when using UNLIST
+# group: [general]
+
+
+statement ok
+select unnest([5]) as r, sum(r) OVER ();
