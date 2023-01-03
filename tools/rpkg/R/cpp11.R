@@ -100,6 +100,10 @@ rapi_rel_set_diff <- function(rel_a, rel_b) {
   .Call(`_duckdb_rapi_rel_set_diff`, rel_a, rel_b)
 }
 
+rapi_rel_set_symdiff <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_symdiff`, rel_a, rel_b)
+}
+
 rapi_rel_limit <- function(rel, n) {
   .Call(`_duckdb_rapi_rel_limit`, rel, n)
 }

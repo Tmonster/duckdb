@@ -244,6 +244,17 @@ rel_set_intersect <- rapi_rel_set_intersect
 #' rel_set_diff(rel_a, rel_b)
 rel_set_diff <- rapi_rel_set_diff
 
+#' SET SYMDIFF on two DuckDB relation objects
+#' @param rel_a a DuckDB relation object
+#' @param rel_b a DuckDB relation object
+#' @return a new `duckdb_relation` object resulting from the SYMDIFF
+#' @noRd
+#' @examples
+#' rel_a <- rel_from_df(con, mtcars)
+#' rel_b <- rel_from_df(con, mtcars)
+#' rel_set_symdiff(rel_a, rel_b)
+rel_set_symdiff <- rapi_rel_set_symdiff
+
 #' Lazily compute a distinct result on a DuckDB relation object
 #' @param rel the input DuckDB relation object
 #' @return a new `duckdb_relation` object with distinct rows

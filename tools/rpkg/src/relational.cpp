@@ -286,6 +286,15 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
+[[cpp11::register]] SEXP rapi_rel_set_symdiff(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
+	// implementing symetric difference like so
+	// A symdiff B = (A except B) UNION (B except A)
+	auto a_except_b = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::EXCEPT);
+	auto b_except_a = std::make_shared<SetOpRelation>(rel_b->rel, rel_a->rel, SetOperationType::EXCEPT);
+	auto symdiff = std::make_shared<SetOpRelation>(a_except_b, b_except_a, SetOperationType::UNION);
+	return make_external<RelationWrapper>("duckdb_relation", symdiff);
+}
+
 [[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
 	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
 }
