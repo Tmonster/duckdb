@@ -176,6 +176,29 @@ test_that("Full join returns all outer relations", {
     expect_equal(rel_df, expected_result)
 })
 
+test_that("Set Intersect returns set intersection", {
+    test_df_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
+    test_df_b <- rel_from_df(con, data.frame(a=c(1, 6), b=c(3, 8)))
+    rel <- rel_set_intersect(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expected_result <- data.frame(a=c(1), b=c(3))
+    expect_equal(rel_df, expected_result)
+})
+
+
+test_that("Set Diff returns the set difference", {
+    test_df_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
+    test_df_b <- rel_from_df(con, data.frame(a=c(1, 6), b=c(3, 8)))
+    rel <- rel_set_diff(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expected_result <- data.frame(a=c(2), b=c(4))
+    expect_equal(rel_df, expected_result)
+})
+
 
 test_that("Union all does not immediately materialize", {
     test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
