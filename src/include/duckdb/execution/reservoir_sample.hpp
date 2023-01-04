@@ -87,7 +87,7 @@ private:
 	idx_t sample_count;
 	bool reservoir_initialized;
 	//! The current reservoir
-	unique_ptr<DataChunk> reservoir_dchunk;
+	unique_ptr<DataChunk> reservoir_chunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
@@ -117,7 +117,7 @@ private:
 	unique_ptr<ReservoirSample> current_sample;
 	//! The set of finished samples of the reservoir sample
 	vector<unique_ptr<ReservoirSample>> finished_samples;
-	//! The amount of tuples that have been processed so far (I think this means seen).
+	//! The amount of tuples that have been processed so far (not put in the reservoir, just processed)
 	idx_t current_count = 0;
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
 	bool is_finalized;
