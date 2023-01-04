@@ -78,7 +78,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry,
-		                           input.GetValue(col_idx, index_in_chunk));
+		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement();
 }
