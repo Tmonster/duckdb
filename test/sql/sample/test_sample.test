@@ -32,8 +32,6 @@ SELECT COUNT(*) FROM test USING SAMPLE 3
 ----
 3
 
-
-
 # sample size exceeds input
 query I
 SELECT COUNT(*) FROM test USING SAMPLE 10
@@ -65,10 +63,9 @@ SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
 ----
 5
 
-
 # sample on a larger data set over RESERVOIR_THRESHOLD = 100000
 query I
-SELECT COUNT(*) FROM range(1000000) USING SAMPLE 100000
+SELECT COUNT(*) FROM range(1000000) USING SAMPLE 1000100
 ----
 100000
 
@@ -137,8 +134,6 @@ endloop
 
 # specify as sample_size, with reservoir sampling this should give us an exact count (i.e. always 10)
 loop i 0 10
-
-
 
 query I
 select count(*) from range(100) using sample 10% (reservoir)
