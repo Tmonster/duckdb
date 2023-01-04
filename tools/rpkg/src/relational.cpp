@@ -287,7 +287,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_set_symdiff(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
-	// implementing symetric difference like so
+	// symdiff implemented using the equation below
 	// A symdiff B = (A except B) UNION (B except A)
 	auto a_except_b = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::EXCEPT);
 	auto b_except_a = std::make_shared<SetOpRelation>(rel_b->rel, rel_a->rel, SetOperationType::EXCEPT);
