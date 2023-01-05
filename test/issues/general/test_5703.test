@@ -3,7 +3,7 @@
 # group: [general]
 
 statement ok
-select 5 as r, r as y, y as i;
+select unnest([5]) as r, sum(r) OVER ();
 
 
 mode skip
@@ -11,8 +11,11 @@ mode skip
 statement ok
 SELECT avg(0) c0, (SELECT c0 OFFSET 5);
 
-select unnest([5]) as r, sum(r) OVER ();
+statement ok
+select 5 as r, r as y, y;
 
 statement ok
 select unnest([5]) as r, r as y;
 
+statement ok
+select unnest([5, 5, 6, 6]) as a group by a;

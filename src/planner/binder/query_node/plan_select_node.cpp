@@ -68,18 +68,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(having);
 	}
 
-	if (!statement.windows.empty()) {
-		auto win = make_unique<LogicalWindow>(statement.window_index);
-		win->expressions = move(statement.windows);
-		// visit the window expressions
-		for (auto &expr : win->expressions) {
-			PlanSubqueries(&expr, &root);
-		}
-		D_ASSERT(!win->expressions.empty());
-		win->AddChild(move(root));
-		root = move(win);
-	}
-
 	if (statement.qualify) {
 		PlanSubqueries(&statement.qualify, &root);
 		auto qualify = make_unique<LogicalFilter>(move(statement.qualify));
@@ -100,6 +88,18 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(unnest);
 	}
 
+	if (!statement.windows.empty()) {
+		auto win = make_unique<LogicalWindow>(statement.window_index);
+		win->expressions = move(statement.windows);
+		// visit the window expressions
+		for (auto &expr : win->expressions) {
+			PlanSubqueries(&expr, &root);
+		}
+		D_ASSERT(!win->expressions.empty());
+		win->AddChild(move(root));
+		root = move(win);
+	}
+
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(&expr, &root);
 	}
@@ -109,6 +109,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	auto &projection = *proj;
 	proj->AddChild(move(root));
 	root = move(proj);
+
+	// HERE YOU NEED TO FIX root so a window over an unnest projection can work.
 
 	// finish the plan by handling the elements of the QueryNode
 	root = VisitQueryNode(statement, move(root));
@@ -125,6 +127,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		prune->AddChild(move(root));
 		root = move(prune);
 	}
+	std::cout << "leaving binder::plan_select_node" << std::endl;
 	return root;
 }
 

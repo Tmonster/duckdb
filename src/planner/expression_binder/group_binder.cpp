@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, idx_t group_index,
@@ -28,6 +30,8 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			break;
 		}
 	}
+	// is this where we get our window function?
+	std::cout << "group binder checking if there is a function" << std::endl;
 	switch (expr.expression_class) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
