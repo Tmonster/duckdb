@@ -341,7 +341,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
 
-	std::cout << "binding select operator" << std::endl;
+//	std::cout << "binding select operator" << std::endl;
 	// bind the sample clause
 	if (statement.sample) {
 		result->sample_options = move(statement.sample);
@@ -450,6 +450,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
+			std::cout << "binding and forcing aggregates" << std::endl;
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}

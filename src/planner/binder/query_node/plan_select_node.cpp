@@ -8,6 +8,8 @@
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
@@ -32,7 +34,21 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
+	if (!statement.unnests.empty()) {
+		std::cout << "planning unnest" << std::endl;
+		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
+		unnest->expressions = move(statement.unnests);
+		// visit the unnest expressions
+		for (auto &expr : unnest->expressions) {
+			PlanSubqueries(&expr, &root);
+		}
+		D_ASSERT(!unnest->expressions.empty());
+		unnest->AddChild(move(root));
+		root = move(unnest);
+	}
+
 	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty()) {
+		std::cout << "planning a group by" << std::endl;
 		if (!statement.groups.group_expressions.empty()) {
 			// visit the groups
 			for (auto &group : statement.groups.group_expressions) {
@@ -68,26 +84,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(having);
 	}
 
-	if (statement.qualify) {
-		PlanSubqueries(&statement.qualify, &root);
-		auto qualify = make_unique<LogicalFilter>(move(statement.qualify));
-
-		qualify->AddChild(move(root));
-		root = move(qualify);
-	}
-
-	if (!statement.unnests.empty()) {
-		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
-		unnest->expressions = move(statement.unnests);
-		// visit the unnest expressions
-		for (auto &expr : unnest->expressions) {
-			PlanSubqueries(&expr, &root);
-		}
-		D_ASSERT(!unnest->expressions.empty());
-		unnest->AddChild(move(root));
-		root = move(unnest);
-	}
-
 	if (!statement.windows.empty()) {
 		auto win = make_unique<LogicalWindow>(statement.window_index);
 		win->expressions = move(statement.windows);
@@ -100,6 +96,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(win);
 	}
 
+	if (statement.qualify) {
+		PlanSubqueries(&statement.qualify, &root);
+		auto qualify = make_unique<LogicalFilter>(move(statement.qualify));
+
+		qualify->AddChild(move(root));
+		root = move(qualify);
+	}
+
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(&expr, &root);
 	}
@@ -109,6 +113,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	auto &projection = *proj;
 	proj->AddChild(move(root));
 	root = move(proj);
+	root->Print();
 
 	// HERE YOU NEED TO FIX root so a window over an unnest projection can work.
 
@@ -127,7 +132,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		prune->AddChild(move(root));
 		root = move(prune);
 	}
-	std::cout << "leaving binder::plan_select_node" << std::endl;
+//	std::cout << "leaving binder::plan_select_node" << std::endl;
 	return root;
 }
 

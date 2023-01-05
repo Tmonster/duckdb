@@ -3,7 +3,29 @@
 # group: [general]
 
 statement ok
+CREATE TABLE foo AS SELECT 'a, b, c' AS "x", '1' AS y;
+
+statement ok
+select unnest([5]) as r, unnest([8]) as w GROUP BY ALL ;
+
+mode skip
+
+statement ok
+SELECT y, UNLIST(string_split("x", ', ')) x, COUNT(*) FROM foo GROUP BY ALL;
+
+statement ok
+SELECT y, UNLIST(string_split("x", ', ')) x, COUNT(*) FROM foo GROUP BY y, x;
+
+statement ok
 select unnest([5]) as r, sum(r) OVER ();
+
+
+
+
+mode skip
+
+
+
 
 
 mode skip
@@ -14,8 +36,7 @@ SELECT avg(0) c0, (SELECT c0 OFFSET 5);
 statement ok
 select 5 as r, r as y, y;
 
-statement ok
-select unnest([5]) as r, r as y;
+
 
 statement ok
 select unnest([5, 5, 6, 6]) as a group by a;

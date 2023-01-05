@@ -14,6 +14,7 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -378,7 +379,8 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	return result_expression;
 }
 
-void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
+void Binder::
+    PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
 	if (!*expr_ptr) {
 		return;
 	}
@@ -389,6 +391,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 
 	// check if this is a subquery node
 	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
+		std::cout << "planning a subquery" << std::endl;
 		auto &subquery = (BoundSubqueryExpression &)expr;
 		// subquery node! plan it
 		if (subquery.IsCorrelated() && !plan_subquery) {
