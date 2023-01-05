@@ -38,10 +38,12 @@ PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
 
+	std::cout << "going to start creating the plan" << std::endl;
 	// first resolve column references
 	profiler.StartPhase("column_binding");
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
+	op->Print();
 	profiler.EndPhase();
 
 	// now resolve types of all the operators
@@ -57,6 +59,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.StartPhase("create_plan");
 	auto plan = CreatePlan(*op);
 	profiler.EndPhase();
+	std::cout << "ok now at end of create plan" << std::endl;
 
 	plan->Verify();
 	return plan;

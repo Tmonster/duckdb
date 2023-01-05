@@ -21,6 +21,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -340,6 +341,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
 
+	std::cout << "binding select operator" << std::endl;
 	// bind the sample clause
 	if (statement.sample) {
 		result->sample_options = move(statement.sample);

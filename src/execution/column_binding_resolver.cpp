@@ -10,6 +10,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 ColumnBindingResolver::ColumnBindingResolver() {
@@ -62,11 +64,15 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 	// general case
 	// first visit the children of this operator
+	std::cout << "visiting children of op " << LogicalOperatorToString(op.type) << std::endl;
 	VisitOperatorChildren(op);
 	// now visit the expressions of this operator to resolve any bound column references
+	std::cout << "visiting op expressions of  " << LogicalOperatorToString(op.type) << std::endl;
 	VisitOperatorExpressions(op);
+	std::cout << "dont visiting expressions of " << LogicalOperatorToString(op.type) << std::endl;
 	// finally update the current set of bindings to the current set of column bindings
 	bindings = op.GetColumnBindings();
+	std::cout << "dont getting column bindings of " << LogicalOperatorToString(op.type) << std::endl;
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
