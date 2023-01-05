@@ -32,6 +32,18 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
+	if (!statement.unnests.empty()) {
+		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
+		unnest->expressions = move(statement.unnests);
+		// visit the unnest expressions
+		for (auto &expr : unnest->expressions) {
+			PlanSubqueries(&expr, &root);
+		}
+		D_ASSERT(!unnest->expressions.empty());
+		unnest->AddChild(move(root));
+		root = move(unnest);
+	}
+
 	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty()) {
 		if (!statement.groups.group_expressions.empty()) {
 			// visit the groups
@@ -86,18 +98,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 
 		qualify->AddChild(move(root));
 		root = move(qualify);
-	}
-
-	if (!statement.unnests.empty()) {
-		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
-		unnest->expressions = move(statement.unnests);
-		// visit the unnest expressions
-		for (auto &expr : unnest->expressions) {
-			PlanSubqueries(&expr, &root);
-		}
-		D_ASSERT(!unnest->expressions.empty());
-		unnest->AddChild(move(root));
-		root = move(unnest);
 	}
 
 	for (auto &expr : statement.select_list) {
