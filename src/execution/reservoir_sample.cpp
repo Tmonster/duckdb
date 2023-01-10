@@ -42,10 +42,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-
-
-
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	// TODO: The calling functions need to be updated because maybe we don't want to delete everything?
 	if (num_added_samples == 0) {
