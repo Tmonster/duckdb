@@ -1,4 +1,4 @@
-# name: test/sql/sample/test_sample.test
+# name: test/sql/sample/reservoir_testing.test
 # description: Test SAMPLE keyword
 # group: [sample]
 
@@ -9,9 +9,6 @@ CALL dbgen(sf=0.1);
 
 statement ok
 PRAGMA enable_verification;
-
-statement ok
-PRAGMA threads=1;
 
 query I
 SELECT COUNT(*) FROM lineitem USING SAMPLE 4096 ROWS
