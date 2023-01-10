@@ -43,7 +43,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	// TODO: The calling functions need to be updated because maybe we don't want to delete everything?
 	if (num_added_samples == 0) {
 		return nullptr;
 	}
@@ -62,7 +61,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		reservoir_chunk->SetCardinality(samples_remaining);
-		//		reservoir_chunk->SetCapacity(samples_remaining);
 		num_added_samples = samples_remaining;
 		return ret;
 	}

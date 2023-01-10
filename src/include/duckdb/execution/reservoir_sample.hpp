@@ -95,7 +95,8 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
-	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
+	ReservoirSamplePercentage(Allocator
+	                              &allocator, double percentage, int64_t seed);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
