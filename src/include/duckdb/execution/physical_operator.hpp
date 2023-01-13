@@ -186,7 +186,8 @@ public:
 	// Sink interface
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
-	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
+	//! CAN be called in parallel, proper locking is needed when accessing dat
+	//!a inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	                            DataChunk &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
@@ -195,7 +196,7 @@ public:
 	virtual void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
+	//! If Finalize returns SinkResultType::Finished, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
 

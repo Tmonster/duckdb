@@ -12,6 +12,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
 		return;
 	}
+	base_reservoir_sample.num_entries_seen_total += input.size();
 	// Input: A population V of n weighted items
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
@@ -23,14 +24,14 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		}
 	}
 	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
-	// find the position of next_index_to_sample relative to number of seen entries (num_seen_entries)
+	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset = base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_seen_entries;
+		idx_t offset = base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
-			base_reservoir_sample.num_seen_entries += remaining;
+			base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
 		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
@@ -75,7 +76,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
-		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry,
+		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement();
@@ -144,6 +145,7 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
+	base_reservoir_sample.num_entries_seen_total += input.size();
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
 		// we don't have enough space in our current reservoir
 		// first check what we still need to append to the current sample
@@ -228,8 +230,9 @@ void ReservoirSamplePercentage::Finalize() {
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
 	next_index_to_sample = 0;
 	min_weight_threshold = 0;
-	min_weighted_entry = 0;
-	num_seen_entries = 0;
+	min_weighted_entry_index = 0;
+	num_entries_to_skip_b4_next_sample = 0;
+	num_entries_seen_total = 0;
 }
 
 BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(-1) {
@@ -260,9 +263,9 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
 	min_weight_threshold = t_w;
-	min_weighted_entry = min_key.second;
+	min_weighted_entry_index = min_key.second;
 	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
-	num_seen_entries = 0;
+	num_entries_to_skip_b4_next_sample = 0;
 }
 
 void BaseReservoirSampling::ReplaceElement() {
@@ -275,7 +278,7 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! we generate a random number between (min_weight_threshold, 1)
 	double r2 = random.NextRandom(min_weight_threshold, 1);
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry));
+	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry_index));
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }

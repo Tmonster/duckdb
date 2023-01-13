@@ -29,7 +29,7 @@ struct ReservoirQuantileState {
 	}
 
 	void ReplaceElement(T &input) {
-		v[r_samp->min_weighted_entry] = input;
+		v[r_samp->min_weighted_entry_index] = input;
 		r_samp->ReplaceElement();
 	}
 
@@ -38,8 +38,8 @@ struct ReservoirQuantileState {
 			v[pos++] = element;
 			r_samp->InitializeReservoir(pos, len);
 		} else {
-			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_seen_entries);
-			if (r_samp->next_index_to_sample == r_samp->num_seen_entries) {
+			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
+			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
 				ReplaceElement(element);
 			}
 		}

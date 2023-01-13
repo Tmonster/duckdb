@@ -35,10 +35,13 @@ public:
 	//! The reservoir threshold of the current min entry
 	double min_weight_threshold;
 	//! The reservoir index of the current min entry
-	idx_t min_weighted_entry;
+	idx_t min_weighted_entry_index;
 	//! The current count towards next index (i.e. we will replace an entry in next_index - current_count tuples)
 	//! The number of entries "seen" before choosing one that will go in our reservoir sample.
-	idx_t num_seen_entries;
+	idx_t num_entries_to_skip_b4_next_sample;
+	//! when collecting a sample in parallel, we want to know how many values each thread has seen
+	//! so we can collect the samples from the thread local states in a uniform manner
+	idx_t num_entries_seen_total;
 };
 
 class BlockingSample {
