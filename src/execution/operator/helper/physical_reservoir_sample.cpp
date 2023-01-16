@@ -36,14 +36,26 @@ public:
 class SampleGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SampleGlobalSinkState(Allocator &allocator, SampleOptions &options) {
-
+		if (options.is_percentage) {
+			auto percentage = options.sample_size.GetValue<double>();
+			if (percentage == 0) {
+				return;
+			}
+			sample = make_unique<ReservoirSamplePercentage>(allocator, percentage, options.seed);
+		} else {
+			auto size = options.sample_size.GetValue<int64_t>();
+			if (size == 0) {
+				return;
+			}
+			sample = make_unique<ReservoirSample>(allocator, size, options.seed);
+		}
 	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The reservoir sample
 	unique_ptr<BlockingSample> sample;
-	vector<unique_ptr<BlockingSample>> intermediate_samples;
+	vector<intermediate_sample_and_pop_count> intermediate_samples;
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {
@@ -76,23 +88,42 @@ void PhysicalReservoirSample::Combine(ExecutionContext &context, GlobalSinkState
 	auto &global_state = (SampleGlobalSinkState &)gstate;
 	auto &local_state = (SampleLocalSinkState &)lstate;
 	lock_guard<mutex> glock(global_state.lock);
-	global_state.intermediate_samples.push_back(move(local_state.sample));
+	global_state.intermediate_samples.push_back(intermediate_sample_and_pop_count(move(local_state.sample), 0));
 }
 
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
 	auto &global_state = (SampleGlobalSinkState &)gstate;
 	auto total_count = 0;
 	for (auto &sample : global_state.intermediate_samples) {
-		total_count += sample->base_reservoir_sample.num_entries_seen_total;
+		total_count += sample.isample->base_reservoir_sample.num_entries_seen_total;
 	}
-	for (auto &sample : global_state.intermediate_samples) {
+	idx_t sample_count;
+	if (options->is_percentage) {
+		auto percentage = options->sample_size.GetValue<double>();
+		sample_count = percentage * total_count;
+	} else {
+		auto size = options->sample_size.GetValue<int64_t>();
+		sample_count = size;
+	}
+
+	auto weights = vector<double>();
+	for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {
 		// get the proper amount of data for the sample.
 		// calculate sample_to_add, num_entries_seen_total / total_count
 		// Call sample->GetChunk until you get samples_to_add.
-		global_state.sample->AddToReservoir(sample->GetChunk());
+		auto &sample = global_state.intermediate_samples.at(i);
+		double fraction_of_samples_to_add = sample.isample->base_reservoir_sample.num_entries_seen_total / total_count;
+		sample.weight = fraction_of_samples_to_add;
 	}
-	global_state.sample = move(global_state.intermediate_samples.back());
-	global_state.intermediate_samples.pop_back();
+	for (idx_t j = 0; j < sample_count; j++) {
+		// generate random number in between 0 and sample_count
+		// check which sample should be popped from and increase the sample pop count
+	}
+	for (idx_t k = 0; k < global_state.intermediate_samples.size(); k++) {
+		// add chunks to the global sample until the pop count for the sample reaches 0
+	}
+
+	global_state.intermediate_samples.clear();
 	return SinkFinalizeType::READY;
 }
 

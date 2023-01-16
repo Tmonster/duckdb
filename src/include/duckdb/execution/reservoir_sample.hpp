@@ -15,6 +15,16 @@
 
 namespace duckdb {
 
+class BlockingSample;
+
+struct intermediate_sample_and_pop_count {
+	intermediate_sample_and_pop_count(unique_ptr<BlockingSample> isample, idx_t pop_count) :
+	      isample(move(isample)), pop_count(pop_count) {}
+	unique_ptr<BlockingSample> isample;
+	idx_t pop_count;
+	double weight = 0;
+};
+
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -53,6 +63,10 @@ public:
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
+
+	//! When collecting samples in parallel, merge samples to create
+	//! the final sample for the column
+	void Merge(unique_ptr<BlockingSample> &other, idx_t samples_to_merge);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.

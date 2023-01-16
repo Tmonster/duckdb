@@ -8,6 +8,11 @@ ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64
       reservoir_initialized(false) {
 }
 
+//void ReservoirSample::AddToReservoir(DataChunk &input, idx_t max_amount_to_add = STANDARD_VECTOR_SIZE) {
+//
+//}
+
+
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
 		return;
@@ -40,6 +45,20 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		// shift the chunk forward
 		remaining -= offset;
 		base_offset += offset;
+	}
+}
+
+void BlockingSample::Merge(unique_ptr<BlockingSample> &other, idx_t samples_to_merge) {
+	auto num_samples_merged = 0;
+	while (num_samples_merged < samples_to_merge) {
+		auto chunk = other->GetChunk();
+		if (chunk->size() + num_samples_merged > samples_to_merge) {
+			chunk->SetCardinality(num_samples_merged - chunk->size());
+			AddToReservoir(*chunk);
+			break;
+		}
+		num_samples_merged += chunk->size();
+		AddToReservoir(*chunk);
 	}
 }
 
