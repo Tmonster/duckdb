@@ -57,10 +57,10 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
-
+	BaseReservoirSampling base_reservoir_sample;
 protected:
 	//! The reservoir sampling
-	BaseReservoirSampling base_reservoir_sample;
+
 	RandomEngine &random;
 };
 

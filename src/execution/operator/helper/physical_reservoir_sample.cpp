@@ -81,6 +81,16 @@ void PhysicalReservoirSample::Combine(ExecutionContext &context, GlobalSinkState
 
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
 	auto &global_state = (SampleGlobalSinkState &)gstate;
+	auto total_count = 0;
+	for (auto &sample : global_state.intermediate_samples) {
+		total_count += sample->base_reservoir_sample.num_entries_seen_total;
+	}
+	for (auto &sample : global_state.intermediate_samples) {
+		// get the proper amount of data for the sample.
+		// calculate sample_to_add, num_entries_seen_total / total_count
+		// Call sample->GetChunk until you get samples_to_add.
+		global_state.sample->AddToReservoir(sample->GetChunk());
+	}
 	global_state.sample = move(global_state.intermediate_samples.back());
 	global_state.intermediate_samples.pop_back();
 	return SinkFinalizeType::READY;
