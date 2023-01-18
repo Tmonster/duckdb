@@ -15,16 +15,6 @@
 
 namespace duckdb {
 
-class BlockingSample;
-
-struct intermediate_sample_and_pop_count {
-	intermediate_sample_and_pop_count(unique_ptr<BlockingSample> isample, idx_t pop_count) :
-	      isample(move(isample)), pop_count(pop_count) {}
-	unique_ptr<BlockingSample> isample;
-	idx_t pop_count;
-	double weight = 0;
-};
-
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -34,7 +24,7 @@ public:
 
 	void SetNextEntry();
 
-	void ReplaceElement();
+	void ReplaceElement(double with_weight = -1);
 
 	//! The random generator
 	RandomEngine random;
@@ -64,9 +54,7 @@ public:
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
-	//! When collecting samples in parallel, merge samples to create
-	//! the final sample for the column
-	void Merge(unique_ptr<BlockingSample> &other, idx_t samples_to_merge);
+	virtual void Merge(unique_ptr<BlockingSample> &other) = 0;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
@@ -86,13 +74,16 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
+	//! When collecting samples in parallel, merge samples to create a final sample for the column
+	void Merge(unique_ptr<BlockingSample> &other) override;
+
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 
 private:
 	//! Replace a single element of the input
-	void ReplaceElement(DataChunk &input, idx_t index_in_chunk);
+	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = 0);
 	void InitializeReservoir(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
@@ -117,6 +108,9 @@ public:
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
+
+	//! When collecting samples in parallel, merge samples to create a final sample for the column
+	void Merge(unique_ptr<BlockingSample> &other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.

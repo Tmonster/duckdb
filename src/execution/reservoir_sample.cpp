@@ -8,11 +8,6 @@ ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64
       reservoir_initialized(false) {
 }
 
-//void ReservoirSample::AddToReservoir(DataChunk &input, idx_t max_amount_to_add = STANDARD_VECTOR_SIZE) {
-//
-//}
-
-
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
 		return;
@@ -48,18 +43,56 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void BlockingSample::Merge(unique_ptr<BlockingSample> &other, idx_t samples_to_merge) {
-	auto num_samples_merged = 0;
-	while (num_samples_merged < samples_to_merge) {
-		auto chunk = other->GetChunk();
-		if (chunk->size() + num_samples_merged > samples_to_merge) {
-			chunk->SetCardinality(num_samples_merged - chunk->size());
-			AddToReservoir(*chunk);
-			break;
-		}
-		num_samples_merged += chunk->size();
-		AddToReservoir(*chunk);
+void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
+	// 1. First pop pairs from other.base_reservoir_sample.reservoir_weights until
+	//    you have an element with a weight above the
+	auto &other_as_rs = (ReservoirSample&)*other;
+	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+	other->base_reservoir_sample.reservoir_weights.pop();
+	while (min_weight_other.first < other->base_reservoir_sample.min_weight_threshold) {
+		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+		other->base_reservoir_sample.reservoir_weights.pop();
 	}
+
+	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
+	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
+		return;
+	}
+
+	// 3. All entries in other can now go into this.reservoir sample
+	ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
+	while (other->base_reservoir_sample.reservoir_weights.size() > 0) {
+		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+		other->base_reservoir_sample.reservoir_weights.pop();
+		// replace element in reservoir chunk with the weight from the other reservoir chunk
+		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
+	}
+}
+
+void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
+//	// 1. First pop pairs from other.base_reservoir_sample.reservoir_weights until
+//	//    you have an element with a weight above the
+//	auto &other_as_rsp = (ReservoirSamplePercentage&)*other;
+//	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+//	other->base_reservoir_sample.reservoir_weights.pop();
+//	while (min_weight_other.first < other->base_reservoir_sample.min_weight_threshold) {
+//		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+//		other->base_reservoir_sample.reservoir_weights.pop();
+//	}
+//
+//	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
+//	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
+//		return;
+//	}
+
+	// 3. All entries in other can now go into this.reservoir sample
+//	ReplaceElement(*other_as_rsp.reservoir_chunk, min_weight_other.second, min_weight_other.first);
+//	while (other->base_reservoir_sample.reservoir_weights.size() > 0) {
+//		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+//		other->base_reservoir_sample.reservoir_weights.pop();
+//		// replace element in reservoir chunk with the weight from the other reservoir chunk
+//		ReplaceElement(*other_as_rsp.reservoir_chunk, min_weight_other.second, min_weight_other.first);
+//	}
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
@@ -88,7 +121,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	return move(reservoir_chunk);
 }
 
-void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
+void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
@@ -98,7 +131,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
-	base_reservoir_sample.ReplaceElement();
+	base_reservoir_sample.ReplaceElement(with_weight);
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -287,7 +320,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
-void BaseReservoirSampling::ReplaceElement() {
+void BaseReservoirSampling::ReplaceElement(double with_weight) {
 	//! replace the entry in the reservoir
 	//! pop the minimum entry
 	reservoir_weights.pop();
@@ -296,6 +329,11 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! 9. The new threshold Tw is the new minimum key of R
 	//! we generate a random number between (min_weight_threshold, 1)
 	double r2 = random.NextRandom(min_weight_threshold, 1);
+
+	//! if we are merging two reservoir samples use the weight passed
+	if (with_weight >= 0) {
+		r2 = with_weight;
+	}
 	//! now we insert the new weight into the reservoir
 	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry_index));
 	//! we update the min entry with the new min entry in the reservoir
