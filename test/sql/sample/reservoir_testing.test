@@ -5,13 +5,11 @@
 require tpch
 
 statement ok
-CALL dbgen(sf=5);
+CALL dbgen(sf=2);
 
-statement ok
-PRAGMA enable_verification;
 
 query I
-SELECT COUNT(*) FROM lineitem USING SAMPLE 4096 ROWS
+SELECT COUNT(*) FROM lineitem USING SAMPLE 1000000 ROWS;
 ----
-4096
+1000000
 

@@ -26,9 +26,6 @@ public:
 			sample = make_unique<ReservoirSample>(allocator, size, options.seed);
 		}
 	}
-
-	//! The lock for updating the global aggregate state
-	mutex lock;
 	//! The reservoir sample
 	unique_ptr<BlockingSample> sample;
 };
@@ -68,14 +65,11 @@ unique_ptr<LocalSinkState> PhysicalReservoirSample::GetLocalSinkState(ExecutionC
 
 SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                              DataChunk &input) const {
+
 	auto &local_state = (SampleLocalSinkState &)lstate;
 	if (!local_state.sample) {
 		return SinkResultType::FINISHED;
 	}
-	// here we add samples to local state, then we eventually combine them in the global state using Combine()
-	// Why am I confused?
-	// When do I know when a thread collects no more data?
-	// Is there a way to know how much data a thread will eventually collect?
 
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.

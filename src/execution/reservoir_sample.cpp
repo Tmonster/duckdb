@@ -1,5 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/pair.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -48,25 +49,39 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 	//    you have an element with a weight above the
 	auto &other_as_rs = (ReservoirSample&)*other;
 	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-	other->base_reservoir_sample.reservoir_weights.pop();
-	while (min_weight_other.first < other->base_reservoir_sample.min_weight_threshold) {
-		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+	// need to remember indexes of samples you want to replace
+	vector<std::pair<double, idx_t>> temporary_queue;
+	idx_t samples_to_replace = 0;
+	while (samples_to_replace < other->base_reservoir_sample.reservoir_weights.size()) {
+		while ((-1 * min_weight_other.first) < base_reservoir_sample.min_weight_threshold) {
+			other->base_reservoir_sample.reservoir_weights.pop();
+			min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
+		}
+		samples_to_replace += 1;
+		temporary_queue.push_back(base_reservoir_sample.reservoir_weights.top());
+		base_reservoir_sample.reservoir_weights.pop();
+		base_reservoir_sample.min_weight_threshold = base_reservoir_sample.reservoir_weights.top().first * -1;
 		other->base_reservoir_sample.reservoir_weights.pop();
+		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
 	}
+
 
 	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
 	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
 		return;
 	}
 
+	idx_t replaced_element_count = 0;
 	// 3. All entries in other can now go into this.reservoir sample
-	ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-	while (other->base_reservoir_sample.reservoir_weights.size() > 0) {
+	for (auto &weight_pair : temporary_queue) {
 		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
 		other->base_reservoir_sample.reservoir_weights.pop();
+		base_reservoir_sample.min_weighted_entry_index = weight_pair.second;
 		// replace element in reservoir chunk with the weight from the other reservoir chunk
 		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
+		replaced_element_count++;
 	}
+//	std::cout << "replaced_element_count = " << replaced_element_count << ", percetage = " << double(replaced_element_count) / (double) base_reservoir_sample.num_entries_seen_total << std::endl;
 }
 
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {

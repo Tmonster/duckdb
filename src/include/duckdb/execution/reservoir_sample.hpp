@@ -83,7 +83,7 @@ public:
 
 private:
 	//! Replace a single element of the input
-	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = 0);
+	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
 	void InitializeReservoir(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
