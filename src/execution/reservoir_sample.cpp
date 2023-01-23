@@ -84,32 +84,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 //	std::cout << "replaced_element_count = " << replaced_element_count << ", percetage = " << double(replaced_element_count) / (double) base_reservoir_sample.num_entries_seen_total << std::endl;
 }
 
-void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
-//	// 1. First pop pairs from other.base_reservoir_sample.reservoir_weights until
-//	//    you have an element with a weight above the
-//	auto &other_as_rsp = (ReservoirSamplePercentage&)*other;
-//	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-//	other->base_reservoir_sample.reservoir_weights.pop();
-//	while (min_weight_other.first < other->base_reservoir_sample.min_weight_threshold) {
-//		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-//		other->base_reservoir_sample.reservoir_weights.pop();
-//	}
-//
-//	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
-//	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
-//		return;
-//	}
-
-	// 3. All entries in other can now go into this.reservoir sample
-//	ReplaceElement(*other_as_rsp.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-//	while (other->base_reservoir_sample.reservoir_weights.size() > 0) {
-//		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-//		other->base_reservoir_sample.reservoir_weights.pop();
-//		// replace element in reservoir chunk with the weight from the other reservoir chunk
-//		ReplaceElement(*other_as_rsp.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-//	}
-}
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (num_added_samples == 0) {
 		return nullptr;
@@ -147,6 +121,10 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement(with_weight);
+}
+
+void ReservoirSample::Finalize() {
+	return;
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -209,6 +187,22 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
       is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+}
+
+void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
+	//! We are now merging all the samples. 80% of every sample should equal 80%
+	//! of all rows so we set sample percentage to 1, which will means every tuple
+	//! in the added chunks will be added
+
+	if (!is_finalized) {
+		Finalize();
+	}
+	sample_percentage = 1;
+	auto chunk = other->GetChunk();
+	while (chunk) {
+		AddToReservoir(*chunk);
+		chunk = other->GetChunk();
+	}
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {

@@ -56,14 +56,17 @@ public:
 
 	virtual void Merge(unique_ptr<BlockingSample> &other) = 0;
 
+	virtual void Finalize() = 0;
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	// sample is completely built.
+	//! sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
 	BaseReservoirSampling base_reservoir_sample;
+
+
 protected:
 	//! The reservoir sampling
-
 	RandomEngine &random;
+
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
@@ -80,6 +83,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
+	void Finalize() override;
 
 private:
 	//! Replace a single element of the input
@@ -115,9 +119,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
-
-private:
-	void Finalize();
+	void Finalize() override;
 
 private:
 	Allocator &allocator;
