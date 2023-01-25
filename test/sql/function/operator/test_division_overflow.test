@@ -5,6 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+
+statement ok
+select 1 / 0;
+----
+
 statement error
 SELECT (-128)::TINYINT / (-1)::TINYINT
 
