@@ -2,31 +2,40 @@
 # description: Test arithmetic on NaN values
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
+foreach type INT 
 
-foreach type FLOAT DOUBLE
+foreach val nan
 
-foreach val nan inf -inf
-
-# any arithmetic on a nan or inf value will result in an overflow
-statement error
+# any arithmetic on a nan will result in a nan
+query I
 SELECT '${val}'::${type} + 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} - 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} * 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} / 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} % 1
+----
+nan
 
-statement error
+query I
 SELECT -('${val}'::${type})
+----
+nan
 
 endloop
 

@@ -58,6 +58,8 @@ public:
 	//! Destructor
 	DUCKDB_API ~Value();
 
+	static double nan();
+
 	// copy assignment
 	DUCKDB_API Value &operator=(const Value &other);
 	// move assignment
@@ -565,6 +567,8 @@ template <>
 DUCKDB_API bool Value::IsNan(float input);
 template <>
 DUCKDB_API bool Value::IsNan(double input);
+template <>
+DUCKDB_API bool Value::IsNan(hugeint_t input);
 
 template <>
 DUCKDB_API bool Value::IsFinite(float input);

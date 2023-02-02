@@ -1041,6 +1041,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
           bool ZERO_INITIALIZE = true, char decimal_separator = '.'>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;

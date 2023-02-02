@@ -275,9 +275,16 @@ test_that("R semantics for arithmetics are respected", {
     test_df_b <- duckdb:::rel_from_df(con, data.frame(c=c(NaN, 6), d=c(3, 8)))
     cond <- list(expr_function("eq", list(expr_reference("b", test_df_a), expr_reference("d", test_df_b))))
     rel_join <- rel_join(test_df_a, test_df_b, cond, "inner")
-#     rel_df <- rel_to_altrep(rel_join)
-#     rel_df
     addition_expression <- duckdb:::expr_function("+", list(expr_reference("a"), expr_reference("c")))
     proj <- duckdb:::rel_project(rel_join, list(addition_expression))
-    duckdb:::rapi_rel_to_df(proj)
+    res = duckdb:::rapi_rel_to_df(proj)
+})
+
+
+test_that("R semantics for arithmetics are respected", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5, NaN)))
+    sum_rel <- duckdb:::rapi_expr_function("sum", list(expr_reference("a")))
+    ans <- duckdb:::rapi_rel_aggregate(test_df_a, list(), list(sum_rel))
+    res = duckdb:::rapi_rel_to_df(ans)
 })

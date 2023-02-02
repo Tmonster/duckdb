@@ -82,6 +82,10 @@ Value::Value(Value &&other) noexcept
       list_value(std::move(other.list_value)) {
 }
 
+double Value::nan() {
+	return std::nan("1");
+}
+
 Value &Value::operator=(const Value &other) {
 	type_ = other.type_;
 	is_null = other.is_null;
@@ -340,6 +344,11 @@ bool Value::IsNan(float input) {
 template <>
 bool Value::IsNan(double input) {
 	return std::isnan(input);
+}
+
+template <>
+bool Value::IsNan(hugeint_t input) {
+	return input == (Value::nan());
 }
 
 template <>

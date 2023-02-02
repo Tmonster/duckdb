@@ -383,3 +383,4 @@ query II
 SELECT '5'::HUGEINT <> '5'::HUGEINT, '5'::HUGEINT <> '18446744073709551621'::HUGEINT
 ----
 false	true
+

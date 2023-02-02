@@ -421,6 +421,9 @@ struct NegateOperator {
 
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
+		if (Value::IsNan(input)) {
+			return Value::nan();
+		}
 		auto cast = (TR)input;
 		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
@@ -802,6 +805,9 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float DivideOperator::Operation(float left, float right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	auto result = left / right;
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
@@ -811,6 +817,9 @@ float DivideOperator::Operation(float left, float right) {
 
 template <>
 double DivideOperator::Operation(double left, double right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	auto result = left / right;
 	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
@@ -820,6 +829,9 @@ double DivideOperator::Operation(double left, double right) {
 
 template <>
 hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	if (right.lower == 0 && right.upper == 0) {
 		throw InternalException("Hugeint division by zero!");
 	}
@@ -837,6 +849,7 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
 			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
 		} else if (right == 0) {
@@ -944,6 +957,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float ModuloOperator::Operation(float left, float right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	if (!Value::FloatIsFinite(result)) {
@@ -954,6 +970,9 @@ float ModuloOperator::Operation(float left, float right) {
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	if (!Value::DoubleIsFinite(result)) {
@@ -964,6 +983,9 @@ double ModuloOperator::Operation(double left, double right) {
 
 template <>
 hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	if (right.lower == 0 && right.upper == 0) {
 		throw InternalException("Hugeint division by zero!");
 	}

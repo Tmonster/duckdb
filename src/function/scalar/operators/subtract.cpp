@@ -14,6 +14,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float SubtractOperator::Operation(float left, float right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	auto result = left - right;
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in subtraction of float!");
@@ -23,6 +26,9 @@ float SubtractOperator::Operation(float left, float right) {
 
 template <>
 double SubtractOperator::Operation(double left, double right) {
+	if (Value::IsNan(left) || Value::IsNan(right)) {
+		return Value::nan();
+	}
 	auto result = left - right;
 	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in subtraction of double!");

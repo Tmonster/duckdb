@@ -190,6 +190,8 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		Execute((const BoundCaseExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CAST:
+		// at one point 'nan' needs to be cast as a decimal.
+		// because apparently that works.
 		Execute((const BoundCastExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
