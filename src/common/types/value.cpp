@@ -83,7 +83,8 @@ Value::Value(Value &&other) noexcept
 }
 
 double Value::nan() {
-	return std::nan("1");
+	// https://en.cppreference.com/w/cpp/numeric/math/nan
+	return std::nan("");
 }
 
 Value &Value::operator=(const Value &other) {
@@ -345,15 +346,6 @@ template <>
 bool Value::IsNan(double input) {
 	return std::isnan(input);
 }
-
-//template <>
-//bool Value::IsNan(hugeint_t input) {
-//	double result;
-//	if (Hugeint::TryCast(input, result)) {
-//		return std::isnan(result);
-//	}
-//	return false;
-//}
 
 template <>
 bool Value::IsFinite(float input) {

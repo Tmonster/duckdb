@@ -41,7 +41,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	}
 	if (!table.empty()) {
 		auto res = make_external<ColumnRefExpression>("duckdb_expr", name, table);
-//		res->alias = name; // TODO does this really make sense here?
+		res->alias = name; // TODO does this really make sense here?
 		return res;
 	} else {
 		return make_external<ColumnRefExpression>("duckdb_expr", name);
