@@ -346,10 +346,14 @@ bool Value::IsNan(double input) {
 	return std::isnan(input);
 }
 
-template <>
-bool Value::IsNan(hugeint_t input) {
-	return input == (Value::nan());
-}
+//template <>
+//bool Value::IsNan(hugeint_t input) {
+//	double result;
+//	if (Hugeint::TryCast(input, result)) {
+//		return std::isnan(result);
+//	}
+//	return false;
+//}
 
 template <>
 bool Value::IsFinite(float input) {

@@ -567,8 +567,8 @@ template <>
 DUCKDB_API bool Value::IsNan(float input);
 template <>
 DUCKDB_API bool Value::IsNan(double input);
-template <>
-DUCKDB_API bool Value::IsNan(hugeint_t input);
+//template <>
+//DUCKDB_API bool Value::IsNan(hugeint_t input);
 
 template <>
 DUCKDB_API bool Value::IsFinite(float input);

@@ -2,7 +2,7 @@
 # description: Test arithmetic on NaN values
 # group: [float]
 
-foreach type INT 
+foreach type FLOAT DOUBLE
 
 foreach val nan
 
@@ -40,3 +40,9 @@ nan
 endloop
 
 endloop
+
+
+query I
+SELECT ('nan'::DOUBLE) + 1::HUGEINT
+----
+nan
