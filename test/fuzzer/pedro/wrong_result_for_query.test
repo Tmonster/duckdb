@@ -1,0 +1,35 @@
+# name: test/fuzzer/pedro/natural_join_generated_heap_overflow.test
+# description: Issue #4675: Natural join with generated column heap overflow
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1),(2),(3);
+
+query I
+SELECT 1 FROM t1;
+----
+1
+1
+1
+
+mode skip
+
+query I
+SELECT 1 FROM t1 WHERE -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))
+----
+1
+
+mode unskip
+
+query I
+SELECT 1 FROM t1 WHERE NOT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)))
+----
+1
+
+query I
+SELECT 1 FROM t1 WHERE (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))) IS NULL
+----
+1
