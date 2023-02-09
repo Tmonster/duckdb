@@ -1,5 +1,5 @@
-# name: test/fuzzer/pedro/natural_join_generated_heap_overflow.test
-# description: Issue #4675: Natural join with generated column heap overflow
+# name: test/fuzzer/pedro/wrong_result_for_query.test
+# description: Issue #5982: Out of range errors
 # group: [pedro]
 
 statement ok
@@ -15,29 +15,28 @@ SELECT 1 FROM t1;
 1
 1
 
-mode skip
+statement error
+SELECT -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486));
+----
+Out of Range Error
 
-query I
+statement error
+SELECT NOT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)));
+----
+Out of Range Error
+
+statement error
 SELECT 1 FROM t1 WHERE -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))
 ----
-1
+Out of Range Error
 
-mode unskip
-
-# works
-query I
-SELECT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)))
-----
-0
-
-mode skip
-
-query I
-SELECT 1 FROM t1 WHERE NOT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)))
-----
-1
-
-query I
+statement error
 SELECT 1 FROM t1 WHERE (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))) IS NULL
 ----
-1
+Out of Range Error
+
+# check hugeint out of range
+statement error
+SELECT 1 FROM t1 WHERE (-170141183460469231731687303715884105728 >=  (89070581734562392861637894029983261872 - (-81070601725906838870049409685900843999)));
+----
+Out of Range Error

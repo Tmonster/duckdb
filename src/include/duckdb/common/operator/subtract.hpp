@@ -75,7 +75,6 @@ struct SubtractOperatorOverflowCheck {
 	DUCKDB_API static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TrySubtractOperator::Operation(left, right, result)) {
-			//This is where the error is thrown.
 			throw OutOfRangeException("Overflow in subtraction of %s (%d - %d)!", TypeIdToString(GetTypeId<TA>()), left,
 			                          right);
 		}
