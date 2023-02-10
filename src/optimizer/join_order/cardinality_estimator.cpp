@@ -8,6 +8,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -392,8 +393,11 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
 	TableCatalogEntry *catalog_table = nullptr;
 	auto get = GetLogicalGet(op);
+	D_ASSERT(node->set->count == 1);
 	if (get) {
 		catalog_table = GetCatalogTableEntry(get);
+		std::cout << "got catalog table for " << catalog_table->name << std::endl;
+		relation_to_table_name_ce[node->set->relations[0]] = catalog_table->name;
 	}
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.

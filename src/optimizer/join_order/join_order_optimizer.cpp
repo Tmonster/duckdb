@@ -174,6 +174,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
+
 		// Add binding information from the nonreorderable join to this relation.
 		for (idx_t it : bindings) {
 			cardinality_estimator.MergeBindings(it, relation_id, child_binding_maps);

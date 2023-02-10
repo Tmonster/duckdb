@@ -59,6 +59,10 @@ private:
 
 	CardinalityEstimator cardinality_estimator;
 
+	//! For debugging and checking which relation is what table
+	//! Also can help when debugging cardinality estimation
+	unordered_map<idx_t, string> relation_to_table_name;
+
 	bool full_plan_found;
 	bool must_update_full_plan;
 	unordered_set<std::string> join_nodes_in_full_plan;

@@ -1,0 +1,56 @@
+# name: test/fuzzer/pedro/logical_column_index_out_of_range.test
+# description: Issue #5984 (4): Logical column index 1 out of range during natural joins
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT, c2 INT);
+
+statement ok
+CREATE TABLE t2(c1 INT, c2 INT);
+
+mode output_result
+
+# t0
+# c1
+
+# t1
+# c0    c2
+
+# t2 ??
+# c1    c2
+
+# SELECT 1 FROM t1 t2(c1) NATURAL RIGHT JOIN t0, t2 t1(c0) WHERE t2.c2 >= c0;
+
+#  SQL Query
+#  SELECT t0.*, 5, t1.*, 8, t2.* FROM t1 t2(c1) NATURAL RIGHT JOIN t0,  t2 t1(c0);
+#  ================================================================================
+#  c1	5	c0	c2	8	c1	c2
+#  INTEGER	INTEGER	INTEGER	INTEGER	INTEGER	INTEGER	INTEGER
+#  [ Rows: 0]
+
+
+statement ok
+SELECT 1 FROM t1 t2(c1) NATURAL RIGHT JOIN t0, t2 t1(c0) WHERE t2.c2 = c0;
+
+mode skip
+
+#query II
+#SELECT t5.blah_blah, t5.na_na FROM t1 t5(blah_blah, na_na);
+#----
+
+# result
+# t5.blah_blah  t5.na_na
+
+#query II
+#SELECT t5.blah_blah, t5.na_na FROM t1 t5(blah_blah, na_na) NATURAL RIGHT JOIN t2;
+#----
+
+
+
+# WHERE t2.c2 >= c0;

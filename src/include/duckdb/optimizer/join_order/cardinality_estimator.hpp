@@ -68,6 +68,10 @@ private:
 
 	vector<RelationsToTDom> relations_to_tdoms;
 
+	//! For debugging and checking which relation is what table
+	//! Also can help when debugging cardinality estimation
+	unordered_map<idx_t, string> relation_to_table_name_ce;
+
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
