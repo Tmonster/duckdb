@@ -210,7 +210,11 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
 		auto actual_table = get->GetTable();
-		relation_to_table_name[relation_id] = actual_table->name;
+		if (actual_table) {
+			relation_to_table_name[relation_id] = actual_table->name;
+		} else {
+			relation_to_table_name[relation_id] = "LOGICAL GET " + std::to_string(get->table_index);
+		}
 		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
 		relations.push_back(std::move(relation));
 		return true;

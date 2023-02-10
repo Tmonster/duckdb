@@ -317,30 +317,27 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
-		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
-			auto child_left = join->children.at(0).get();
-			auto child_right = join->children.at(0).get();
-			auto left_get = GetLogicalGet(child_left, table_index);
-			auto right_get = GetLogicalGet(child_right, table_index);
-			if (left_get) {
-				get = left_get;
-			}
-			if (right_get) {
-				get = right_get;
-			}
-		}
-		break;
-	}
+//	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+//		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
+//		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
+//			auto child_left = join->children.at(0).get();
+//			auto child_right = join->children.at(0).get();
+//			auto left_get = GetLogicalGet(child_left, table_index);
+//			auto right_get = GetLogicalGet(child_right, table_index);
+//			if (left_get) {
+//				get = left_get;
+//			}
+//			if (right_get) {
+//				get = right_get;
+//			}
+//		}
+//		break;
+//	}
 	default:
 		// return null pointer, maybe there is no logical get under this child
 		break;
 	}
-	if (get && get->table_index == table_index) {
-		return get;
-	}
-	return nullptr;
+	return get;
 }
 
 void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
@@ -405,10 +402,10 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	TableCatalogEntry *catalog_table = nullptr;
 	auto get = GetLogicalGet(op, relation_id);
 	D_ASSERT(node->set->count == 1);
-	if (get) {
-		catalog_table = GetCatalogTableEntry(get);
-		std::cout << "got catalog table for " << catalog_table->name << std::endl;
-	}
+//	if (get) {
+//		catalog_table = GetCatalogTableEntry(get);
+//		std::cout << "got catalog table for " << catalog_table->name << std::endl;
+//	}
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.
 	unordered_set<idx_t>::iterator ite;
