@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -154,6 +155,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 		// Keep track of all of the filter bindings the new join order optimizer makes
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
+		vector<string> tables_names_in_nonreorderable_join;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
 			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
@@ -162,8 +164,15 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			// save the relation bindings from the optimized child. These later all get added to the
 			// parent cardinality_estimator relation column binding map.
 			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
+			// for debugging, copy the relation_to_table_name information.
+			for (auto &entry : optimizer.relation_to_table_name) {
+				tables_names_in_nonreorderable_join.push_back(entry.second);
+			}
 			child_bindings_it += 1;
 		}
+		// here you have to give the operator its own estimated props if it is a logical comparison join.
+		// this is to prevent the cardinality estimator from traversing into the logical operators
+
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations
 		// enumerate all base relations obtained from this join and add them to the relation mapping
@@ -200,7 +209,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
-		relation_to_table_name[table_index] = get->GetName();
+		auto actual_table = get->GetTable();
+		relation_to_table_name[relation_id] = actual_table->name;
 		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
 		relations.push_back(std::move(relation));
 		return true;
@@ -211,7 +221,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relations.size();
-		relation_to_table_name[get->table_index] = get->GetName();
+		relation_to_table_name[relations.size()] = "Logical Expression Get " + std::to_string(get->table_index);
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -220,6 +230,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto dummy_scan = (LogicalDummyScan *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[dummy_scan->table_index] = relations.size();
+		relation_to_table_name[relations.size()] = "Logical dummy scan " + dummy_scan->GetName();
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -231,6 +242,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[proj->table_index] = relations.size();
+		relation_to_table_name[relations.size()] = "logical projection " + std::to_string(proj->table_index);
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -970,6 +982,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			auto comparison = (BoundComparisonExpression *)filter.get();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
+			// Here, so left bindings extracts table_index 0 (which is technically correct, so that's fine)
+			// But relation 0 is non-reorderable and refers to tables 7 and 8.
 			ExtractBindings(*comparison->left, left_bindings);
 			ExtractBindings(*comparison->right, right_bindings);
 			GetColumnBinding(*comparison->left, filter_info->left_binding);
@@ -977,6 +991,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
+
+				// for some reason the filter_info table_index is 0, which is ambiguous since table_index 0 (or relation 0)
+				// comes from a non-reorderable join.
+
+				// right here, what happens with filter_info->left_set and left_bindings?
 				filter_info->left_set = set_manager.GetJoinRelation(left_bindings);
 				filter_info->right_set = set_manager.GetJoinRelation(right_bindings);
 				// we can only create a meaningful edge if the sets are not exactly the same
@@ -995,14 +1014,19 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 	}
 	// now use dynamic programming to figure out the optimal join order
-	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// First we initialize each of the single-node plans with themselves with their cardinalities. These are the leaf
+	// nodes of the join tree
+	// NOTE: we can just use the JoinRelationSet->set->ToString() here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	// NOTE: Non reorderable Joins can cause problems here.
 	vector<NodeOp> nodes_ops;
+	// somewhere here in the node_ops is where things go wrong. There are two relations, but if one is a non-reorderable
+	// join, then only one of the logical get operations are kept. Which one? IDK. but if we can store all relation operations
+	// then we can get to the bottom of this.
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		nodes_ops.emplace_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
+		nodes_ops.emplace_back(NodeOp(make_unique<JoinNode>(node, rel.op->estimated_cardinality), rel.op));
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);

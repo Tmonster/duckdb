@@ -305,23 +305,31 @@ static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
-static LogicalGet *GetLogicalGet(LogicalOperator *op) {
+static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index) {
 	LogicalGet *get = nullptr;
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		get = (LogicalGet *)op;
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
-		get = GetLogicalGet(op->children.at(0).get());
+		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		get = GetLogicalGet(op->children.at(0).get());
+		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
-			auto child = join->children.at(0).get();
-			get = GetLogicalGet(child);
+			auto child_left = join->children.at(0).get();
+			auto child_right = join->children.at(0).get();
+			auto left_get = GetLogicalGet(child_left, table_index);
+			auto right_get = GetLogicalGet(child_right, table_index);
+			if (left_get) {
+				get = left_get;
+			}
+			if (right_get) {
+				get = right_get;
+			}
 		}
 		break;
 	}
@@ -329,7 +337,10 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 		// return null pointer, maybe there is no logical get under this child
 		break;
 	}
-	return get;
+	if (get && get->table_index == table_index) {
+		return get;
+	}
+	return nullptr;
 }
 
 void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
@@ -392,12 +403,11 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	auto relation_id = node->set->relations[0];
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
 	TableCatalogEntry *catalog_table = nullptr;
-	auto get = GetLogicalGet(op);
+	auto get = GetLogicalGet(op, relation_id);
 	D_ASSERT(node->set->count == 1);
 	if (get) {
 		catalog_table = GetCatalogTableEntry(get);
 		std::cout << "got catalog table for " << catalog_table->name << std::endl;
-		relation_to_table_name_ce[node->set->relations[0]] = catalog_table->name;
 	}
 
 	//! Initialize the tdoms for all columns the relation uses in join conditions.
@@ -469,9 +479,9 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	}
 }
 
-TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
+TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op, idx_t table_index) {
 	// First check table filters
-	auto get = GetLogicalGet(op);
+	auto get = GetLogicalGet(op, table_index);
 	return get ? &get->table_filters : nullptr;
 }
 
@@ -533,9 +543,9 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	return cardinality_after_filters;
 }
 
-idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
+idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index) {
 	idx_t cardinality_after_filters = cardinality;
-	auto get = GetLogicalGet(op);
+	auto get = GetLogicalGet(op, table_index);
 	unique_ptr<BaseStatistics> column_statistics;
 	for (auto &it : table_filters->filters) {
 		column_statistics = nullptr;
@@ -566,15 +576,20 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 
 void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op) {
 	auto has_logical_filter = IsLogicalFilter(op);
-	auto table_filters = GetTableFilters(op);
+	D_ASSERT(node->set->count == 1);
+	auto relation_id = node->set->relations[0];
+	auto table_filters = GetTableFilters(op, relation_id);
 
 	auto card_after_filters = node->GetBaseTableCardinality();
 	if (table_filters) {
-		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
+		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters, relation_id);
 		card_after_filters = MinValue(inspect_result, (double)card_after_filters);
 	}
 	if (has_logical_filter) {
 		card_after_filters *= DEFAULT_SELECTIVITY;
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		// do stuff
 	}
 	node->SetEstimatedCardinality(card_after_filters);
 }
