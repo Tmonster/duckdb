@@ -42,6 +42,9 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
+	//! A mapping of relation number -> table name
+	//! Used for debugging
+	unordered_map<idx_t, string> relation_to_table_name;
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
@@ -58,10 +61,6 @@ private:
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	CardinalityEstimator cardinality_estimator;
-
-	//! For debugging and checking which relation is what table
-	//! Also can help when debugging cardinality estimation
-	unordered_map<idx_t, string> relation_to_table_name;
 
 	bool full_plan_found;
 	bool must_update_full_plan;

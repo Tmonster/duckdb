@@ -200,6 +200,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		auto table_index = get->table_index;
 		relation_mapping[table_index] = relation_id;
+		relation_to_table_name[table_index] = get->GetName();
 		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
 		relations.push_back(std::move(relation));
 		return true;
@@ -210,6 +211,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relations.size();
+		relation_to_table_name[get->table_index] = get->GetName();
 		relations.push_back(std::move(relation));
 		return true;
 	}
