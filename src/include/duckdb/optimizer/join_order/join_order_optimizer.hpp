@@ -40,7 +40,7 @@ private:
 	idx_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
-	//! A mapping of base table index -> index into relations array (relation number)
+	//! A mapping of base table index -> relation id.
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;

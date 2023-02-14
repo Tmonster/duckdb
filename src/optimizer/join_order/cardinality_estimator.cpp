@@ -299,6 +299,10 @@ static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
+
+// The issue is here, logical projections can also have table indexes. You eventually want to get the logical get under that projection
+// but there may be multiple logical gets under the projection if a cross join was pushed in there.
+// I hate this so much.
 static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConstants::INVALID_INDEX) {
 	LogicalGet *get = nullptr;
 	switch (op->type) {
@@ -307,28 +311,30 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		get = GetLogicalGet(op->children.at(0).get(), table_index);
+		break;;
+	case LogicalOperatorType::LOGICAL_PROJECTION : {
+		auto proj = (LogicalProjection *)op; if (proj->table_index == table_index) {
+			auto a = 0;
+		} get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		get = GetLogicalGet(op->children.at(0).get(), table_index);
-		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
+//		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		// We should never be calling GetLogicalGet without a valid table_index.
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical join means there is a non-reorderable relation in the join plan. This means we need
 		// to know the exact table index to return.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
-			auto child = join->children.at(0).get();
-			get = GetLogicalGet(child, table_index);
-			if (get && get->table_index == table_index) {
-				return get;
-			}
-			child = join->children.at(1).get();
-			get = GetLogicalGet(child, table_index);
-			if (get && get->table_index == table_index) {
-				return get;
-			}
+		auto child = op->children.at(0).get();
+		get = GetLogicalGet(child, table_index);
+		if (get && get->table_index == table_index) {
+			return get;
+		}
+		child = op->children.at(1).get();
+		get = GetLogicalGet(child, table_index);
+		if (get && get->table_index == table_index) {
+			return get;
 		}
 		break;
 	}
@@ -387,6 +393,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 			}
 		}
 		// Total domains can be affected by filters. So we update base table cardinality first
+		// which also estimates the affect of filters.
 		EstimateBaseTableCardinality(join_node, op);
 		// Then update total domains.
 		UpdateTotalDomains(join_node, op);
@@ -394,43 +401,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
-}
-
-void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
-                                                    unordered_map<idx_t, idx_t> *relation_mapping) {
-	//#ifdef debug
-	for (idx_t i = 0; i < node_ops->size(); i++) {
-		auto join_node = (*node_ops)[i].node.get();
-		auto op = (*node_ops)[i].op;
-		auto relation_id = join_node->set->relations[0];
-		// some relations are non-reorderable joins so they may have multiple tables within them that
-		// we need to add to our names
-		vector<idx_t> tables_in_relation;
-		for (auto &it : *relation_mapping) {
-			if (it.second == relation_id) {
-				tables_in_relation.push_back(it.first);
-			}
-		}
-
-		TableCatalogEntry *catalog_table = nullptr;
-		LogicalGet *get = nullptr;
-		for (auto &table_index : tables_in_relation) {
-			get = GetLogicalGet(op, table_index);
-			if (get) {
-				catalog_table = GetCatalogTableEntry(get);
-			}
-			if (catalog_table) {
-				// add original name for debugging. If the relation represents a non reorderable join
-				// Get the table information of each table underneath.
-				if (relation_attributes[relation_id].original_name.length() == 0) {
-					relation_attributes[relation_id].original_name += catalog_table->name;
-				} else {
-					relation_attributes[relation_id].original_name += ", " + catalog_table->name;
-				}
-			}
-		}
-	}
-	//#endif
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
@@ -642,6 +612,81 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 		lowest_card_found = MinValue(card_after_filters, lowest_card_found);
 	}
 	node->SetEstimatedCardinality(lowest_card_found);
+}
+
+void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
+                                                    unordered_map<idx_t, idx_t> *relation_mapping) {
+	//#ifdef debug
+	for (idx_t i = 0; i < node_ops->size(); i++) {
+		auto join_node = (*node_ops)[i].node.get();
+		auto op = (*node_ops)[i].op;
+		auto relation_id = join_node->set->relations[0];
+		// some relations are non-reorderable joins so they may have multiple tables within them that
+		// we need to add to our names. Sometimes cross products are pushed down and are buried in
+		// a single relation as well, so we need to extract all the table_index bindings for these relations
+		// from the relation_mapping
+		vector<idx_t> tables_in_relation;
+		for (auto &it : *relation_mapping) {
+			if (it.second == relation_id) {
+				// if it is a logical projection, it's possible the binding information may have an extra layer of indirection
+				// The issue is that a logical projection gets a new table index for the join order optimizer
+				// while the logical get that is under it has it's own table index. If we call GetLogicalGet later
+				// we need the table_index under the projection. We can find this by checking the
+				// relation_column_to_original_column map.
+				// The condition (it.second == relation.id) checks to see if the projection index (or table index the relation was built on)
+				// matches the requested relation_id.
+				// If the match hits then the same information should theoretically be in the relation_column_to_original_column map
+				// Just to be sure we double check.
+//				if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				for (auto &binding_pair : relation_column_to_original_column) {
+					// this is a similar check to above
+					// binding_pair.first.table_index = relation_id
+					// it.first = base_table_index (so a projection->table_index)
+					// binding_pair.first.table_index = (relation->something else).
+					if (binding_pair.first.table_index == it.first) {
+						if (binding_pair.second.table_index != relation_id) {
+							tables_in_relation.push_back(binding_pair.second.table_index);
+						} else {
+							tables_in_relation.push_back(it.first);
+						}
+						break;
+					}
+				}
+//				} else {
+//					tables_in_relation.push_back(it.first);
+//				}
+			}
+		}
+
+		TableCatalogEntry *catalog_table = nullptr;
+		LogicalGet *get = nullptr;
+		for (auto &table_index : tables_in_relation) {
+			get = GetLogicalGet(op, table_index);
+			if (get) {
+				catalog_table = GetCatalogTableEntry(get);
+			}
+			if (catalog_table) {
+				// add original name for debugging. If the relation represents a non reorderable join
+				// Get the table information of each table underneath.
+				if (relation_attributes[relation_id].original_name.length() == 0) {
+					relation_attributes[relation_id].original_name += catalog_table->name;
+				} else {
+					relation_attributes[relation_id].original_name += ", " + catalog_table->name;
+				}
+			}
+		}
+	}
+	//#endif
+}
+
+string CardinalityEstimator::GetBindings(idx_t relation_id = DConstants::INVALID_INDEX) {
+	string res = "";
+	for (auto &pair : relation_column_to_original_column) {
+		if (pair.first.table_index == relation_id || relation_id == DConstants::INVALID_INDEX) {
+			res += GetTableName(pair.first.table_index) + to_string(pair.second.column_index) + "\n";
+		}
+	}
+	return res;
 }
 
 string CardinalityEstimator::GetTableName(idx_t relation_id) {

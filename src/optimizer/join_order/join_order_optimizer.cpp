@@ -166,23 +166,26 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			child_bindings_it += 1;
 		}
 
-		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
-		// however the join refers to multiple base relations
-		// enumerate all base relations obtained from this join and add them to the relation mapping
-		// also, we have to resolve the join conditions for the joins here
-		// get the left and right bindings
-		unordered_set<idx_t> bindings;
-		LogicalJoin::GetTableReferences(*op, bindings);
+		// after this we want to treat this node as a single node relation
+		// however the join refers to multiple tables (either in the catalog or parquet files)
+		// enumerate all relations in the join and add them to the relation mapping of the current optimizer
+		// This will help resolve the join conditions.
+		unordered_set<idx_t> relations_in_join;
+		LogicalJoin::GetTableReferences(*op, relations_in_join);
 		// Estimate the cardinality of the join.
 		//		input_op.EstimateCardinality(context);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
-		// Add binding information from the nonreorderable join to this relation.
-		for (idx_t it : bindings) {
+		// Add binding information from the non-reorderable join to this relation.
+		for (idx_t it : relations_in_join) {
 			cardinality_estimator.MergeBindings(it, relation_id, child_binding_maps);
 			relation_mapping[it] = relation_id;
 		}
+		auto wat = make_unique<JoinNode>(JoinNode(std::move(set_manager.GetJoinRelation(relation_id)), 0));
+		auto one_op = vector<NodeOp>();
+		one_op.push_back(NodeOp(std::move(wat), op));
+		cardinality_estimator.UpdateRelationTableNames(&one_op, &relation_mapping);
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -237,7 +240,10 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
 		// This logical projection may sit on top of a logical comparison join that has been pushed down
-		// we want to copy the binding info of both tables
+		// we want to copy the binding info from the join order optimizer that is optimized on the projection
+		// Unlike a non-reorderable join however, the bindings are still valid, so we don't pass a different
+		// catalog table index for every binding like we do with the non-reorderable joins, but rather
+		// just hte projection table index.
 		relation_mapping[proj->table_index] = relation_id;
 		for (auto &binding_info : child_binding_maps.at(0)) {
 			cardinality_estimator.AddRelationToColumnMapping(
@@ -245,8 +251,12 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
 			                                             binding_info.second.column_index);
 		}
-		//		relation_mapping[proj->table_index] = relation_id;
-		// grab the bindings in child join order optimizer and merge them with the bindings of the current optimizer
+		// our cardinality estimator has the mappings, and we have the projection.
+		// so we can just call get logical get and do the stuff.
+		auto wat = make_unique<JoinNode>(JoinNode(std::move(set_manager.GetJoinRelation(relation_id)), 0));
+		auto one_op = vector<NodeOp>();
+		one_op.push_back(NodeOp(std::move(wat), proj));
+		cardinality_estimator.UpdateRelationTableNames(&one_op, &relation_mapping);
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -1078,6 +1088,13 @@ string JoinOrderOptimizer::HumanReadableJoinTree(JoinNode *node) {
 		;
 	}
 	res += ") ";
+	if (node->info && node->info->filters.size() > 0) {
+		res +=  " ON ";
+		for (auto &f : node->info->filters) {
+			res += cardinality_estimator.GetTableName(f->left_binding.table_index) + "." + std::to_string(f->left_binding.column_index) + " = ";
+			res += cardinality_estimator.GetTableName(f->right_binding.table_index) + "." + std::to_string(f->left_binding.column_index);
+		}
+	}
 	res += HumanReadableJoinTree(node->left);
 	res += HumanReadableJoinTree(node->right);
 	return res;

@@ -63,7 +63,8 @@ private:
 
 	//! A mapping of relation id -> RelationAttributes
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
-	//! A mapping of (relation, bound_column) -> (actual table, actual column)
+	//! A mapping of (relation, bound_column) -> (actual table_index, actual column index)
+	//! With the bound_table index, and actual column we can get table statistics
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 
 	vector<RelationsToTDom> relations_to_tdoms;
@@ -96,8 +97,12 @@ public:
 	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
 
 	string GetTableName(idx_t relation_id);
+
 	//! For debugging purposes
 	void UpdateRelationTableNames(vector<NodeOp> *node_ops, unordered_map<idx_t, idx_t> *relation_mapping);
+	//! For debugging purposes, you can dump the current bindings of the cardinality estimator
+	//! and see the table_name.column_index information stored. This info is used to get table statistics
+	string GetBindings(idx_t relation_id);
 
 private:
 	bool SingleColumnFilter(FilterInfo *filter_info);
