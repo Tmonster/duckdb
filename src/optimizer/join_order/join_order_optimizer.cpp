@@ -1089,10 +1089,12 @@ string JoinOrderOptimizer::HumanReadableJoinTree(JoinNode *node) {
 	}
 	res += ") ";
 	if (node->info && node->info->filters.size() > 0) {
-		res +=  " ON ";
+		res += " ON ";
 		for (auto &f : node->info->filters) {
-			res += cardinality_estimator.GetTableName(f->left_binding.table_index) + "." + std::to_string(f->left_binding.column_index) + " = ";
-			res += cardinality_estimator.GetTableName(f->right_binding.table_index) + "." + std::to_string(f->left_binding.column_index);
+			res += cardinality_estimator.GetTableName(f->left_binding.table_index) + "." +
+			       std::to_string(f->left_binding.column_index) + " = ";
+			res += cardinality_estimator.GetTableName(f->right_binding.table_index) + "." +
+			       std::to_string(f->left_binding.column_index);
 		}
 	}
 	res += HumanReadableJoinTree(node->left);

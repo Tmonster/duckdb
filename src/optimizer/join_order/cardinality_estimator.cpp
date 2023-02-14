@@ -299,10 +299,9 @@ static bool IsLogicalFilter(LogicalOperator *op) {
 	return op->type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
-
-// The issue is here, logical projections can also have table indexes. You eventually want to get the logical get under that projection
-// but there may be multiple logical gets under the projection if a cross join was pushed in there.
-// I hate this so much.
+// The issue is here, logical projections can also have table indexes. You eventually want to get the logical get under
+// that projection but there may be multiple logical gets under the projection if a cross join was pushed in there. I
+// hate this so much.
 static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConstants::INVALID_INDEX) {
 	LogicalGet *get = nullptr;
 	switch (op->type) {
@@ -311,16 +310,19 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		get = GetLogicalGet(op->children.at(0).get(), table_index);
-		break;;
-	case LogicalOperatorType::LOGICAL_PROJECTION : {
-		auto proj = (LogicalProjection *)op; if (proj->table_index == table_index) {
+		break;
+		;
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto proj = (LogicalProjection *)op;
+		if (proj->table_index == table_index) {
 			auto a = 0;
-		} get = GetLogicalGet(op->children.at(0).get(), table_index);
+		}
+		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-//		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
+		//		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		// We should never be calling GetLogicalGet without a valid table_index.
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical join means there is a non-reorderable relation in the join plan. This means we need
@@ -628,21 +630,21 @@ void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
 		vector<idx_t> tables_in_relation;
 		for (auto &it : *relation_mapping) {
 			if (it.second == relation_id) {
-				// if it is a logical projection, it's possible the binding information may have an extra layer of indirection
-				// The issue is that a logical projection gets a new table index for the join order optimizer
-				// while the logical get that is under it has it's own table index. If we call GetLogicalGet later
-				// we need the table_index under the projection. We can find this by checking the
+				// if it is a logical projection, it's possible the binding information may have an extra layer of
+				// indirection The issue is that a logical projection gets a new table index for the join order
+				// optimizer while the logical get that is under it has it's own table index. If we call GetLogicalGet
+				// later we need the table_index under the projection. We can find this by checking the
 				// relation_column_to_original_column map.
-				// The condition (it.second == relation.id) checks to see if the projection index (or table index the relation was built on)
-				// matches the requested relation_id.
-				// If the match hits then the same information should theoretically be in the relation_column_to_original_column map
-				// Just to be sure we double check.
-//				if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				// The condition (it.second == relation.id) checks to see if the projection index (or table index the
+				// relation was built on) matches the requested relation_id. If the match hits then the same information
+				// should theoretically be in the relation_column_to_original_column map Just to be sure we double
+				// check.
+				//				if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				for (auto &binding_pair : relation_column_to_original_column) {
 					// this is a similar check to above
 					// binding_pair.first.table_index = relation_id
-					// it.first = base_table_index (so a projection->table_index, or logical_get->table_index in which the relation was built on)
-					// binding_pair.first.table_index = (Should be the same.).
+					// it.first = base_table_index (so a projection->table_index, or logical_get->table_index in which
+					// the relation was built on) binding_pair.first.table_index = (Should be the same.).
 					if (binding_pair.first.table_index == it.first) {
 						// here we chc
 						if (binding_pair.second.table_index != relation_id) {
@@ -653,9 +655,9 @@ void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
 						break;
 					}
 				}
-//				} else {
-//					tables_in_relation.push_back(it.first);
-//				}
+				//				} else {
+				//					tables_in_relation.push_back(it.first);
+				//				}
 			}
 		}
 
