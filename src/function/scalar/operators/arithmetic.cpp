@@ -849,7 +849,6 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
 			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
 		} else if (right == 0) {
@@ -983,9 +982,6 @@ double ModuloOperator::Operation(double left, double right) {
 
 template <>
 hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
-	if (Value::IsNan(left) || Value::IsNan(right)) {
-		return Value::nan();
-	}
 	if (right.lower == 0 && right.upper == 0) {
 		throw InternalException("Hugeint division by zero!");
 	}
