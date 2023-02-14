@@ -641,9 +641,10 @@ void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
 				for (auto &binding_pair : relation_column_to_original_column) {
 					// this is a similar check to above
 					// binding_pair.first.table_index = relation_id
-					// it.first = base_table_index (so a projection->table_index)
-					// binding_pair.first.table_index = (relation->something else).
+					// it.first = base_table_index (so a projection->table_index, or logical_get->table_index in which the relation was built on)
+					// binding_pair.first.table_index = (Should be the same.).
 					if (binding_pair.first.table_index == it.first) {
+						// here we chc
 						if (binding_pair.second.table_index != relation_id) {
 							tables_in_relation.push_back(binding_pair.second.table_index);
 						} else {
