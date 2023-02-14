@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "iostream"
 
 #include <limits>
 
@@ -421,10 +422,10 @@ struct NegateOperator {
 
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		if (Value::IsNan(input)) {
+		auto cast = (TR)input;
+		if (Value::IsNan(cast)) {
 			return Value::nan();
 		}
-		auto cast = (TR)input;
 		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
 		}

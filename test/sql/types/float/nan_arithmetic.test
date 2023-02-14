@@ -32,6 +32,7 @@ SELECT '${val}'::${type} % 1
 ----
 nan
 
+# test negation
 query I
 SELECT -('${val}'::${type})
 ----
@@ -40,6 +41,11 @@ nan
 endloop
 
 endloop
+
+query I
+select -320938.4298::DECIMAL(18,4);
+----
+-320938.4298
 
 
 query I

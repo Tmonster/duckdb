@@ -32,6 +32,7 @@
 
 #include <utility>
 #include <cmath>
+#include "iostream"
 
 namespace duckdb {
 
@@ -349,10 +350,26 @@ bool Value::IsNan(double input) {
 }
 
 // hugeint can never be nan
-template<>
+template <>
 bool Value::IsNan(hugeint_t input) {
 	return false;
 }
+
+template<>
+bool Value::IsNan(int64_t input) {
+	return false;
+}
+
+template<>
+bool Value::IsNan(int32_t input) {
+	return false;
+}
+
+template<>
+bool Value::IsNan(int16_t input) {
+	return false;
+}
+
 
 template <>
 bool Value::IsFinite(float input) {
