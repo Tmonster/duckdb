@@ -348,6 +348,12 @@ bool Value::IsNan(double input) {
 	return std::isnan(input);
 }
 
+// hugeint can never be nan
+template<>
+bool Value::IsNan(hugeint_t input) {
+	return false;
+}
+
 template <>
 bool Value::IsFinite(float input) {
 	return Value::FloatIsFinite(input);

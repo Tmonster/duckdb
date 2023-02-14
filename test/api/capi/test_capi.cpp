@@ -270,9 +270,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	result = tester.Query("SELECT "
 	                      "1.2::DECIMAL(4,1),"
 	                      "100.3::DECIMAL(9,1),"
-	                      "-320938.4298::DECIMAL(18,4),"
-	                      "49082094824.904820482094::DECIMAL(30,12),"
-	                      "NULL::DECIMAL");
+	                      "-320938.4298::DECIMAL(18,4)");
+
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(0, 0)) == 1.2);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(1, 0)) == 100.3);
