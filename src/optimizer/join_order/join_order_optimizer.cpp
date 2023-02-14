@@ -155,7 +155,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// Keep track of all of the filter bindings the new join order optimizer makes
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
-//		idx_t max_child_cardinality = 0;
+		//		idx_t max_child_cardinality = 0;
 		for (auto &child : op->children) {
 			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
@@ -166,7 +166,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			child_bindings_it += 1;
 		}
 
-
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations
 		// enumerate all base relations obtained from this join and add them to the relation mapping
@@ -175,7 +174,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		unordered_set<idx_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// Estimate the cardinality of the join.
-//		input_op.EstimateCardinality(context);
+		//		input_op.EstimateCardinality(context);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
@@ -241,10 +240,12 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// we want to copy the binding info of both tables
 		relation_mapping[proj->table_index] = relation_id;
 		for (auto &binding_info : child_binding_maps.at(0)) {
-			cardinality_estimator.AddRelationToColumnMapping(ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
-			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index, binding_info.second.column_index);
+			cardinality_estimator.AddRelationToColumnMapping(
+			    ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
+			                                             binding_info.second.column_index);
 		}
-//		relation_mapping[proj->table_index] = relation_id;
+		//		relation_mapping[proj->table_index] = relation_id;
 		// grab the bindings in child join order optimizer and merge them with the bindings of the current optimizer
 		relations.push_back(std::move(relation));
 		return true;
@@ -1061,18 +1062,20 @@ string JoinOrderOptimizer::HumanReadableJoinTree(JoinNode *node) {
 		return "";
 	}
 	string res = "(";
-	for(idx_t i = 0; i < node->set->count; i++) {
+	for (idx_t i = 0; i < node->set->count; i++) {
 		res += cardinality_estimator.GetTableName(node->set->relations[i]) + ", ";
 	}
 	res += ")";
 	// building left
 	res += " <- (";
-	for(idx_t i = 0; i < node->left->set->count; i++) {
-		res += cardinality_estimator.GetTableName(node->left->set->relations[i]) + ", ";;
+	for (idx_t i = 0; i < node->left->set->count; i++) {
+		res += cardinality_estimator.GetTableName(node->left->set->relations[i]) + ", ";
+		;
 	}
 	res += ") JOIN (";
-	for(idx_t i = 0; i < node->right->set->count; i++) {
-		res += cardinality_estimator.GetTableName(node->right->set->relations[i]) + ", ";;
+	for (idx_t i = 0; i < node->right->set->count; i++) {
+		res += cardinality_estimator.GetTableName(node->right->set->relations[i]) + ", ";
+		;
 	}
 	res += ") ";
 	res += HumanReadableJoinTree(node->left);
