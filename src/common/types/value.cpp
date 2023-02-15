@@ -355,21 +355,50 @@ bool Value::IsNan(hugeint_t input) {
 	return false;
 }
 
-template<>
+template <>
 bool Value::IsNan(int64_t input) {
 	return false;
 }
 
-template<>
+template <>
 bool Value::IsNan(int32_t input) {
 	return false;
 }
 
-template<>
+template <>
 bool Value::IsNan(int16_t input) {
 	return false;
 }
 
+template <>
+bool Value::IsNan(int8_t input) {
+	return false;
+}
+
+template <>
+bool Value::IsNan(bool input) {
+	return false;
+}
+
+template <>
+bool Value::IsNan(uint8_t input) {
+	return false;
+}
+
+template <>
+bool Value::IsNan(uint16_t input) {
+	return false;
+}
+
+template <>
+bool Value::IsNan(uint32_t input) {
+	return false;
+}
+
+template <>
+bool Value::IsNan(uint64_t input) {
+	return false;
+}
 
 template <>
 bool Value::IsFinite(float input) {
