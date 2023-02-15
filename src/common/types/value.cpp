@@ -32,7 +32,6 @@
 
 #include <utility>
 #include <cmath>
-#include "iostream"
 
 namespace duckdb {
 
