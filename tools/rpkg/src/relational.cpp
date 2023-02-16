@@ -19,6 +19,7 @@
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
+#include "duckdb/main/relation/cross_product_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
@@ -177,11 +178,21 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                        std::string join) {
+	auto join_type = JoinType::INNER;
 	unique_ptr<ParsedExpression> cond;
 
-	if (conds.size() == 0) { // nop
-		stop("join needs conditions");
-	} else if (conds.size() == 1) {
+	if (join == "left") {
+		join_type = JoinType::LEFT;
+	} else if (join == "right") {
+		join_type = JoinType::RIGHT;
+	} else if (join == "outer") {
+		join_type = JoinType::OUTER;
+	} else if (join == "cross") {
+		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
+		return make_external<RelationWrapper>("duckdb_relation", res);
+	}
+
+	if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
 		vector<unique_ptr<ParsedExpression>> cond_args;
@@ -191,14 +202,6 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto join_type = JoinType::INNER;
-	if (join == "left") {
-		join_type = JoinType::LEFT;
-	} else if (join == "right") {
-		join_type = JoinType::RIGHT;
-	} else if (join == "outer") {
-		join_type = JoinType::OUTER;
-	}
 	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
