@@ -185,8 +185,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_unique<DatabaseManager>(*this);
-	buffer_manager =
-	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
+	buffer_manager = make_unique<BufferManager>(*this, config.options.temporary_directory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
@@ -264,6 +263,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+BufferPool &DatabaseInstance::GetBufferPool() {
+	return *config.buffer_pool;
+}
+
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
 	return db.GetDatabaseManager();
 }
@@ -333,6 +336,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
 	}
+	if (new_config.buffer_pool) {
+		config.buffer_pool = std::move(new_config.buffer_pool);
+	} else {
+		config.buffer_pool = make_shared<BufferPool>(config.options.maximum_memory);
+	}
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -356,7 +364,8 @@ idx_t DuckDB::NumberOfThreads() {
 }
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	return loaded_extensions.find(name) != loaded_extensions.end();
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	return loaded_extensions.find(extension_name) != loaded_extensions.end();
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -364,7 +373,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
-	loaded_extensions.insert(name);
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	loaded_extensions.insert(extension_name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
