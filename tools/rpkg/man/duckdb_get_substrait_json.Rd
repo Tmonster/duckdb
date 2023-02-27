@@ -5,14 +5,12 @@
 \title{Get the Substrait plan for a SQL query in the JSON format
 Transforms a SQL query into a vector containing the serialized Substrait query JSON}
 \usage{
-duckdb_get_substrait_json(conn, query, enable_optimizer = TRUE)
+duckdb_get_substrait_json(conn, query)
 }
 \arguments{
 \item{conn}{A DuckDB connection, created by \code{dbConnect()}.}
 
 \item{query}{The query string in SQL}
-
-\item{enable_optimizer}{Optional parameter to enable/disable query-optimizer. By default optimizer is enabled.}
 }
 \value{
 A vector containing the substrait protobuf JSON

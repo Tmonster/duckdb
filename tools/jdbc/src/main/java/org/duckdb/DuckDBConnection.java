@@ -81,17 +81,17 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void commit() throws SQLException {
-		try (Statement s = createStatement()) {
-			s.execute("COMMIT");
-			transactionRunning = false;
-		}
+		Statement s = createStatement();
+		s.execute("COMMIT");
+		transactionRunning = false;
+		s.close();
 	}
 
 	public void rollback() throws SQLException {
-		try (Statement s = createStatement()) {
-			s.execute("ROLLBACK");
-			transactionRunning = false;
-		}
+		Statement s = createStatement();
+		s.execute("ROLLBACK");
+		transactionRunning = false;
+		s.close();
 	}
 
 	protected void finalize() throws Throwable {
@@ -116,10 +116,17 @@ public class DuckDBConnection implements java.sql.Connection {
 			return false;
 		}
 		// run a query just to be sure
-		try (Statement s = createStatement();
-			ResultSet rs = s.executeQuery("SELECT 42")) {
-			return rs.next() && rs.getInt(1) == 42;
+		Statement s = createStatement();
+		ResultSet rs = s.executeQuery("SELECT 42");
+		if (!rs.next() || rs.getInt(1) != 42) {
+			rs.close();
+			s.close();
+			return false;
 		}
+		rs.close();
+		s.close();
+
+		return true;
 	}
 
 	public SQLWarning getWarnings() throws SQLException {

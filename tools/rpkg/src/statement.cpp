@@ -21,15 +21,12 @@ using namespace cpp11::literals;
 	}
 }
 
-[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query, bool enable_optimizer = true) {
+[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait: Invalid connection");
 	}
 
-	named_parameter_map_t parameter_map;
-	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
-
-	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)}, parameter_map);
+	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)});
 	auto res = rel->Execute();
 	auto chunk = res->Fetch();
 	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
@@ -43,16 +40,12 @@ using namespace cpp11::literals;
 	return rawval;
 }
 
-[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query,
-                                                 bool enable_optimizer = true) {
+[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait_json: Invalid connection");
 	}
 
-	named_parameter_map_t parameter_map;
-	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
-
-	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)}, parameter_map);
+	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)});
 	auto res = rel->Execute();
 	auto chunk = res->Fetch();
 	auto json = StringValue::Get(chunk->GetValue(0, 0));

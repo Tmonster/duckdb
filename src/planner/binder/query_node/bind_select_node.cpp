@@ -328,16 +328,6 @@ void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_
 }
 
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
-	D_ASSERT(statement.from_table);
-	// first bind the FROM table statement
-	auto from = std::move(statement.from_table);
-	auto from_table = Bind(*from);
-	return BindSelectNode(statement, std::move(from_table));
-}
-
-unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
-	D_ASSERT(from_table);
-	D_ASSERT(!statement.from_table);
 	auto result = make_unique<BoundSelectNode>();
 	result->projection_index = GenerateTableIndex();
 	result->group_index = GenerateTableIndex();
@@ -347,7 +337,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	result->unnest_index = GenerateTableIndex();
 	result->prune_index = GenerateTableIndex();
 
-	result->from_table = std::move(from_table);
+	// first bind the FROM table statement
+	result->from_table = Bind(*statement.from_table);
+
 	// bind the sample clause
 	if (statement.sample) {
 		result->sample_options = std::move(statement.sample);

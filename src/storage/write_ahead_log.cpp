@@ -119,7 +119,7 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 }
 
 //===--------------------------------------------------------------------===//
-// MACROS
+// MACRO'S
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(ScalarMacroCatalogEntry *entry) {
 	if (skip_writing) {
@@ -151,26 +151,6 @@ void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
-	writer->WriteString(entry->schema->name);
-	writer->WriteString(entry->name);
-}
-
-//===--------------------------------------------------------------------===//
-// Indexes
-//===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCreateIndex(IndexCatalogEntry *entry) {
-	if (skip_writing) {
-		return;
-	}
-	writer->Write<WALType>(WALType::CREATE_INDEX);
-	entry->Serialize(*writer);
-}
-
-void WriteAheadLog::WriteDropIndex(IndexCatalogEntry *entry) {
-	if (skip_writing) {
-		return;
-	}
-	writer->Write<WALType>(WALType::DROP_INDEX);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }

@@ -2,7 +2,7 @@
 # description: Storing a column containing only unique strings.
 # group: [dictionary]
 
-name Dictionary Compression Write
+name name Dictionary Compression Write
 group dictionary
 storage persistent
 require_reinit

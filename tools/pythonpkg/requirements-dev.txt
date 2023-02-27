@@ -9,4 +9,3 @@ mypy
 psutil>=5.9.0
 fsspec
 polars
-tensorflow

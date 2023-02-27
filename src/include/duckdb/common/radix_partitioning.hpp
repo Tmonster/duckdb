@@ -78,13 +78,13 @@ protected:
 		case 2:
 		case 3:
 		case 4:
-			return GetBufferSize(1 << 1);
+			return GetBufferSize(1);
 		case 5:
-			return GetBufferSize(1 << 2);
+			return GetBufferSize(2);
 		case 6:
-			return GetBufferSize(1 << 3);
+			return GetBufferSize(3);
 		default:
-			return GetBufferSize(1 << 4);
+			return GetBufferSize(4);
 		}
 	}
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;

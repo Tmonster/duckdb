@@ -221,7 +221,10 @@ public:
 		}
 
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto files = fs.GlobFiles(info.file_path, context);
+		auto files = fs.Glob(info.file_path, context);
+		if (files.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
+		}
 
 		// The most likely path (Parquet read without union by name option)
 		if (!parquet_options.union_by_name) {
@@ -359,7 +362,11 @@ public:
 	}
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
-		return fs.GlobFiles(glob, context);
+		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
+		if (files.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", glob);
+		}
+		return files;
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,

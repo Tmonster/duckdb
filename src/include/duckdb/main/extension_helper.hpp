@@ -62,9 +62,6 @@ public:
 	//! Apply any known extension aliases
 	static string ApplyExtensionAlias(string extension_name);
 
-	static string GetExtensionName(const string &extension);
-	static bool IsFullPath(const string &extension);
-
 private:
 	static const vector<string> PathComponents();
 	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);

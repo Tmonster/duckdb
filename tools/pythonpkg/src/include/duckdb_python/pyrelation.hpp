@@ -43,6 +43,8 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
+	shared_ptr<Relation> rel;
+
 public:
 	static void Initialize(py::handle &m);
 
@@ -71,11 +73,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
-	                                                 bool enable_optimizer = true);
+	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
+	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr, bool enable_optimizer = true);
+	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
+	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
 	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -153,8 +155,6 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
-	string ToSQL();
-
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	idx_t Length();
@@ -178,17 +178,13 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	Optional<py::tuple> FetchOne();
+	py::object FetchOne();
 
-	py::list FetchAll();
+	py::object FetchAll();
 
-	py::list FetchMany(idx_t size);
+	py::object FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
-
-	py::dict FetchPyTorch();
-
-	py::dict FetchTF();
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
@@ -248,8 +244,6 @@ public:
 
 	static bool IsRelation(const py::object &object);
 
-	Relation &GetRel();
-
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -260,13 +254,10 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
-	void ExecuteOrThrow(bool stream_result = false);
-	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
+	void ExecuteOrThrow();
+	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
-	shared_ptr<Relation> rel;
-	vector<LogicalType> types;
-	vector<string> names;
 	unique_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
 };

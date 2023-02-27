@@ -2,7 +2,7 @@ import * as duckdb from "..";
 import assert from "assert";
 import fs from "fs";
 
-describe("TypeScript declarations", function () {
+describe("TypeScript declarataions", function () {
   var db: duckdb.Database;
   before(function (done) {
     db = new duckdb.Database(":memory:", duckdb.OPEN_READWRITE, done);

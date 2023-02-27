@@ -43,13 +43,11 @@ enum class StatementType : uint8_t {
 	RELATION_STATEMENT,
 	EXTENSION_STATEMENT,
 	LOGICAL_PLAN_STATEMENT,
-	ATTACH_STATEMENT,
-	DETACH_STATEMENT,
-	MULTI_STATEMENT
+	ATTACH_STATEMENT
 
 };
 
-DUCKDB_API string StatementTypeToString(StatementType type);
+string StatementTypeToString(StatementType type);
 
 enum class StatementReturnType : uint8_t {
 	QUERY_RESULT, // the statement returns a query result (e.g. for display to the user)

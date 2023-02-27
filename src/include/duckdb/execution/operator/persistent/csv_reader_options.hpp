@@ -75,8 +75,6 @@ struct BufferedCSVReaderOptions {
 	case_insensitive_map_t<idx_t> sql_types_per_column;
 	//! User-defined SQL type list
 	vector<LogicalType> sql_type_list;
-	//! User-defined name list
-	vector<string> name_list;
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//

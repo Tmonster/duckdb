@@ -32,7 +32,11 @@ protected:
 		// already resolved
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
-		return GenerateColumnBindings(0, types.size());
+		vector<ColumnBinding> bindings;
+		for (idx_t i = 0; i < types.size(); i++) {
+			bindings.push_back(ColumnBinding(0, i));
+		}
+		return bindings;
 	}
 };
 } // namespace duckdb

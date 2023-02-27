@@ -34,7 +34,7 @@ public:
 
 public:
 	string ToSQL() override;
-	void Serialize(Serializer &serializer);
+	void Serialize(duckdb::MetaBlockWriter &serializer);
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	virtual string GetSchemaName() = 0;

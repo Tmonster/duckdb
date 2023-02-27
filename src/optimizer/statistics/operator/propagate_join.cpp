@@ -83,8 +83,12 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						*node_ptr = std::move(cross_product);
 						return;
 					}
-					case JoinType::INNER: {
-						// inner, replace with cross product
+					case JoinType::INNER:
+					case JoinType::LEFT:
+					case JoinType::RIGHT:
+					case JoinType::OUTER: {
+						// inner/left/right/full outer join, replace with cross product
+						// since the condition is always true, left/right/outer join are equivalent to inner join here
 						auto cross_product =
 						    LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
 						*node_ptr = std::move(cross_product);

@@ -74,9 +74,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		this.conn.transactionRunning = true;
 
 		// Start transaction via Statement
-		try (Statement s = conn.createStatement()) {
-			s.execute("BEGIN TRANSACTION;");
-		}
+		Statement s = conn.createStatement();
+		s.execute("BEGIN TRANSACTION;");
+		s.close();
 	}
 
 	private void prepare(String sql) throws SQLException {
@@ -231,7 +231,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		} else if (x instanceof LocalDateTime) {
 			x = new DuckDBTimestamp((LocalDateTime) x);
 		} else if (x instanceof OffsetDateTime) {
-			x = new DuckDBTimestampTZ((OffsetDateTime) x);
+			x = new DuckDBTimestamp((OffsetDateTime) x);
 		}
 		params[parameterIndex - 1] = x;
 	}

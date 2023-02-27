@@ -4,8 +4,6 @@ import pytest
 class TestPolars(object):
     def test_polars(self,duckdb_cursor):
         pl = pytest.importorskip("polars")
-        # We also need arrow to do this conversion
-        arrow = pytest.importorskip("pyarrow")
         pl_testing = pytest.importorskip("polars.testing")
         df = pl.DataFrame(
             {

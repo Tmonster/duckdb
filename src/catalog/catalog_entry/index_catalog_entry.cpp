@@ -19,11 +19,10 @@ string IndexCatalogEntry::ToSQL() {
 	return sql;
 }
 
-void IndexCatalogEntry::Serialize(Serializer &serializer) {
-	// here we serialize the index metadata in the following order:
-	// schema name, table name, index name, sql, index type, index constraint type, expression list, parsed expressions,
-	// column IDs
-
+void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
+	// Here we serialize the index metadata in the following order:
+	// schema name, table name, index name, sql, index type, index constraint type, expression list.
+	// column_ids, unbound_expression
 	FieldWriter writer(serializer);
 	writer.WriteString(GetSchemaName());
 	writer.WriteString(GetTableName());
@@ -38,9 +37,9 @@ void IndexCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	// here we deserialize the index metadata in the following order:
-	// schema name, table schema name, table name, index name, sql, index type, index constraint type, expression list,
-	// parsed expression list, column IDs
+	// Here we deserialize the index metadata in the following order:
+	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
+	// list.
 
 	auto create_index_info = make_unique<CreateIndexInfo>();
 

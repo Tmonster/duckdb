@@ -60,7 +60,8 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
 	}
 	conflict_manager.SetIndexCount(1);
-	index->CheckConstraintsForChunk(chunk, conflict_manager);
+
+	index->LookupValues(chunk, conflict_manager);
 }
 
 vector<column_t> TableIndexList::GetRequiredColumns() {

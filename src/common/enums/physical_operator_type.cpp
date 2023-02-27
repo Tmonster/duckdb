@@ -133,8 +133,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_TYPE";
 	case PhysicalOperatorType::ATTACH:
 		return "ATTACH";
-	case PhysicalOperatorType::DETACH:
-		return "DETACH";
 	case PhysicalOperatorType::RESULT_COLLECTOR:
 		return "RESULT_COLLECTOR";
 	case PhysicalOperatorType::EXTENSION:

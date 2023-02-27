@@ -7,6 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include <utility>
+
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
@@ -114,9 +117,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
-	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
+	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
 
-	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
+	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
 
 	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
 
@@ -135,10 +138,10 @@ public:
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
 
-	Optional<py::list> GetDescription();
+	py::object GetDescription();
 
 	// these should be functions on the result but well
-	Optional<py::tuple> FetchOne();
+	py::object FetchOne();
 
 	py::list FetchMany(idx_t size);
 
@@ -151,13 +154,9 @@ public:
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);
 
-	py::dict FetchPyTorch();
-
-	py::dict FetchTF();
-
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
@@ -180,11 +179,5 @@ private:
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };
-
-template <class T>
-static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
-}
 
 } // namespace duckdb

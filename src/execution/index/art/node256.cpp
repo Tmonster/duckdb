@@ -92,7 +92,8 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	// adjust the ART size
 	if (n->ChildIsInMemory(pos)) {
 		auto child = n->GetChild(art, pos);
-		art.DecreaseMemorySize(child->MemorySize(art, true));
+		D_ASSERT(art.memory_size >= child->MemorySize(art, true));
+		art.memory_size -= child->MemorySize(art, true);
 	}
 
 	// erase the child and decrease the count
@@ -103,7 +104,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	if (node->count <= NODE_256_SHRINK_THRESHOLD) {
 
 		auto new_node = Node48::New();
-		art.IncreaseMemorySize(new_node->MemorySize(art, false));
+		art.memory_size += new_node->MemorySize(art, false);
 		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < Node256::GetSize(); i++) {
@@ -114,7 +115,8 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 			}
 		}
 
-		art.DecreaseMemorySize(node->MemorySize(art, false));
+		D_ASSERT(art.memory_size >= node->MemorySize(art, false));
+		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
 	}

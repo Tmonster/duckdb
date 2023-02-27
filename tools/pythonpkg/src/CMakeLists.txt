@@ -15,7 +15,6 @@ add_library(
   pyconnection.cpp
   python_import_cache.cpp
   pyrelation.cpp
-  dataframe.cpp
   pyresult.cpp
   map.cpp
   vector_conversion.cpp
