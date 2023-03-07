@@ -1,0 +1,30 @@
+# name: test/sql/join/semianti/no_duplicating.test
+# description: Test semi joins
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES(42, 1, 1), (43, 1, 1);
+
+statement ok
+CREATE TABLE right_table (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES(42, 1);
+
+statement ok
+INSERT INTO right_table VALUES (1, 42), (1, 42), (1, 42), (42, 1), (12, 12), (12, 13);
+
+mode output_result
+
+# complex condition resulting in an any join
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+----
+42	1	1
+43	1	1

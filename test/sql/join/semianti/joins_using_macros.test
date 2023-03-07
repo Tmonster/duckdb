@@ -1,0 +1,38 @@
+# name: test/sql/join/semianti/joins_using_macros.test
+# description: Test semi and anti joins that use macros for join conditions (issue 6597)
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES(42, 1, 1), (43, 1, 1);
+
+statement ok
+CREATE TABLE right_table (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES(42, 1);
+
+statement ok
+CREATE MACRO eq(a, b) AS a = b;
+
+statement ok
+CREATE MACRO ___eq_na_matches_na(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))
+
+statement ok
+CREATE MACRO ___neq_na_matches_na(a, b) AS (NOT ((a IS NULL AND b IS NULL) OR (a = b)))
+
+query III
+select * from left_table ANTI JOIN right_table ON (FALSE OR (left_table.a = right_table.a));
+----
+43	1	1
+
+
+query III
+select * from left_table ANTI JOIN right_table ON (left_table.a = right_table.a)
+----
+43	1	1
