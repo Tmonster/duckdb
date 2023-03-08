@@ -41,6 +41,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		return make_unique<BoundConstantExpression>(Value(comparison->return_type));
 	}
 	auto &constant_type = outer_constant->return_type;
+	// this is why https://github.com/duckdb/duckdb/issues/5984 #39 is still a problem
+	// we automatically cast the values to hugeint, which hides the overflow.
 	hugeint_t outer_value = IntegralValue::Get(outer_constant->value);
 	hugeint_t inner_value = IntegralValue::Get(inner_constant->value);
 
