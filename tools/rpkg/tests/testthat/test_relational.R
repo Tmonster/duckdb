@@ -384,6 +384,18 @@ test_that("rel aggregate on NaN values is NaN", {
    expect_equal(rel_df, expected_result)
 })
 
+test_that("rel aggregate on only NA returns NA", {
+   duckdb_sum_default_zero(con, TRUE)
+   a <- data.frame(a=as.numeric(c('val1')))
+   rel_a <- rel_from_df(con, a)
+   # rel_a is now a data frame with a column of type DOUBLE where all values are NA.
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(0))
+   expect_equal(rel_df, expected_result)
+})
+
 test_that("rel aggregate on empty dataframe returns 0 when user sets default sum to 0 (int)", {
    duckdb_sum_default_zero(con, TRUE)
    rel_a <- rel_from_df(con, data.frame(a=c(integer())))
