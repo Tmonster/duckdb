@@ -21,10 +21,10 @@ extern "C" SEXP _duckdb_rapi_disconnect(SEXP conn) {
   END_CPP11
 }
 // database.cpp
-void rapi_sum_default_zero(duckdb::conn_eptr_t conn, bool turn_on);
-extern "C" SEXP _duckdb_rapi_sum_default_zero(SEXP conn, SEXP turn_on) {
+void rapi_sum_default_zero(duckdb::conn_eptr_t con, bool turn_on);
+extern "C" SEXP _duckdb_rapi_sum_default_zero(SEXP con, SEXP turn_on) {
   BEGIN_CPP11
-    rapi_sum_default_zero(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<bool>>(turn_on));
+    rapi_sum_default_zero(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(con), cpp11::as_cpp<cpp11::decay_t<bool>>(turn_on));
     return R_NilValue;
   END_CPP11
 }

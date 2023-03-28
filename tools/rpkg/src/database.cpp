@@ -26,7 +26,7 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	return true;
 }
 
-struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
+struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
@@ -41,13 +41,15 @@ struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 	}
 };
 
-
-[[cpp11::register]] void rapi_sum_default_zero(duckdb::conn_eptr_t conn, bool turn_on) {
+[[cpp11::register]] void rapi_sum_default_zero(duckdb::conn_eptr_t con, bool turn_on) {
 	// I want to check the validity of conn, but if I do, an R program that calls this function
 	// will not exit
+//	if (!con || !con.get() || !con->conn) {
+//		cpp11::stop("sum_default_zero: Invalid connection");
+//	}
 
-	conn->conn->context->transaction.BeginTransaction();
-	auto sum_function = Catalog::GetEntry(*conn->conn->context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG,
+	con->conn->context->transaction.BeginTransaction();
+	auto sum_function = Catalog::GetEntry(*con->conn->context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG,
 	                                      DEFAULT_SCHEMA, "sum", false);
 
 	auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
@@ -61,7 +63,8 @@ struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 			if (turn_on) {
 				aggr.finalize = AggregateFunction::StateFinalize<SumState<hugeint_t>, hugeint_t, ZeroSumOperation>;
 			} else {
-				aggr.finalize = AggregateFunction::StateFinalize<SumState<hugeint_t>, hugeint_t, DoubleSumOperation<RegularAdd>>;
+				aggr.finalize =
+				    AggregateFunction::StateFinalize<SumState<hugeint_t>, hugeint_t, DoubleSumOperation<RegularAdd>>;
 			}
 			break;
 		case PhysicalType::FLOAT:
@@ -69,7 +72,8 @@ struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 			if (turn_on) {
 				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, ZeroSumOperation>;
 			} else {
-				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation<RegularAdd>>;
+				aggr.finalize =
+				    AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation<RegularAdd>>;
 			}
 			break;
 		case PhysicalType::BOOL:
@@ -86,7 +90,7 @@ struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 		}
 	}
 
-	conn->conn->context->transaction.Commit();
+	con->conn->context->transaction.Commit();
 }
 
 [[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
