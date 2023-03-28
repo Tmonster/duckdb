@@ -365,37 +365,73 @@ test_that("R semantics for arithmetics sum function are respected", {
    expect_true(is.nan(res[[1]]))
 })
 
-test_that("rel aggregate on NaN is 0 when sum default it 0", {
+test_that("rel aggregate is NaN when NaN values are present even if sum default it 0", {
    duckdb_sum_default_zero(con, TRUE)
    test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
    sum_rel <- expr_function("sum", list(expr_reference("a")))
    ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
    res <- rel_to_altrep(ans)
-   expect_equal(0, res[[1]])
+   expect_equal(NaN, res[[1]])
 })
 
-test_that("rel aggregate on NA is 0", {
+test_that("rel aggregate on NaN values is NaN", {
    duckdb_sum_default_zero(con, TRUE)
    rel_a <- rel_from_df(con, data.frame(a=c(NaN, NaN, 5, 5), b=c(3, 3, 4, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
    rel_df <- rel_to_altrep(res)
-   expected_result <- data.frame(b=c(3, 4), sum=c(0, 10))
+   expected_result <- data.frame(b=c(3, 4), sum=c(NaN, 10))
    expect_equal(rel_df, expected_result)
 })
 
-test_that("rel aggregate on NA is 0 with only 1 NaN", {
+test_that("rel aggregate on empty dataframe returns 0 when user sets default sum to 0 (int)", {
    duckdb_sum_default_zero(con, TRUE)
-   rel_a <- rel_from_df(con, data.frame(a=c(NaN, 2, 2, 2, 2, 1, 1), b=c(3, 3, 3, 3, 3, 4, 4)))
+   rel_a <- rel_from_df(con, data.frame(a=c(integer())))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
-   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   res <- rel_aggregate(rel_a, list(), aggrs)
    rel_df <- rel_to_altrep(res)
-   expected_result <- data.frame(b=c(3, 4), sum=c(0, 2))
+   expected_result <- data.frame(sum=c(0))
+   expect_equal(rel_df, expected_result)
+})
+
+test_that("rel aggregate on empty dataframe returns 0 when user sets default sum to 0 (double)", {
+   duckdb_sum_default_zero(con, TRUE)
+   rel_a <- rel_from_df(con, data.frame(a=c(double())))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(0))
+   expect_equal(rel_df, expected_result)
+})
+
+test_that("rel aggregate sum turn on then off works (int)", {
+   duckdb_sum_default_zero(con, TRUE)
+   rel_a <- rel_from_df(con, data.frame(a=c(integer())))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(0))
    expect_equal(rel_df, expected_result)
    duckdb_sum_default_zero(con, FALSE)
-   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   res <- rel_aggregate(rel_a, list(), aggrs)
    rel_df <- rel_to_altrep(res)
-   expected_result <- data.frame(b=c(3, 4), sum=c(NaN, 2))
+   expected_result <- data.frame(sum=c(NaN))
+   expect_equal(rel_df, expected_result)
+})
+
+
+test_that("rel aggregate sum turn on then off works (int)", {
+   duckdb_sum_default_zero(con, TRUE)
+   rel_a <- rel_from_df(con, data.frame(a=c(double())))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(0))
+   expect_equal(rel_df, expected_result)
+   duckdb_sum_default_zero(con, FALSE)
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(NaN))
    expect_equal(rel_df, expected_result)
 })
 

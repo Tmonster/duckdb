@@ -26,21 +26,21 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	return true;
 }
 
-struct FloatDoubleZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
+struct ZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 	template <class T, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
-			// if it's not set, set to 0
-			mask.SetInvalid(idx);
+			// if not set, then no values have been added, meaning the column was empty.
+			// Set this to 0 then. Provides a better fix for https://github.com/duckdb/duckdb/issues/5832
+			// since only scalar macros can be created, and if sum() is used in a window function, a scalar sum()
+			// function will throw an error
+			target[idx] = 0;
 		} else {
-			if (Value::DoubleIsFinite(state->value)) {
-				target[idx] = state->value;
-			} else {
-				target[idx] = 0;
-			}
+			target[idx] = state->value;
 		}
 	}
 };
+
 
 [[cpp11::register]] void rapi_sum_default_zero(duckdb::conn_eptr_t conn, bool turn_on) {
 	// I want to check the validity of conn, but if I do, an R program that calls this function
@@ -53,19 +53,25 @@ struct FloatDoubleZeroSumOperation : public BaseSumOperation<SumSetOperation, Re
 	auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
 	for (auto &aggr : sum_function_cast->functions.functions) {
 		switch (aggr.arguments[0].InternalType()) {
-		case PhysicalType::DOUBLE:
-			if (turn_on) {
-				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, FloatDoubleZeroSumOperation>;
-			} else {
-				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation<RegularAdd>>;
-			}
-			break;
-		case PhysicalType::FLOAT:
 		case PhysicalType::INT8:
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
 		case PhysicalType::INT128:
+			if (turn_on) {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<hugeint_t>, hugeint_t, ZeroSumOperation>;
+			} else {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<hugeint_t>, hugeint_t, DoubleSumOperation<RegularAdd>>;
+			}
+			break;
+		case PhysicalType::FLOAT:
+		case PhysicalType::DOUBLE:
+			if (turn_on) {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, ZeroSumOperation>;
+			} else {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation<RegularAdd>>;
+			}
+			break;
 		case PhysicalType::BOOL:
 		case PhysicalType::BIT:
 		case PhysicalType::STRUCT:
