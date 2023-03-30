@@ -1,0 +1,9 @@
+When the logical comparison join is traversed, we create a filter.
+
+The filter then expects that the tables beneath it have valid bindings
+(in our case  7:0, and 15:0)
+
+It seems like the dummy scan and projection scan have (for whatever reason) table indexes of 9 and 1, which is not what we want.
+
+
+
