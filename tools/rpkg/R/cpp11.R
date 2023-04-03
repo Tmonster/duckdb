@@ -44,6 +44,10 @@ rapi_expr_function <- function(name, args, order_bys, filter_bys) {
   .Call(`_duckdb_rapi_expr_function`, name, args, order_bys, filter_bys)
 }
 
+rapi_rel_to_sql <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_sql`, rel)
+}
+
 rapi_expr_set_alias <- function(expr, alias) {
   invisible(.Call(`_duckdb_rapi_expr_set_alias`, expr, alias))
 }

@@ -51,6 +51,13 @@ expr_tostring <- rapi_expr_tostring
 #' expr_set_alias(expr_constant(42), "my_alias")
 expr_set_alias <- rapi_expr_set_alias
 
+#' Get the SQL string for the relation
+#' @param expr the relation
+#' @noRd
+#' @examples
+#' rel_to_sql(rel)
+rel_to_sql <- rapi_rel_to_sql
+
 #' @export
 print.duckdb_expr <- function(x, ...) {
   message("DuckDB Expression: ", expr_tostring(x))

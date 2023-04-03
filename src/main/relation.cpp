@@ -193,6 +193,14 @@ unique_ptr<TableRef> Relation::GetTableRef() {
 	return make_unique<SubqueryRef>(std::move(select), GetAlias());
 }
 
+string Relation::ToSQL() {
+	auto node = GetQueryNode();
+	if (node) {
+		return node->ToString();
+	}
+	throw Exception("can't call toSQL on this node");
+}
+
 unique_ptr<QueryResult> Relation::Execute() {
 	return context.GetContext()->Execute(shared_from_this());
 }

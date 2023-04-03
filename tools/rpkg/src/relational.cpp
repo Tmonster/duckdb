@@ -106,6 +106,10 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	return func_expr;
 }
 
+[[cpp11::register]] std::string rapi_rel_to_sql(duckdb::rel_extptr_t rel) {
+	return rel->rel->ToSQL();
+}
+
 [[cpp11::register]] void rapi_expr_set_alias(duckdb::expr_extptr_t expr, std::string alias) {
 	expr->alias = alias;
 }
