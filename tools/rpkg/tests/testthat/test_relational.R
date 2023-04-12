@@ -590,32 +590,65 @@ test_that("R can do comparisons with constant strings and respects the original 
    expect_equal(res, data.frame(a=c("hello")))
 })
 
+# Error: Conversion Error: Unimplemented type for cast (VARCHAR -> r_string)
 test_that("R strings are not garbage collected", {
-  get_string_filter_rel <- function(rel_df) {
-      hel <- "mr."
-      lo <- "du"
-      o <- "ck"
-      const_mrduck <- expr_constant(paste0(substr(paste0(1, 1, hel, lo), 3, 7), substr(paste0(129, "jk", o, "t"), 6, 7)), TRUE)
-      filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_mrduck))))
-      rm(hel)
-      rm(lo)
-      rm(o)
-      gc()
-      return(filter_rel)
-  }
-  first <- "marm"
-  second <- "r."
-  third <- "du"
-  fourth <- "ckz"
   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-  rel_df <- rel_from_df(con, data.frame(a=c(substr(paste0(first, second, third, fourth), 4, 10), "world")), TRUE)
+  experimental <- FALSE
+
+  duck <- function() {
+    paste0("mr.", "duck")
+  }
+
+  get_string_filter_rel <- function(rel_df) {
+    const_mrduck <- duckdb:::expr_constant(duck(), experimental)
+    filter_rel <- duckdb:::rel_filter(rel_df, list(duckdb:::expr_function("eq", list(
+      duckdb:::expr_function("lower", list(duckdb:::expr_reference("a"))),
+      const_mrduck
+    ))))
+    return(filter_rel)
+  }
+
+  wavs <- duck()
+  rel_df <- duckdb:::rel_from_df(con, data.frame(a=c(toupper(duck()), "world",toupper(wavs),toupper(wavs),toupper(wavs),toupper(wavs))), experimental)
   filter_rel <- get_string_filter_rel(rel_df)
+
   # 3 for good measure
   gc()
   gc()
   gc()
-  res <- rel_to_altrep(filter_rel)
-  expect_equal(res, data.frame(a=c(paste0("m", "r", ".", "d", "u", "c", "k"))))
+
+  res <- duckdb:::rel_to_altrep(filter_rel)
+  expect_equal(res, data.frame(a=toupper(duck())))
+})
+
+test_that("R strings are not garbage collected", {
+  experimental <- TRUE
+  dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+
+  duck <- function() {
+    paste0("mr.", "duck")
+  }
+
+  get_string_filter_rel <- function(rel_df) {
+    const_mrduck <- duckdb:::expr_constant(duck(), experimental)
+    filter_rel <- duckdb:::rel_filter(proj_lower_a, list(duckdb:::expr_function("eq", list(
+      duckdb:::expr_reference("lower(a)"),
+      duckdb:::expr_function("lower", list(duckdb:::expr_reference("LOWER_ME")))
+    ))))
+    return(filter_rel)
+  }
+
+
+  rel_df <- duckdb:::rel_from_df(con, data.frame(a=c(toupper(duck()), "world")), experimental)
+  filter_rel <- get_string_filter_rel(rel_df)
+
+  # 3 for good measure
+  gc()
+  gc()
+  gc()
+
+  res <- duckdb:::rel_to_altrep(filter_rel)
+  expect_equal(res$a,toupper(duck()))
 })
 
 test_that("anti joins for eq_na_matches works", {
@@ -637,4 +670,13 @@ test_that("semi joins for eq_na_matches works", {
    res <- rel_to_altrep(out)
    expect_equal(res, data.frame(x=c(2, 2)))
 })
+
+
+test_that("we can order by two string/character fields", {
+  rel1 <- rel_from_df(con, data.frame(a=c("c", "b", "b", "a"), b=c("y", "y", "w", "y")))
+  rel_order <- rel_order(rel1, list(expr_reference("a"), expr_reference("b")))
+  expected_result <- data.frame(a=c("a", "a", "b", "b"), b=c("x", "y", "x", "y"))
+  res <- rel_to_altrep(rel_order)
+  expect_equal(res, expected_result)
+ })
 

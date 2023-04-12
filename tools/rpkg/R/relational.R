@@ -23,7 +23,8 @@ expr_reference <- function(name, table = "") {
 #' @examples
 #' const_int_expr <- expr_constant(42)
 #' const_str_expr <- expr_constant("Hello, World")
-expr_constant <- function(val, experimental = FALSE) {
+expr_constant <- function(val, experimental = TRUE) {
+    experimental <- TRUE
     rapi_expr_constant(val, experimental)
 }
 
@@ -71,7 +72,8 @@ print.duckdb_expr <- function(x, ...) {
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
-rel_from_df <- function(con, df, experimental=FALSE) {
+rel_from_df <- function(con, df, experimental=TRUE) {
+    experimental <- TRUE
     rapi_rel_from_df(con@conn_ref, as.data.frame(df), experimental)
 }
 
@@ -356,8 +358,6 @@ rel_from_altrep_df <- rapi_rel_from_altrep_df
 #' stopifnot(df_is_materialized(df))
 df_is_materialized <- rapi_df_is_materialized
 
-
-
 #' Convert a relation to a SQL string
 #' @param rel the DuckDB relation object
 #' @return a SQL string
@@ -367,8 +367,6 @@ df_is_materialized <- rapi_df_is_materialized
 #' rel <- rel_from_df(con, mtcars)
 #' print(rel_to_sql(rel))
 rel_to_sql <- rapi_rel_to_sql
-
-
 
 #' Convert a duckdb table relation
 #' @param table the table name
@@ -381,4 +379,3 @@ rel_to_sql <- rapi_rel_to_sql
 rel_from_table <- function(con, table_name, schema_name="MAIN") {
     rapi_rel_from_table(con@conn_ref, schema_name, table_name)
 }
-
