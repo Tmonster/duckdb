@@ -31,6 +31,7 @@ add_library_unity(
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp
+  filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
@@ -47,6 +48,7 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
+  vector.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

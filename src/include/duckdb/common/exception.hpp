@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/typedefs.hpp"
 
-#include <map>
 #include <stdexcept>
 
 namespace duckdb {
@@ -120,6 +121,9 @@ public:
 	DUCKDB_API static bool UncaughtException();
 
 	DUCKDB_API static string GetStackTrace(int max_depth = 120);
+	DUCKDB_API static string FormatStackTrace(string message = "") {
+		return (message + "\n" + GetStackTrace());
+	}
 
 private:
 	string exception_message_;

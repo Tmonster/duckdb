@@ -75,9 +75,9 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
+		bound.expr = make_uniq<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_unique<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound.expr = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 
@@ -210,7 +210,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
-		order_bys = make_unique<BoundOrderModifier>();
+		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
@@ -233,11 +233,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
-	auto entry = node.aggregate_map.find(aggregate.get());
+	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
-		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
+		node.aggregate_map[*aggregate] = aggr_index;
 		node.aggregates.push_back(std::move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
@@ -245,7 +245,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_unique<BoundColumnRefExpression>(
+	auto colref = make_uniq<BoundColumnRefExpression>(
 	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
 	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates

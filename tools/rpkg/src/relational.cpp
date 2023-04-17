@@ -24,6 +24,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -67,7 +68,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
 	}
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
 		// remove the alias since it is assumed to be the name of the argument for the function
@@ -79,7 +80,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	}
 
 	// For aggregates you can add orders
-	auto order_modifier = make_unique<OrderModifier>();
+	auto order_modifier = make_uniq<OrderModifier>();
 	for (expr_extptr_t expr : order_bys) {
 		order_modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
 	}
@@ -93,7 +94,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		for (expr_extptr_t expr : filter_bys) {
 			filters.push_back(expr->Copy());
 		}
-		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+		filter_expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
 	}
 
 	auto func_expr = make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
@@ -139,18 +140,18 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 }
 
 [[cpp11::register]] SEXP rapi_rel_filter(duckdb::rel_extptr_t rel, list exprs) {
-	unique_ptr<ParsedExpression> filter_expr;
+	duckdb::unique_ptr<ParsedExpression> filter_expr;
 	if (exprs.size() == 0) { // nop
 		warning("rel_filter without filter expressions has no effect");
 		return rel;
 	} else if (exprs.size() == 1) {
 		filter_expr = ((expr_extptr_t)exprs[0])->Copy();
 	} else {
-		vector<unique_ptr<ParsedExpression>> filters;
+		vector<duckdb::unique_ptr<ParsedExpression>> filters;
 		for (expr_extptr_t expr : exprs) {
 			filters.push_back(expr->Copy());
 		}
-		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+		filter_expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
 	}
 	auto res = std::make_shared<FilterRelation>(rel->rel, std::move(filter_expr));
 
@@ -164,7 +165,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		warning("rel_project without projection expressions has no effect");
 		return rel;
 	}
-	vector<unique_ptr<ParsedExpression>> projections;
+	vector<duckdb::unique_ptr<ParsedExpression>> projections;
 	vector<string> aliases;
 
 	for (expr_extptr_t expr : exprs) {
@@ -181,7 +182,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 }
 
 [[cpp11::register]] SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
-	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
+	vector<duckdb::unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
 	// TODO deal with empty groups
 	vector<string> aliases;
@@ -312,11 +313,11 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
-		vector<unique_ptr<ParsedExpression>> cond_args;
+		vector<duckdb::unique_ptr<ParsedExpression>> cond_args;
 		for (expr_extptr_t expr : conds) {
 			cond_args.push_back(expr->Copy());
 		}
-		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
+		cond = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
 	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
@@ -326,7 +327,7 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
-static SEXP result_to_df(unique_ptr<QueryResult> res) {
+static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
 		stop(res->GetError());
 	}
@@ -381,6 +382,10 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] std::string rapi_rel_tostring(duckdb::rel_extptr_t rel) {
 	return rel->rel->ToString();
+}
+
+[[cpp11::register]] std::string rapi_rel_to_sql(duckdb::rel_extptr_t rel) {
+	return rel->rel->GetQueryNode()->ToString();
 }
 
 [[cpp11::register]] SEXP rapi_rel_explain(duckdb::rel_extptr_t rel) {
@@ -445,4 +450,15 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, symdiff);
+}
+
+[[cpp11::register]] SEXP rapi_rel_from_table(duckdb::conn_eptr_t con, const std::string schema_name,
+                                             const std::string table_name) {
+	if (!con || !con.get() || !con->conn) {
+		stop("rel_from_df: Invalid connection");
+	}
+	auto desc = make_uniq<TableDescription>();
+	auto rel = con->conn->Table(schema_name, table_name);
+	cpp11::writable::list prot = {};
+	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel));
 }
