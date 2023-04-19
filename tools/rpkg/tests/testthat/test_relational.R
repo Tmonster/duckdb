@@ -33,6 +33,12 @@ test_that("we can create various expressions and don't crash", {
   expect_error(expr_reference(""))
   expect_error(expr_reference(NULL))
 
+  expr_constant(TRUE, TRUE)
+  expr_constant(FALSE, TRUE)
+  expr_constant(NA, TRUE)
+  expr_constant(42L, TRUE)
+  expr_constant(42, TRUE)
+
   expr_constant(TRUE)
   expr_constant(FALSE)
   expr_constant(NA)
@@ -564,6 +570,52 @@ test_that("R semantics for arithmetics sum function are respected", {
    ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
    res <- rel_to_altrep(ans)
    expect_equal(res[[1]], 15)
+})
+
+test_that("R can do comparisons with constant strings", {
+   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+   test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), expr_constant("hello", TRUE)))))
+   res <- rel_to_altrep(filter_rel)
+   expect_equal(res, data.frame(a=c("hello")))
+})
+
+test_that("R can do comparisons with constant strings and respects the original value of the constant string", {
+   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+   test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   const_hello <- expr_constant("hello", TRUE)
+   filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), const_hello))))
+   const_hello <- expr_constant("world")
+   res <- rel_to_altrep(filter_rel)
+   expect_equal(res, data.frame(a=c("hello")))
+})
+
+test_that("R strings are not garbage collected", {
+  get_string_filter_rel <- function(rel_df) {
+      hel <- "mr."
+      lo <- "du"
+      o <- "ck"
+      const_mrduck <- expr_constant(paste0(substr(paste0(1, 1, hel, lo), 3, 7), substr(paste0(129, "jk", o, "t"), 6, 7)), TRUE)
+      filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_mrduck))))
+      rm(hel)
+      rm(lo)
+      rm(o)
+      gc()
+      return(filter_rel)
+  }
+  first <- "marm"
+  second <- "r."
+  third <- "du"
+  fourth <- "ckz"
+  dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+  rel_df <- rel_from_df(con, data.frame(a=c(substr(paste0(first, second, third, fourth), 4, 10), "world")), TRUE)
+  filter_rel <- get_string_filter_rel(rel_df)
+  # 3 for good measure
+  gc()
+  gc()
+  gc()
+  res <- rel_to_altrep(filter_rel)
+  expect_equal(res, data.frame(a=c(paste0("m", "r", ".", "d", "u", "c", "k"))))
 })
 
 test_that("anti joins for eq_na_matches works", {
