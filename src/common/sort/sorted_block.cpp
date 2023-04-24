@@ -3,7 +3,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 
 #include <numeric>
 
@@ -367,7 +367,7 @@ int SBIterator::ComparisonValue(ExpressionType comparison) {
 }
 
 static idx_t GetBlockCountWithEmptyCheck(const GlobalSortState &gss) {
-	D_ASSERT(gss.sorted_blocks.size() > 0);
+	D_ASSERT(!gss.sorted_blocks.empty());
 	return gss.sorted_blocks[0]->radix_sorting_data.size();
 }
 
