@@ -41,9 +41,9 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		auto catalog_table = relation_mapping[colref.binding.table_index];
-		auto column_index = colref.binding.column_index;
-		cardinality_estimator.AddColumnToRelationMap(catalog_table, column_index);
+		auto relation_id = relation_mapping[colref.binding.table_index];
+		auto relation_column_index = colref.binding.column_index;
+		cardinality_estimator.AddColumnToRelationMap(relation_id, relation_column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -182,6 +182,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			cardinality_estimator.MergeBindings(it, relation_id, child_binding_maps);
 			relation_mapping[it] = relation_id;
 		}
+		cardinality_estimator.AddRelationId(relation_id, op->GetName());
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -200,7 +201,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		auto &get = op->Cast<LogicalExpressionGet>();
 		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		relation_mapping[get.table_index] = relations.size();
+		auto relation_id = relations.size();
+		relation_mapping[get.table_index] = relation_id;
+		cardinality_estimator.AddRelationId(relation_id, get.GetName());
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -208,7 +211,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		// table function call, add to set of relations
 		auto &dummy_scan = op->Cast<LogicalDummyScan>();
 		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
-		relation_mapping[dummy_scan.table_index] = relations.size();
+		auto relation_id = relations.size();
+		relation_mapping[dummy_scan.table_index] = relation_id;
+		cardinality_estimator.AddRelationId(relation_id, dummy_scan.GetName());
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -222,6 +227,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op->Cast<LogicalGet>();
 			cardinality_estimator.AddRelationColumnMapping(get, relation_id);
+			cardinality_estimator.AddRelationId(relation_id, op->GetName());
 			relation_mapping[table_index] = relation_id;
 			relations.push_back(std::move(relation));
 			return true;
@@ -231,17 +237,33 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// push one child column binding map back.
-		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
-		child_binding_maps.emplace_back();
-		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
+		vector<column_binding_map_t<ColumnBinding>> child_optimizer_bindings;
+		child_optimizer_bindings.emplace_back();
+		// TODO: Explain!
+		// What I think: We have a projection or a get. Here we copy the binding information from the projection
+		// into the child_optimizer_bindings. The information in the child_optimizer_bindings is then copied into the
+		// current optimizer.
+		optimizer.cardinality_estimator.CopyRelationMap(child_optimizer_bindings.at(0));
 		// This logical projection/get may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
 		relation_mapping[table_index] = relation_id;
-		for (auto &binding_info : child_binding_maps.at(0)) {
+		cardinality_estimator.AddRelationId(relation_id, op->GetName());
+		for (auto &binding_info : child_optimizer_bindings.at(0)) {
+
+			// binding_info comes from the optimized projection
+			// we are now masking this binding info to treat is as if it is coming from the current projection/get.
+			// the current projection/get has a table index declared previously in the scope.
+			// We bind the table index and column to the binding info from the optimized projection.
 			cardinality_estimator.AddRelationToColumnMapping(
-			    ColumnBinding(table_index, binding_info.first.column_index), binding_info.second);
-			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
-			                                             binding_info.second.column_index);
+			    ColumnBinding(relation_id, binding_info.first.column_index), binding_info.second);
+
+			// Here I need some debugging.
+			// TODO: What does it mean to "add a column to the relation map?"
+			// TODO: What is binding info?
+			// Cardinality estimator keeps track of the relations, the original table_ids of the relations
+			// and the estimated cardinality of relation based on the distinct value counts of the columns.
+			// Here we add the column to the relation info
+			cardinality_estimator.AddColumnToRelationMap(relation_id, binding_info.second.column_index);
 		}
 		relations.push_back(std::move(relation));
 		return true;

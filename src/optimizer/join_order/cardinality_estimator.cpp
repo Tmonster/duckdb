@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include <cmath>
+#include "iostream"
 
 namespace duckdb {
 
@@ -96,6 +97,14 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 }
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
+	//	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
+	//		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
+	//		std::cout << "was    (" << key.table_index << ", " << key.column_index << ") -> (" <<
+	//relation_column_to_original_column[key].table_index << ", " <<
+	//relation_column_to_original_column[key].column_index << ")" << std::endl; 		std::cout << "now is (" <<
+	//key.table_index << ", " << key.column_index << ") -> (" << value.table_index << ", " << value.column_index << ")"
+	//<< std::endl;
+	//	}
 	relation_column_to_original_column[key] = value;
 }
 
@@ -106,8 +115,17 @@ void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &
 	}
 }
 
+void CardinalityEstimator::AddRelationId(idx_t relation_id, string original_name) {
+	D_ASSERT(relation_attributes.find(relation_id) == relation_attributes.end());
+	relation_attributes[relation_id] = RelationAttributes();
+	relation_attributes[relation_id].original_name = original_name;
+}
+
+//! Add a relation_id, column_id to the relation mapping
 void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t column_index) {
-	relation_attributes[table_index].columns.insert(column_index);
+	if (relation_attributes[table_index].columns.find(column_index) == relation_attributes[table_index].columns.end()) {
+		relation_attributes[table_index].columns.insert(column_index);
+	}
 }
 
 void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos) {

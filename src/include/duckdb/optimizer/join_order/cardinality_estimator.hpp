@@ -16,6 +16,9 @@
 namespace duckdb {
 
 struct RelationAttributes {
+
+	RelationAttributes() {
+	}
 	string original_name;
 	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
@@ -73,6 +76,7 @@ public:
 
 	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
 
+	void AddRelationId(idx_t relation_id, string original_name);
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
