@@ -97,14 +97,11 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 }
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
-	//	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
-	//		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
-	//		std::cout << "was    (" << key.table_index << ", " << key.column_index << ") -> (" <<
-	//relation_column_to_original_column[key].table_index << ", " <<
-	//relation_column_to_original_column[key].column_index << ")" << std::endl; 		std::cout << "now is (" <<
-	//key.table_index << ", " << key.column_index << ") -> (" << value.table_index << ", " << value.column_index << ")"
-	//<< std::endl;
-	//	}
+//	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
+//		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
+//		std::cout << "was    (" << key.table_index << ", " << key.column_index << ") -> (" << relation_column_to_original_column[key].table_index << ", " << relation_column_to_original_column[key].column_index << ")" << std::endl;
+//		std::cout << "now is (" << key.table_index << ", " << key.column_index << ") -> (" << value.table_index << ", " << value.column_index << ")" << std::endl;
+//	}
 	relation_column_to_original_column[key] = value;
 }
 
@@ -179,9 +176,10 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 }
 
 void CardinalityEstimator::AddRelationColumnMapping(LogicalGet &get, idx_t relation_id) {
-	for (idx_t it = 0; it < get.column_ids.size(); it++) {
-		auto key = ColumnBinding(relation_id, it);
-		auto value = ColumnBinding(get.table_index, get.column_ids[it]);
+	auto bindings = get.GetColumnBindings();
+	for (idx_t it = 0; it < bindings.size(); it++) {
+		auto key = ColumnBinding(relation_id, bindings.at(it).column_index);
+		auto value = ColumnBinding(get.table_index, bindings.at(it).column_index);
 		AddRelationToColumnMapping(key, value);
 	}
 }

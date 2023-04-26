@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include "iostream"
+
 #include <algorithm>
 #include <cmath>
 
@@ -248,14 +250,33 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		// we want to copy the binding info of both tables
 		relation_mapping[table_index] = relation_id;
 		cardinality_estimator.AddRelationId(relation_id, op->GetName());
-		for (auto &binding_info : child_optimizer_bindings.at(0)) {
 
-			// binding_info comes from the optimized projection
+		column_binding_set_t propagated_bindings;
+		for (auto &expected_expression : op->expressions) {
+			if (expected_expression->type == ExpressionType::BOUND_COLUMN_REF) {
+				propagated_bindings.insert(expected_expression->Cast<BoundColumnRefExpression>().binding);
+			}
+		}
+
+		bool bindings_carried_over = false;
+		for (auto &child_binding_info : child_optimizer_bindings.at(0)) {
+
+			// child_binding_info comes from the optimized projection
 			// we are now masking this binding info to treat is as if it is coming from the current projection/get.
 			// the current projection/get has a table index declared previously in the scope.
 			// We bind the table index and column to the binding info from the optimized projection.
-			cardinality_estimator.AddRelationToColumnMapping(
-			    ColumnBinding(relation_id, binding_info.first.column_index), binding_info.second);
+//			cardinality_estimator.AddRelationToColumnMapping(
+//			    ColumnBinding(relation_id, child_binding_info.first.column_index), child_binding_info.second);
+
+			// check if the projection projects the child binding as well
+			for (auto &propagated_binding : propagated_bindings) {
+				if (child_binding_info.second == propagated_binding) {
+					cardinality_estimator.AddRelationToColumnMapping(
+					    ColumnBinding(relation_id, child_binding_info.first.column_index), child_binding_info.second);
+					cardinality_estimator.AddColumnToRelationMap(relation_id, child_binding_info.second.column_index);
+					bindings_carried_over = true;
+				}
+			}
 
 			// Here I need some debugging.
 			// TODO: What does it mean to "add a column to the relation map?"
@@ -263,7 +284,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			// Cardinality estimator keeps track of the relations, the original table_ids of the relations
 			// and the estimated cardinality of relation based on the distinct value counts of the columns.
 			// Here we add the column to the relation info
-			cardinality_estimator.AddColumnToRelationMap(relation_id, binding_info.second.column_index);
+
 		}
 		relations.push_back(std::move(relation));
 		return true;
