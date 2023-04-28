@@ -388,7 +388,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> &node_op
 	InitEquivalentRelations(filter_infos);
 	InitTotalDomains();
 	for (idx_t i = 0; i < node_ops.size(); i++) {
-		auto &join_node = *node_ops[i].node;
+		auto &join_node = *node_ops.at(i).node;
 		auto &op = node_ops[i].op;
 		join_node.SetBaseTableCardinality(op.EstimateCardinality(context));
 		if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {

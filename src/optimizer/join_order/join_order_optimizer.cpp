@@ -95,62 +95,22 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-
-// Need a relation id for copying over bindings.
-// returns a column binding map for what (relation_id, relation_column_id) -> (table_id, actual_column_id)
-column_binding_map_t<ColumnBinding> JoinOrderOptimizer::OptimizeChildren(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent) {
-	LogicalOperator *op = &input_op;
-	// Keep track of all filter bindings the new join order optimizer makes
-	column_binding_map_t<ColumnBinding> all_child_bindings;
-	idx_t child_bindings_it = 0;
-	for (auto &child : op->children) {
-		JoinOrderOptimizer child_optimizer(context);
-		child = child_optimizer.Optimize(std::move(child));
-
-//		CopyChildOptmizerCEBindingMap(child_optimizer, input_op, &all_child_bindings);
-
-		// save the relation bindings from the optimized child. These later all get added to the
-		// parent cardinality_estimator relation column binding map.
-	}
-	// Relation should be added by the calling function.
-	// TODO: Verify that the child has an estimated cardinality and that the bindings are correct
-}
-
 void JoinOrderOptimizer::AddRelation(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent) {
 #ifdef DEBUG
 	// TODO: Here we debug if we are adding a duplicate relation to the the relations map
 #endif
+	D_ASSERT(parent);
+	idx_t table_index = input_op.GetTableIndex()[0];
 	LogicalOperator *op = &input_op;
 	auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
 	auto relation_id = relations.size();
+//	D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
+	relation_mapping[table_index] = relation_id;
 	// Add binding information from the nonreorderable join to this relation.
-
 	cardinality_estimator.AddRelationId(relation_id, op->GetName());
 	relations.push_back(std::move(relation));
 }
 
-//Copy Child Optimizer Cardinality Estimator Binding Map
-void JoinOrderOptimizer::CopyChildOptmizerCEBindingMap(JoinOrderOptimizer &child_optimizer, LogicalOperator &input_op, column_binding_map_t<ColumnBinding> &all_child_bindings) {
-#ifdef DEBUG
-	// TODO: Here we can check if our bindings are being overwritten.
-#endif
-
-	LogicalOperator *op = &input_op;
-	unordered_set<idx_t> bindings;
-	LogicalJoin::GetTableReferences(*op, bindings);
-
-	// This op propagates only certain bindings. We only need to copy those.
-	column_binding_set_t propagated_bindings;
-	for (auto &expected_expression : op->expressions) {
-		if (expected_expression->type == ExpressionType::BOUND_COLUMN_REF) {
-			propagated_bindings.insert(expected_expression->Cast<BoundColumnRefExpression>().binding);
-		} else {
-			std::cout << "we are missing an expresion type and some propagated bindings." << std::endl;
-		}
-	}
-	// TODO: From the input op, we should know the bindings, so we only need to copy bindings that are being projected from this input op.
-	// TODO: Iterate through the bindings of the child_optimizer, and add them to the all_child_bindings_map
-}
 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
                                               vector<reference<LogicalOperator>> &filter_operators,
@@ -192,6 +152,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty
+				// can't we also just optimize the children inside of here?
 				// this can be fixed once we implement the left_projection_map properly...
 				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
@@ -213,14 +174,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-		OptimizeChildren(input_op, parent);
 
-		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
-		// however the join refers to multiple base relations
-		// enumerate all base relations obtained from this join and add them to the relation mapping
-		// also, we have to resolve the join conditions for the joins here
-		// get the left and right bindings
-
+		input_op.children[0] = Optimize(std::move(input_op.children[0]));
+		input_op.children[1] = Optimize(std::move(input_op.children[1]));
 		AddRelation(input_op, parent);
 		return true;
 	}
@@ -236,98 +192,27 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
-		auto &get = op->Cast<LogicalExpressionGet>();
-		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
+//		auto &get = op->Cast<LogicalExpressionGet>();
 		AddRelation(input_op, parent);
-		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		auto relation_id = relations.size();
-		relation_mapping[get.table_index] = relation_id;
-		cardinality_estimator.AddRelationId(relation_id, get.GetName());
-		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
-		// table function call, add to set of relations
-		auto &dummy_scan = op->Cast<LogicalDummyScan>();
-		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
 		AddRelation(input_op, parent);
-		auto relation_id = relations.size();
-		relation_mapping[dummy_scan.table_index] = relation_id;
-
-		cardinality_estimator.AddRelationId(relation_id, dummy_scan.GetName());
-		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto table_index = op->GetTableIndex()[0];
+//		auto table_index = op->GetTableIndex()[0];
 		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
-		auto relation_id = relations.size();
+//		auto relation_id = relations.size();
 
-		// If the children are empty, operator can't ge a logical get.
-		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = op->Cast<LogicalGet>();
-			AddRelation(input_op, parent);
-			cardinality_estimator.AddRelationColumnMapping(get, relation_id);
-			cardinality_estimator.AddRelationId(relation_id, op->GetName());
-			relation_mapping[table_index] = relation_id;
-			relations.push_back(std::move(relation));
-			return true;
+		// optimize children of logical projection, then add the optimized
+		// child ino to the relation map
+		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION || op->children.size() == 1) {
+			input_op.children[0] = Optimize(std::move(input_op.children[0]));
 		}
-
-		// we run the join order optimizer within the subquery as well
-//		JoinOrderOptimizer optimizer(context);
-//		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
-		OptimizeChildren(input_op, parent);
-		// push one child column binding map back.
-		// TODO: Explain!
-		// What I think: We have a projection or a get. Here we copy the binding information from the projection
-		// into the child_optimizer_bindings. The information in the child_optimizer_bindings is then copied into the
-		// current optimizer.
-//!	Done by the call to OptimizeChildren.	optimizer.cardinality_estimator.CopyRelationMap(child_optimizer_bindings.at(0));
-		// This logical projection/get may sit on top of a logical comparison join that has been pushed down
-		// we want to copy the binding info of both tables
-
-//! Done by call to AddRelation		relation_mapping[table_index] = relation_id;
-//! Done by call to AddRelation		cardinality_estimator.AddRelationId(relation_id, op->GetName());
-
-//! Done by call to OptimizeChildren, which calls copy bindings		column_binding_set_t propagated_bindings;
-//! Done by call to OptimizeChildren, which calls copy bindings		for (auto &expected_expression : op->expressions) {
-//! Done by call to OptimizeChildren, which calls copy bindings			if (expected_expression->type == ExpressionType::BOUND_COLUMN_REF) {
-//! Done by call to OptimizeChildren, which calls copy bindings				propagated_bindings.insert(expected_expression->Cast<BoundColumnRefExpression>().binding);
-//! Done by call to OptimizeChildren, which calls copy bindings			}
-//! Done by call to OptimizeChildren, which calls copy bindings		}
-
-// Should all be called by optimize children.
-//		bool bindings_carried_over = false;
-//		for (auto &child_binding_info : child_optimizer_bindings.at(0)) {
-//
-//			// child_binding_info comes from the optimized projection
-//			// we are now masking this binding info to treat is as if it is coming from the current projection/get.
-//			// the current projection/get has a table index declared previously in the scope.
-//			// We bind the table index and column to the binding info from the optimized projection.
-////		cardinality_estimator.AddRelationToColumnMapping(
-////			    ColumnBinding(relation_id, child_binding_info.first.column_index), child_binding_info.second);
-//
-//			// check if the projection projects the child binding as well
-//			for (auto &propagated_binding : propagated_bindings) {
-//				if (child_binding_info.second == propagated_binding) {
-//					cardinality_estimator.AddRelationToColumnMapping(
-//					    ColumnBinding(relation_id, child_binding_info.first.column_index), child_binding_info.second);
-//					cardinality_estimator.AddColumnToRelationMap(relation_id, child_binding_info.second.column_index);
-//					bindings_carried_over = true;
-//				}
-//			}
-//
-//			// Here I need some debugging.
-//			// TODO: What does it mean to "add a column to the relation map?"
-//			// TODO: What is binding info?
-//			// Cardinality estimator keeps track of the relations, the original table_ids of the relations
-//			// and the estimated cardinality of relation based on the distinct value counts of the columns.
-//			// Here we add the column to the relation info
-
-		}
-//! Done by call to AddRelation			relations.push_back(std::move(relation));
+		// no children, just add the current op.
+		AddRelation(input_op, parent);
 		return true;
 	}
 	default:
@@ -804,6 +689,11 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 }
 
 static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
+//	if (!rel.parent) {
+//		std::cout << "the following op has no parent " << std::endl;
+//		std::cout << rel.op.ToString() << std::endl;
+//		throw Exception("Could not find relation in parent node (?)");
+//	}
 	auto &children = rel.parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (children[i].get() == &rel.op) {
@@ -1021,6 +911,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// extract a list of all relations that have to be joined together
 	// and a list of all conditions that is applied to them
 	vector<reference<LogicalOperator>> filter_operators;
+	// Here we need a parent op for some reason. Makes no sense to me.
 	if (!ExtractJoinRelations(*op, filter_operators)) {
 		// do not support reordering this type of plan
 		return plan;
