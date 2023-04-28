@@ -90,6 +90,15 @@ private:
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
 	                          optional_ptr<LogicalOperator> parent = nullptr);
 
+	//! When extracting join relations, you sometimes run the join order optimizer on children if they are non
+	//! re-orderable or for some other reason. When we optimize a child, we need the cardinality estimation information
+	column_binding_set_t OptimizeChildren(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent);
+	//! During the extract join relation phase, we add a relations to our relation map
+	void AddRelation(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent);
+	//! When adding a relation, if the relation represents a non-reorderable relation
+	//! then you need to copy the child binding map.
+	void CopyChildOptmizerCEBindingMap(JoinOrderOptimizer &child_optimizer, LogicalOperator &input_op, column_binding_map_t<ColumnBinding> &all_child_bindings);
+
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
 	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);

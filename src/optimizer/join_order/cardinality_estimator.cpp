@@ -97,13 +97,15 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 }
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
-//	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
-//		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
-//		std::cout << "was    (" << key.table_index << ", " << key.column_index << ") -> (" << relation_column_to_original_column[key].table_index << ", " << relation_column_to_original_column[key].column_index << ")" << std::endl;
-//		std::cout << "now is (" << key.table_index << ", " << key.column_index << ") -> (" << value.table_index << ", " << value.column_index << ")" << std::endl;
-//	}
+	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
+		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
+		std::cout << "was    (" << key.table_index << ", " << key.column_index << ") -> (" << relation_column_to_original_column[key].table_index << ", " << relation_column_to_original_column[key].column_index << ")" << std::endl;
+		std::cout << "now is (" << key.table_index << ", " << key.column_index << ") -> (" << value.table_index << ", " << value.column_index << ")" << std::endl;
+	}
+//	D_ASSERT(relation_column_to_original_column.find(key) == relation_column_to_original_column.end());
 	relation_column_to_original_column[key] = value;
 }
+
 
 void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map) {
 	for (auto &binding_map : relation_column_to_original_column) {
