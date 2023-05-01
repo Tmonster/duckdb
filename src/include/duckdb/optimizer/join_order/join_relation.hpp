@@ -19,9 +19,10 @@ class LogicalOperator;
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
 	LogicalOperator &op;
+	LogicalOperator &data_op;
 	optional_ptr<LogicalOperator> parent;
 
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, LogicalOperator &data_op) : op(op), data_op(data_op), parent(parent) {
 	}
 };
 

@@ -95,19 +95,37 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-void JoinOrderOptimizer::AddRelation(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent) {
+// parent_op <- An operation with two children
+// input_op <- The operation that original is the child of parent_op and potentially gets reordered
+// data_retreival_op <- the data retreival operation that carries the projected table index & bindings needed for the cardinality estimator.
+void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op, LogicalOperator &data_retreival_op) {
 #ifdef DEBUG
 	// TODO: Here we debug if we are adding a duplicate relation to the the relations map
 #endif
-	idx_t table_index = input_op.GetTableIndex()[0];
-	LogicalOperator *op = &input_op;
-	auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
+	// if parent is null, then this is a root relation
+	// if parent is not null, it should have multiple children
+	D_ASSERT(!parent || parent->children.size() >= 2);
+	auto relation = make_uniq<SingleJoinRelation>(input_op, parent, data_retreival_op);
 	auto relation_id = relations.size();
-
-	D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
-	relation_mapping[table_index] = relation_id;
+	auto table_indexes = data_retreival_op.GetTableIndex();
+	if (table_indexes.empty()) {
+		// relation represents a non-reorderable relation. Get the tables referenced in the non-reorderable
+		// relation and add them to the relation mapping
+		unordered_set<idx_t> table_references;
+		LogicalJoin::GetTableReferences(data_retreival_op, table_references);
+		for (auto &reference : table_references) {
+			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
+			relation_mapping[reference] = relation_id;
+		}
+	} else {
+		// Relations should never return more than 1 table index
+		D_ASSERT(table_indexes.size() == 1);
+		idx_t table_index = table_indexes.at(0);
+		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
+		relation_mapping[table_index] = relation_id;
+	}
 	// Add binding information from the nonreorderable join to this relation.
-	cardinality_estimator.AddRelationId(relation_id, op->GetName());
+	cardinality_estimator.AddRelationId(relation_id, data_retreival_op.GetName());
 	relations.push_back(std::move(relation));
 }
 
@@ -178,7 +196,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 		}
-		AddRelation(*op, parent);
+		unordered_set<idx_t> bindings;
+		LogicalJoin::GetTableReferences(*op, bindings);
+		AddRelation(parent, input_op, *op);
 		return true;
 	}
 
@@ -191,27 +211,21 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
-//		auto &get = op->Cast<LogicalExpressionGet>();
-		AddRelation(*op, parent);
-		return true;
-	}
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
-		AddRelation(*op, parent);
+		AddRelation(parent, input_op, *op);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
-			AddRelation(*op, parent);
+			AddRelation(parent, input_op, *op);
 			return true;
 		}
-
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
-		AddRelation(*op, parent);
+		AddRelation(parent, input_op, *op);
 		return true;
 	}
 	default:
@@ -688,11 +702,6 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 }
 
 static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
-	if (!rel.parent) {
-		std::cout << "the following op has no parent " << std::endl;
-		std::cout << rel.op.ToString() << std::endl;
-		throw Exception("Could not find relation in parent node (?)");
-	}
 	auto &children = rel.parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (children[i].get() == &rel.op) {
@@ -1000,16 +1009,18 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto &node = set_manager.GetJoinRelation(i);
-		if (rel.op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = rel.op.Cast<LogicalGet>();
+		if (rel.data_op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = rel.data_op.Cast<LogicalGet>();
 			cardinality_estimator.AddRelationColumnMapping(get, i);
+		} else {
+			std::cout << "rel data op is not a logical get. Instead it is " << LogicalOperatorToString(rel.data_op.type) << std::endl;
 		}
-		if (rel.op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			std::cout << "add column relation map for logical projection" << std::endl;
-			auto &proj = rel.op.Cast<LogicalProjection>();
-			auto bindings = proj.GetColumnBindings();
-			std::cout << "check bindings for projection here" << std::endl;
-		}
+//		if (rel.data_op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+//			std::cout << "add column relation map for logical projection" << std::endl;
+//			auto &proj = rel.op.Cast<LogicalProjection>();
+//			auto bindings = proj.GetColumnBindings();
+//			std::cout << "check bindings for projection here" << std::endl;
+//		}
 		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
 	}
 
