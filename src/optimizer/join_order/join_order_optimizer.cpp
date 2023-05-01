@@ -99,12 +99,12 @@ void JoinOrderOptimizer::AddRelation(LogicalOperator &input_op, optional_ptr<Log
 #ifdef DEBUG
 	// TODO: Here we debug if we are adding a duplicate relation to the the relations map
 #endif
-	D_ASSERT(parent);
 	idx_t table_index = input_op.GetTableIndex()[0];
 	LogicalOperator *op = &input_op;
 	auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
 	auto relation_id = relations.size();
-//	D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
+
+	D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
 	relation_mapping[table_index] = relation_id;
 	// Add binding information from the nonreorderable join to this relation.
 	cardinality_estimator.AddRelationId(relation_id, op->GetName());
@@ -174,9 +174,10 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-
-		op->children[0] = Optimize(std::move(op->children[0]));
-		op->children[1] = Optimize(std::move(op->children[1]));
+		for (auto &child : op->children) {
+			JoinOrderOptimizer optimizer(context);
+			child = optimizer.Optimize(std::move(child));
+		}
 		AddRelation(*op, parent);
 		return true;
 	}
@@ -202,18 +203,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-//		auto table_index = op->GetTableIndex()[0];
-//		auto relation = make_uniq<SingleJoinRelation>(op, parent);
-//		auto relation_id = relations.size();
 
-		// optimize children of logical projection, then add the optimized
-		// child ino to the relation map
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
 			AddRelation(*op, parent);
 			return true;
 		}
-//		 no children, just add the current op.
-		op->children[0] = Optimize(std::move(op->children[0]));
+
+		JoinOrderOptimizer optimizer(context);
+		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		AddRelation(*op, parent);
 		return true;
 	}
@@ -691,11 +688,11 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 }
 
 static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
-//	if (!rel.parent) {
-//		std::cout << "the following op has no parent " << std::endl;
-//		std::cout << rel.op.ToString() << std::endl;
-//		throw Exception("Could not find relation in parent node (?)");
-//	}
+	if (!rel.parent) {
+		std::cout << "the following op has no parent " << std::endl;
+		std::cout << rel.op.ToString() << std::endl;
+		throw Exception("Could not find relation in parent node (?)");
+	}
 	auto &children = rel.parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (children[i].get() == &rel.op) {
@@ -996,7 +993,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			}
 		}
 	}
-	// now use dynamic programming to figure out the optimal join order
+		// now use dynamic programming to figure out the optimal join order
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
