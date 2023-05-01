@@ -175,9 +175,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
-		input_op.children[0] = Optimize(std::move(input_op.children[0]));
-		input_op.children[1] = Optimize(std::move(input_op.children[1]));
-		AddRelation(input_op, parent);
+		op->children[0] = Optimize(std::move(op->children[0]));
+		op->children[1] = Optimize(std::move(op->children[1]));
+		AddRelation(*op, parent);
 		return true;
 	}
 
@@ -193,26 +193,28 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
 //		auto &get = op->Cast<LogicalExpressionGet>();
-		AddRelation(input_op, parent);
+		AddRelation(*op, parent);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
-		AddRelation(input_op, parent);
+		AddRelation(*op, parent);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 //		auto table_index = op->GetTableIndex()[0];
-		auto relation = make_uniq<SingleJoinRelation>(input_op, parent);
+//		auto relation = make_uniq<SingleJoinRelation>(op, parent);
 //		auto relation_id = relations.size();
 
 		// optimize children of logical projection, then add the optimized
 		// child ino to the relation map
-		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION || op->children.size() == 1) {
-			input_op.children[0] = Optimize(std::move(input_op.children[0]));
+		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
+			AddRelation(*op, parent);
+			return true;
 		}
-		// no children, just add the current op.
-		AddRelation(input_op, parent);
+//		 no children, just add the current op.
+		op->children[0] = Optimize(std::move(op->children[0]));
+		AddRelation(*op, parent);
 		return true;
 	}
 	default:
