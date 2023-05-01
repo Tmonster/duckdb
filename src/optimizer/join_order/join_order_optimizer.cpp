@@ -64,20 +64,20 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		// Here you have a filter on a single column in a table. Return a binding for the column
-		// being filtered on so the filter estimator knows what HLL count to pull
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
-	}
-	// TODO: handle inequality filters with functions.
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
-}
+//void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
+//	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+//		// Here you have a filter on a single column in a table. Return a binding for the column
+//		// being filtered on so the filter estimator knows what HLL count to pull
+//		auto &colref = expression.Cast<BoundColumnRefExpression>();
+//		D_ASSERT(colref.depth == 0);
+//		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+//		// map the base table index to the relation index used by the JoinOrderOptimizer
+//		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+//		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
+//	}
+//	// TODO: handle inequality filters with functions.
+//	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
+//}
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
@@ -925,7 +925,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// TODO: when extracting filter operator bindings, do some debugging work (if in debug mode).
 	// That makes debugging the join order optimizer easier
-
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
@@ -971,8 +970,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			unordered_set<idx_t> left_bindings, right_bindings;
 			ExtractBindings(*comparison.left, left_bindings);
 			ExtractBindings(*comparison.right, right_bindings);
-			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			GetColumnBinding(*comparison.right, filter_info->right_binding);
+//			GetColumnBinding(*comparison.left, filter_info->left_binding);
+//			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
@@ -1001,6 +1000,16 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto &node = set_manager.GetJoinRelation(i);
+		if (rel.op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = rel.op.Cast<LogicalGet>();
+			cardinality_estimator.AddRelationColumnMapping(get, i);
+		}
+		if (rel.op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			std::cout << "add column relation map for logical projection" << std::endl;
+			auto &proj = rel.op.Cast<LogicalProjection>();
+			auto bindings = proj.GetColumnBindings();
+			std::cout << "check bindings for projection here" << std::endl;
+		}
 		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
 	}
 
