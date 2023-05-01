@@ -35,11 +35,6 @@ struct FilterInfo {
 	ColumnBinding right_binding;
 };
 
-struct FilterNode {
-	vector<reference<FilterInfo>> filters;
-	unordered_map<idx_t, unique_ptr<FilterNode>> children;
-};
-
 struct NeighborInfo {
 	NeighborInfo(JoinRelationSet &neighbor) : neighbor(neighbor) {
 	}
