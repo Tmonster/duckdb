@@ -68,7 +68,8 @@ private:
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
-
+	//! copy of the relation mapping from the join order optimizer
+	unordered_map<idx_t, idx_t> relation_mapping;
 	vector<RelationsToTDom> relations_to_tdoms;
 
 public:
@@ -90,13 +91,14 @@ public:
 	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id, column_binding_set_t needed_bindings);
 
 	RelationAttributes getRelationAttributes(idx_t relation_id);
-
+	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
+	void InitRelationMapping(unordered_map<idx_t, idx_t> optimizer_relation_mapping);
 	void InitColumnMappings(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
 	void InitTotalDomains();
 	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
+	vector<NodeOp> InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
 																	   vector<unique_ptr<SingleJoinRelation>> &relations,
 																	   vector<unique_ptr<FilterInfo>> &filter_infos);
 	void InitCardinalityEstimatorProps(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
