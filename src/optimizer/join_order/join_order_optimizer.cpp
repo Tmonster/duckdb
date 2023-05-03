@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+
 
 #include "iostream"
 
@@ -36,16 +38,16 @@ static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b) {
 }
 
 //! Extract the set of relations referred to inside an expression
-bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
+bool JoinOrderOptimizer::ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		auto relation_id = relation_mapping[colref.binding.table_index];
-		auto relation_column_index = colref.binding.column_index;
-		cardinality_estimator.AddColumnToRelationMap(relation_id, relation_column_index);
+//		auto relation_id = relation_mapping[colref.binding.table_index];
+//		auto relation_column_index = colref.binding.column_index;
+//		cardinality_estimator.AddColumnToRelationMap(relation_id, relation_column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -56,7 +58,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	D_ASSERT(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
-		if (!ExtractBindings(expr, bindings)) {
+		if (!ExtractRelationBindings(expr, bindings)) {
 			can_reorder = false;
 			return;
 		}
@@ -64,20 +66,22 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-//void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
-//	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-//		// Here you have a filter on a single column in a table. Return a binding for the column
-//		// being filtered on so the filter estimator knows what HLL count to pull
-//		auto &colref = expression.Cast<BoundColumnRefExpression>();
-//		D_ASSERT(colref.depth == 0);
-//		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
-//		// map the base table index to the relation index used by the JoinOrderOptimizer
-//		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-//		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
-//	}
-//	// TODO: handle inequality filters with functions.
-//	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
-//}
+void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		// Here you have a filter on a single column in a table. Return a binding for the column
+		// being filtered on so the filter estimator knows what HLL count to pull
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		// map the base table index to the relation index used by the JoinOrderOptimizer
+		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+		// Add to the table index, later when we add the columns to the relational mapping for the
+		// cardinality estimator, we will grab the relation_id using relation_mapping[table_index]
+		binding = ColumnBinding(colref.binding.table_index, colref.binding.column_index);
+	}
+	// TODO: handle inequality filters with functions.
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
+}
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
@@ -95,6 +99,27 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
+string static GetRelationName(optional_ptr<LogicalOperator> op) {
+	string ret = op->GetName();
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op->Cast<LogicalGet>();
+		if (get.names.size() > 0) {
+			ret = get.names.at(0);
+		}
+		auto catalog_table = get.GetTable();
+		if (catalog_table) {
+			ret = catalog_table->name;
+		}
+		break;
+	}
+	default:
+		auto a = "cool";
+
+	}
+	return ret;
+}
+
 // parent_op <- An operation with two children
 // input_op <- The operation that original is the child of parent_op and potentially gets reordered
 // data_retreival_op <- the data retreival operation that carries the projected table index & bindings needed for the cardinality estimator.
@@ -109,8 +134,9 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 	auto relation_id = relations.size();
 	auto table_indexes = data_retreival_op.GetTableIndex();
 	if (table_indexes.empty()) {
-		// relation represents a non-reorderable relation. Get the tables referenced in the non-reorderable
-		// relation and add them to the relation mapping
+		// relation represents a non-reorderable relation.
+		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
+		// This should all table references, even if there are nested non-reorderable joins.
 		unordered_set<idx_t> table_references;
 		LogicalJoin::GetTableReferences(data_retreival_op, table_references);
 		for (auto &reference : table_references) {
@@ -125,7 +151,7 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 		relation_mapping[table_index] = relation_id;
 	}
 	// Add binding information from the nonreorderable join to this relation.
-	cardinality_estimator.AddRelationId(relation_id, data_retreival_op.GetName());
+	cardinality_estimator.AddRelationId(relation_id, GetRelationName(&data_retreival_op));
 	relations.push_back(std::move(relation));
 }
 
@@ -196,8 +222,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 		}
-		unordered_set<idx_t> bindings;
-		LogicalJoin::GetTableReferences(*op, bindings);
 		AddRelation(parent, input_op, *op);
 		return true;
 	}
@@ -906,6 +930,58 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
+static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t table_index = DConstants::INVALID_INDEX) {
+	optional_ptr<LogicalOperator> get;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+		get = &op.Cast<LogicalGet>();
+		break;
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
+		get = &op.Cast<LogicalColumnDataGet>();
+		break;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		get = GetDataRetOp(*op.children.at(0), table_index);
+		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		get = GetDataRetOp(*op.children.at(0), table_index);
+		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		// We should never be calling GetDataRetOp without a valid table_index.
+		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
+		// A logical join means there is a non-reorderable relation in the join plan. This means we need
+		// to know the exact table index to return.
+		D_ASSERT(table_index != DConstants::INVALID_INDEX);
+		if (join.join_type == JoinType::MARK || join.join_type == JoinType::LEFT) {
+			auto &left_child = *join.children.at(0);
+			get = GetDataRetOp(left_child, table_index);
+			auto table_indexes = get->GetTableIndex();
+			if (table_indexes.size() == 0) {
+				break;
+			}
+			if (get && table_indexes[0] == table_index) {
+				return get;
+			}
+			auto &right_child = *join.children.at(1);
+			get = GetDataRetOp(right_child, table_index);
+			table_indexes = get->GetTableIndex();
+			if (table_indexes.size() == 0) {
+				break;
+			}
+			if (get && table_indexes[0] == table_index) {
+				return get;
+			}
+		}
+		break;
+	}
+	default:
+		// return null pointer, maybe there is no logical get under this child
+		break;
+	}
+	return get;
+}
+
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
@@ -932,8 +1008,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// filters in the process
 	expression_set_t filter_set;
 
-	// TODO: when extracting filter operator bindings, do some debugging work (if in debug mode).
-	// That makes debugging the join order optimizer easier
+	// When extracting filters/comparisons we have no knowledge of the created relations
+	// every condition created here is to a table index created in the binding phase,
+	// the conditions are not towards the relations.
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
@@ -941,6 +1018,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
+//			if (f_op.children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && f_op.children[0]->Cast<LogicalComparisonJoin>().join_type == JoinType::LEFT) {
+//				std::cout << "break here for tpcds query 80 fun left join debugging" << std::endl;
+//			}
 			for (auto &cond : join.conditions) {
 				auto comparison =
 				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
@@ -964,32 +1044,42 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &filter = filters[i];
 		// first extract the relation set for the entire filter
-		unordered_set<idx_t> bindings;
-		ExtractBindings(*filter, bindings);
-		auto &set = set_manager.GetJoinRelation(bindings);
-
+		unordered_set<idx_t> relations;
+		ExtractRelationBindings(*filter, relations);
+		auto &set = set_manager.GetJoinRelation(relations);
 		auto info = make_uniq<FilterInfo>(set, i);
+
 		auto filter_info = info.get();
 		filter_infos.push_back(std::move(info));
 
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
-			// extract the bindings that are required for the left and right side of the comparison
-			unordered_set<idx_t> left_bindings, right_bindings;
-			ExtractBindings(*comparison.left, left_bindings);
-			ExtractBindings(*comparison.right, right_bindings);
-//			GetColumnBinding(*comparison.left, filter_info->left_binding);
-//			GetColumnBinding(*comparison.right, filter_info->right_binding);
-			if (!left_bindings.empty() && !right_bindings.empty()) {
+			// extract the relation_ids that are required for the left and right side of the comparison
+			unordered_set<idx_t> left_relations, right_relations;
+			ExtractRelationBindings(*comparison.left, left_relations);
+			ExtractRelationBindings(*comparison.right, right_relations);
+			// Get Column Bindings to know exactly what columns between relations are being joined with each other
+			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
+#ifdef DEBUG
+			GetColumnBinding(*comparison.left, filter_info->left_binding);
+			GetColumnBinding(*comparison.right, filter_info->right_binding);
+			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
+			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
+			filter_info->left_join_column = left_table + "." + comparison.left->ToString();
+			filter_info->right_join_column = right_table + "." + comparison.right->ToString();
+//			std::cout << "Binding condition : " << filter_info->left_binding.table_index << ", " << filter_info->left_binding.column_index << " = " << filter_info->right_binding.table_index << ", " << filter_info->right_binding.column_index << std::endl;
+//			std::cout << filter_info->left_join_column << " = " << filter_info->right_join_column << std::endl;
+#endif
+			if (!left_relations.empty() && !right_relations.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
-				filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				filter_info->left_set = &set_manager.GetJoinRelation(left_relations);
+				filter_info->right_set = &set_manager.GetJoinRelation(right_relations);
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
-					if (Disjoint(left_bindings, right_bindings)) {
+					if (Disjoint(left_relations, right_relations)) {
 						// they are disjoint, we only need to create one set of edges in the join graph
 						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
 						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
@@ -1001,34 +1091,62 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			}
 		}
 	}
-		// now use dynamic programming to figure out the optimal join order
-	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
-	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
-	vector<NodeOp> nodes_ops;
-	for (idx_t i = 0; i < relations.size(); i++) {
-		auto &rel = *relations[i];
-		auto &node = set_manager.GetJoinRelation(i);
-		if (rel.data_op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = rel.data_op.Cast<LogicalGet>();
-			cardinality_estimator.AddRelationColumnMapping(get, i);
-		} else {
-			std::cout << "rel data op is not a logical get. Instead it is " << LogicalOperatorToString(rel.data_op.type) << std::endl;
-		}
-//		if (rel.data_op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-//			std::cout << "add column relation map for logical projection" << std::endl;
-//			auto &proj = rel.op.Cast<LogicalProjection>();
-//			auto bindings = proj.GetColumnBindings();
-//			std::cout << "check bindings for projection here" << std::endl;
+
+#ifdef DEBUG
+//	vector<NodeOp> nodes_ops;
+//	for (idx_t i = 0; i < relations.size(); i++) {
+//		auto &rel = *relations[i];
+//		auto &node = set_manager.GetJoinRelation(i);
+//		if (rel.data_op.type == LogicalOperatorType::LOGICAL_GET) {
+//			auto &get = rel.data_op.Cast<LogicalGet>();
+//			cardinality_estimator.AddRelationColumnMapping(get, i);
+//			for (auto &binding : get.GetColumnBindings()) {
+//				cardinality_estimator.AddColumnToRelationMap(i, binding.column_index);
+//			}
+//		} else if (rel.data_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+////			std::cout << "here we need to add relation column mapping for joins that were non-reorderable" << std::endl;
+////			std::cout << "relation " << i << " is a comparison join" << std::endl;
+//			unordered_set<idx_t> table_indexes;
+//			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
+//			for (auto &table_index : table_indexes) {
+//				auto get = GetDataRetOp(rel.data_op, table_index);
+//
+//				auto get_table_indexes = get->GetTableIndex();
+//				D_ASSERT(get_table_indexes.size() == 1 && get_table_indexes[0] == table_index);
+//				auto bindings = get->GetColumnBindings();
+//
+//				if (get) {
+//					cardinality_estimator.AddRelationColumnMapping(*get, i);
+////					std::cout << "adding relation mapping for relation " << i << std::endl;
+////					std::cout << "bindings for table index " << table_index << " are " << std::endl;
+//					for (auto &binding : get->GetColumnBindings()) {
+//						std::cout << binding.table_index << ", " << binding.column_index << std::endl;
+//						cardinality_estimator.AddColumnToRelationMap(i, binding.column_index);
+//					}
+//				} else {
+//					std::cout << "no get returned" << std::endl;
+//				}
+//			}
+////			rel.data_op.Print();
+//		} else {
+//			std::cout << "rel data op is not a logical get or a non-reorderable joins. Instead it is " << LogicalOperatorToString(rel.data_op.type) << std::endl;
 //		}
-		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
-	}
+//		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
+//	}
 
-	cardinality_estimator.InitCardinalityEstimatorProps(nodes_ops, filter_infos);
+#endif
 
-	for (auto &node_op : nodes_ops) {
-		D_ASSERT(node_op.node);
-		plans[&node_op.node->set] = std::move(node_op.node);
+	// now use dynamic programming to figure out the optimal join order
+	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
+	// nodes of the join tree
+	cardinality_estimator.InitCardinalityEstimatorProps2(set_manager, relations, filter_infos);
+
+	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	for (idx_t i = 0; i < relations.size(); i++) {
+		auto &node = set_manager.GetJoinRelation(i);
+		auto join_node = make_uniq<JoinNode>(node, 0);
+		plans[&node] = std::move(join_node);
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

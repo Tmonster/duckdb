@@ -56,6 +56,7 @@ private:
 	idx_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
+
 	//! A mapping of base table index -> index into relations array (relation_id)
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A structure holding all the created JoinRelationSet objects
@@ -80,7 +81,7 @@ private:
 	unordered_set<std::string> join_nodes_in_full_plan;
 
 	//! Extract the bindings referred to by an Expression
-	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+	bool ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings);
 
 	//! Get column bindings from a filter
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
