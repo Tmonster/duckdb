@@ -28,6 +28,15 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 	return false;
 }
 
+void CardinalityEstimator::InitRelationMapping(unordered_map<idx_t, idx_t> optimizer_relation_mapping) {
+	for (auto &kv : optimizer_relation_mapping) {
+		relation_mapping[kv.first] = kv.second;
+	}
+}
+
+
+//! Only called for single filters. Hence no mention of the right binding, since
+//! That binding won't be initialized
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	D_ASSERT(filter_info.set.count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
@@ -381,7 +390,20 @@ static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding>
 	return binding_intersection;
 }
 
-void CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
+//! Update the filter bindings so that left and right table bindings bind to the relations now.
+void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos) {
+	for (auto &filter : filter_infos) {
+		if (filter->set.count <= 1) {
+			continue;
+		}
+		D_ASSERT(relation_mapping.find(filter->left_binding.table_index) != relation_mapping.end());
+		D_ASSERT(relation_mapping.find(filter->right_binding.table_index) != relation_mapping.end());
+		filter->left_binding.table_index = relation_mapping[filter->left_binding.table_index];
+		filter->right_binding.table_index = relation_mapping[filter->right_binding.table_index];
+	}
+}
+
+vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
                                                           vector<unique_ptr<SingleJoinRelation>> &relations,
                                                           vector<unique_ptr<FilterInfo>> &filter_infos) {
 	vector<NodeOp> node_ops;
@@ -433,6 +455,9 @@ void CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelationSetManager
 	}
 
 	InitColumnMappings(node_ops, filter_infos);
+
+	UpdateFilterInfos(filter_infos);
+
 	InitEquivalentRelations(filter_infos);
 	InitTotalDomains();
 	for (idx_t i = 0; i < node_ops.size(); i++) {
@@ -459,8 +484,12 @@ void CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelationSetManager
 		UpdateTotalDomains(join_node, op);
 	}
 
+	// Here we should be able to look at relations_to_tdoms and print the table.column combination of every
+	// equivalent combination and their estimated cardinality.
+
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
+	return node_ops;
 }
 
 void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> &node_ops,
