@@ -33,6 +33,8 @@ struct FilterInfo {
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+	string left_join_column;
+	string right_join_column;
 };
 
 struct NeighborInfo {
