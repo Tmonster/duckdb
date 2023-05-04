@@ -35,6 +35,7 @@ string QueryGraph::ToString() const {
 void QueryGraph::Print() {
 	Printer::Print(ToString());
 }
+
 // LCOV_EXCL_STOP
 
 QueryEdge &QueryGraph::GetQueryEdge(JoinRelationSet &left) {
@@ -76,14 +77,19 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 	info.neighbors.push_back(std::move(n));
 }
 
+
+// info.get() and info is the reason for the bug.
+// if [1, 2, 3] gets passed and [1, 3] -> [4]
+// We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
 void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) {
 	for (idx_t j = 0; j < node.count; j++) {
 		reference<QueryEdge> info = root;
 		for (idx_t i = j; i < node.count; i++) {
 			auto entry = info.get().children.find(node.relations[i]);
 			if (entry == info.get().children.end()) {
-				// node not found
-				break;
+				// node not found, continue because combining with another relation in the node
+				// might have an edge
+				continue;
 			}
 			// check if any subset of the other set is in this sets neighbors
 			info = *entry->second;
@@ -92,6 +98,7 @@ void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<b
 					return;
 				}
 			}
+
 		}
 	}
 }

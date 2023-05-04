@@ -1,0 +1,27 @@
+# name: test/optimizer/joins/order_optimizer_bindings.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+pragma debug_force_no_cross_product=true;
+
+statement ok
+Create table test0 (x integer);
+
+statement ok
+Create table test1 (x integer);
+
+statement ok
+Create table test2 (x integer);
+
+statement ok
+Create table test3 (x integer);
+
+statement ok
+Create table test4 (x integer);
+
+mode output_result
+
+statement ok
+Explain analyze SELECT * FROM  test0, test1, test2,test3, test4
+WHERE test1.x + test4.x = test2.x AND test1.x + test4.x = test3.x AND test1.x = test4.x AND test1.x = test0.x;
