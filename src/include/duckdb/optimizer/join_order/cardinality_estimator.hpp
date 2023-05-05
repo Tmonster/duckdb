@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class JoinOrderOptimizer;
+
 struct RelationAttributes {
 
 	RelationAttributes() {
@@ -22,7 +24,8 @@ struct RelationAttributes {
 	string original_name;
 	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
-	unordered_set<idx_t> columns;
+	// map is column_index, actual column name
+	unordered_map<idx_t, string> columns;
 	double cardinality;
 };
 
@@ -58,7 +61,7 @@ struct Subgraph2Denominator {
 
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator(ClientContext &context) : context(context) {
+	explicit CardinalityEstimator(ClientContext &context, JoinOrderOptimizer *optimizer) : context(context), join_optimizer(optimizer) {
 	}
 
 private:
@@ -68,42 +71,22 @@ private:
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
-	//! copy of the relation mapping from the join order optimizer
-	unordered_map<idx_t, idx_t> relation_mapping;
 	vector<RelationsToTDom> relations_to_tdoms;
+	JoinOrderOptimizer *join_optimizer;
 
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
+	void GetJoinOptimizerReference(JoinOrderOptimizer &optimizer);
 
 	void AddRelationId(idx_t relation_id, string original_name);
-	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
-	//! Add the key value entry into the relation_column_to_original_column
-	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
-	//! Add a column to the relation_to_columns map.
-	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
-	//! Dump all bindings in relation_column_to_original_column into the child_binding_map
-	// If you have a non-reorderable join, this function is used to keep track of bindings
-	// in the child join plan.
-	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
-	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
-	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id, column_binding_set_t needed_bindings);
 
 	RelationAttributes getRelationAttributes(idx_t relation_id);
-	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
-	void InitRelationMapping(unordered_map<idx_t, idx_t> optimizer_relation_mapping);
-	void InitColumnMappings(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
-	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
-	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	vector<NodeOp> InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
-																	   vector<unique_ptr<SingleJoinRelation>> &relations,
-																	   vector<unique_ptr<FilterInfo>> &filter_infos);
-	void InitCardinalityEstimatorProps(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
+	vector<NodeOp> InitCardinalityEstimatorProps();
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
-	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
+
 	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);
 	static double ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality);
 
@@ -113,11 +96,31 @@ private:
 	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 
+	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
+	void InitColumnMappings(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
+	void InitTotalDomains();
+	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
+	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
+
+	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
+
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 	ColumnBinding GetActualBinding(ColumnBinding key);
+
+	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
+	//! Add the key value entry into the relation_column_to_original_column
+	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
+
+	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id, column_binding_set_t needed_bindings);
+
+	//! Add a column to the relation_to_columns map.
+	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
+
+	//! Debugging function to print readable state of the join order optimizer
+	void PrintCardinalityEstimatorInitialState();
 
 	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
 

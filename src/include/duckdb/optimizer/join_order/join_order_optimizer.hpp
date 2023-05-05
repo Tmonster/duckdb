@@ -40,7 +40,7 @@ struct RelationDebugInfo {
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), cardinality_estimator(context), full_plan_found(false), must_update_full_plan(false) {
+	    : context(context), cardinality_estimator(context, this), full_plan_found(false), must_update_full_plan(false) {
 	}
 
 	//! Perform join reordering inside a plan
@@ -74,6 +74,7 @@ private:
 	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A = C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
+	friend CardinalityEstimator;
 	CardinalityEstimator cardinality_estimator;
 
 	bool full_plan_found;

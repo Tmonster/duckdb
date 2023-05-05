@@ -257,12 +257,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 }
 
-//! Update the exclusion set with all entries in the subgraph
-static void UpdateExclusionSet(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
-	for (idx_t i = 0; i < node.count; i++) {
-		exclusion_set.insert(node.relations[i]);
-	}
-}
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet &set,
@@ -381,6 +375,13 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet &left, JoinRelationSet &rig
 	}
 	EmitPair(left, right, info);
 	return true;
+}
+
+//! Update the exclusion set with all entries in the subgraph
+static void UpdateExclusionSet(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
+	for (idx_t i = 0; i < node.count; i++) {
+		exclusion_set.insert(node.relations[i]);
+	}
 }
 
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
@@ -1008,9 +1009,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// filters in the process
 	expression_set_t filter_set;
 
-	// When extracting filters/comparisons we have no knowledge of the created relations
-	// every condition created here is to a table index created in the binding phase,
-	// the conditions are not towards the relations.
+	// Inspect filter operations so we can create edges in our query graph.
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
@@ -1061,16 +1060,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			ExtractRelationBindings(*comparison.right, right_relations);
 			// Get Column Bindings to know exactly what columns between relations are being joined with each other
 			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
-//#ifdef DEBUG
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
-//			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
-//			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
-//			filter_info->left_join_column = left_table + "." + comparison.left->ToString();
-//			filter_info->right_join_column = right_table + "." + comparison.right->ToString();
-//			std::cout << "Binding condition : " << filter_info->left_binding.table_index << ", " << filter_info->left_binding.column_index << " = " << filter_info->right_binding.table_index << ", " << filter_info->right_binding.column_index << std::endl;
-//			std::cout << filter_info->left_join_column << " = " << filter_info->right_join_column << std::endl;
-//#endif
+#ifdef DEBUG
+
+			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
+			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
+			filter_info->left_join_column = left_table + "." + comparison.left->ToString();
+			filter_info->right_join_column = right_table + "." + comparison.right->ToString();
+#endif
 			if (!left_relations.empty() && !right_relations.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
@@ -1096,57 +1094,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 	}
 
-#ifdef DEBUG
-//	vector<NodeOp> nodes_ops;
-//	for (idx_t i = 0; i < relations.size(); i++) {
-//		auto &rel = *relations[i];
-//		auto &node = set_manager.GetJoinRelation(i);
-//		if (rel.data_op.type == LogicalOperatorType::LOGICAL_GET) {
-//			auto &get = rel.data_op.Cast<LogicalGet>();
-//			cardinality_estimator.AddRelationColumnMapping(get, i);
-//			for (auto &binding : get.GetColumnBindings()) {
-//				cardinality_estimator.AddColumnToRelationMap(i, binding.column_index);
-//			}
-//		} else if (rel.data_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-////			std::cout << "here we need to add relation column mapping for joins that were non-reorderable" << std::endl;
-////			std::cout << "relation " << i << " is a comparison join" << std::endl;
-//			unordered_set<idx_t> table_indexes;
-//			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
-//			for (auto &table_index : table_indexes) {
-//				auto get = GetDataRetOp(rel.data_op, table_index);
-//
-//				auto get_table_indexes = get->GetTableIndex();
-//				D_ASSERT(get_table_indexes.size() == 1 && get_table_indexes[0] == table_index);
-//				auto bindings = get->GetColumnBindings();
-//
-//				if (get) {
-//					cardinality_estimator.AddRelationColumnMapping(*get, i);
-////					std::cout << "adding relation mapping for relation " << i << std::endl;
-////					std::cout << "bindings for table index " << table_index << " are " << std::endl;
-//					for (auto &binding : get->GetColumnBindings()) {
-//						std::cout << binding.table_index << ", " << binding.column_index << std::endl;
-//						cardinality_estimator.AddColumnToRelationMap(i, binding.column_index);
-//					}
-//				} else {
-//					std::cout << "no get returned" << std::endl;
-//				}
-//			}
-////			rel.data_op.Print();
-//		} else {
-//			std::cout << "rel data op is not a logical get or a non-reorderable joins. Instead it is " << LogicalOperatorToString(rel.data_op.type) << std::endl;
-//		}
-//		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
-//	}
-
-#endif
-	// copy over relation mapping to the cardinality estimator.
-	// Needed to update filter information so filters bind from
-	// table_index.column_id to relation_id.column_id
-	cardinality_estimator.InitRelationMapping(relation_mapping);
 	// now use dynamic programming to figure out the optimal join order
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree
-	vector<NodeOp> node_ops = cardinality_estimator.InitCardinalityEstimatorProps2(set_manager, relations, filter_infos);
+//	cardinality_estimator.GetJoinOptimizerReference(*this);
+	vector<NodeOp> node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
 
 	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.

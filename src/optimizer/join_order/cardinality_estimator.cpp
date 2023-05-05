@@ -6,7 +6,9 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <cmath>
 #include "iostream"
@@ -27,13 +29,6 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 	}
 	return false;
 }
-
-void CardinalityEstimator::InitRelationMapping(unordered_map<idx_t, idx_t> optimizer_relation_mapping) {
-	for (auto &kv : optimizer_relation_mapping) {
-		relation_mapping[kv.first] = kv.second;
-	}
-}
-
 
 //! Only called for single filters. Hence no mention of the right binding, since
 //! That binding won't be initialized
@@ -117,7 +112,6 @@ void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnB
 		relation_column_to_original_column[key].push_back(value);
 		return;
 	}
-//	D_ASSERT(relation_column_to_original_column.find(key) == relation_column_to_original_column.end());
 	relation_column_to_original_column[key] = vector<ColumnBinding>();
 	relation_column_to_original_column[key].push_back(value);
 }
@@ -128,12 +122,6 @@ RelationAttributes CardinalityEstimator::getRelationAttributes(idx_t relation_id
 	return relation_attributes[relation_id];
 }
 
-void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map) {
-//	for (auto &binding_map : relation_column_to_original_column) {
-//		D_ASSERT(child_binding_map.find(binding_map.first) == child_binding_map.end());
-//		child_binding_map[binding_map.first] = binding_map.second;
-//	}
-}
 
 void CardinalityEstimator::AddRelationId(idx_t relation_id, string original_name) {
 	D_ASSERT(relation_attributes.find(relation_id) == relation_attributes.end());
@@ -145,7 +133,7 @@ void CardinalityEstimator::AddRelationId(idx_t relation_id, string original_name
 //! Should only be called once for table_index, column_index
 void CardinalityEstimator::AddColumnToRelationMap(idx_t relation_id, idx_t column_index) {
 	D_ASSERT(relation_attributes[relation_id].columns.find(column_index) == relation_attributes[relation_id].columns.end());
-	relation_attributes[relation_id].columns.insert(column_index);
+	relation_attributes[relation_id].columns[column_index] = "__no_column_name_found__";
 }
 
 void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos) {
@@ -207,10 +195,13 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 			auto needed_binding_key = ColumnBinding(get.table_index, bindings.at(it).column_index);
 			auto key = ColumnBinding(relation_id, bindings.at(it).column_index);
 			auto value = ColumnBinding(get.table_index, get.column_ids.at(it));
+			auto column_name = get.names.at(it);
+
 			if (needed_bindings.find(needed_binding_key) == needed_bindings.end()) {
 				// if the binding isn't used in any filters, no need to add it
 				continue;
 			}
+			relation_attributes[relation_id].columns[it] = column_name;
 			AddRelationToColumnMapping(key, value);
 		}
 	}
@@ -343,23 +334,12 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	return numerator / denom;
 }
 
-static bool IsLogicalFilter(LogicalOperator &op) {
-	return op.type == LogicalOperatorType::LOGICAL_FILTER;
+void CardinalityEstimator::GetJoinOptimizerReference(JoinOrderOptimizer &optimizer) {
+	join_optimizer = &optimizer;
 }
 
-void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
-                                         vector<column_binding_map_t<ColumnBinding>> &child_binding_maps) {
-	for (auto &map_set : child_binding_maps) {
-		for (auto &mapping : map_set) {
-			ColumnBinding relation_bindings = mapping.first;
-			ColumnBinding actual_bindings = mapping.second;
-
-			if (actual_bindings.table_index == binding_index) {
-				auto key = ColumnBinding(relation_id, relation_bindings.column_index);
-				AddRelationToColumnMapping(key, actual_bindings);
-			}
-		}
-	}
+static bool IsLogicalFilter(LogicalOperator &op) {
+	return op.type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
@@ -374,6 +354,8 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	}
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
+
+
 void CardinalityEstimator::InitColumnMappings(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos) {
 
 }
@@ -392,6 +374,7 @@ static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding>
 
 //! Update the filter bindings so that left and right table bindings bind to the relations now.
 void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos) {
+	auto relation_mapping = join_optimizer->relation_mapping;
 	for (auto &filter : filter_infos) {
 		if (filter->set.count <= 1) {
 			continue;
@@ -403,11 +386,39 @@ void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &fil
 	}
 }
 
-vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelationSetManager &set_manager,
-                                                          vector<unique_ptr<SingleJoinRelation>> &relations,
-                                                          vector<unique_ptr<FilterInfo>> &filter_infos) {
-	vector<NodeOp> node_ops;
+void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
+	// Print what table.columns have the same "total domain"
+	// and print the total domain
 
+	// If a relation has a
+	for (auto &r2tdom : relations_to_tdoms) {
+		string res = "Columns ";
+		for (auto &rel : r2tdom.equivalent_relations) {
+			auto attributes = getRelationAttributes(rel.table_index);
+			auto table_name = attributes.original_name;
+			D_ASSERT(attributes.columns.find(rel.column_index) != attributes.columns.end());
+			auto column_name = attributes.columns.find(rel.column_index)->second;
+			res += table_name + "." + column_name + ", ";
+		}
+		res += " have the same total domains \n";
+		Printer::Print(res);
+	}
+	// print the estimated base cardinality of every table.
+	for (auto &relation_attribute : relation_attributes) {
+		string to_print = "Columns ";
+		for (auto &column : relation_attribute.second.columns) {
+			to_print += relation_attribute.second.original_name + "." + column.second + ", ";
+		}
+		to_print += " have an estimated cardinality of " + to_string(relation_attribute.second.cardinality);
+		Printer::Print(to_print);
+	}
+}
+
+vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
+	vector<NodeOp> node_ops;
+	auto &set_manager = join_optimizer->set_manager;
+	auto &relations = join_optimizer->relations;
+	auto &filter_infos = join_optimizer->filter_infos;
 	// This should be in its own function, here we are adding relation->columns information
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
@@ -416,13 +427,15 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelation
 			auto &get = rel.data_op.Cast<LogicalGet>();
 			auto column_Bindings = get.GetColumnBindings();
 			auto needed_column_bindings = GetColumnBindingsUsedInFilters(column_Bindings, filter_infos);
+
 			// These two below can be combined.
-			// adds (relation_id, column_binding) -> (table_index, actual_column)
-			AddRelationColumnMapping(get, i, needed_column_bindings);
 			for (auto &binding : needed_column_bindings) {
 				// adds columns to relation_mapping[relation_id].RelationAttributes.columns
 				AddColumnToRelationMap(i, binding.column_index);
 			}
+			// adds (relation_id, column_binding) -> (table_index, actual_column)
+			AddRelationColumnMapping(get, i, needed_column_bindings);
+
 		} else if (rel.data_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			//			std::cout << "here we need to add relation column mapping for joins that were non-reorderable" << std::endl;
 			//			std::cout << "relation " << i << " is a comparison join" << std::endl;
@@ -442,17 +455,21 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelation
 
 				auto column_bindings = op->GetColumnBindings();
 				auto needed_column_bindings = GetColumnBindingsUsedInFilters(column_bindings, filter_infos);
-				AddRelationColumnMapping(*op, i, needed_column_bindings);
+
 				for (auto &binding : needed_column_bindings) {
 					// adds columns to relation_mapping[relation_id].RelationAttributes.columns
 					AddColumnToRelationMap(i, binding.column_index);
 				}
+				AddRelationColumnMapping(*op, i, needed_column_bindings);
+
+
 			}
 		} else {
 			std::cout << "rel data op is not a logical get or a non-reorderable joins. Instead it is " << LogicalOperatorToString(rel.data_op.type) << std::endl;
 		}
 		node_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
 	}
+
 
 	InitColumnMappings(node_ops, filter_infos);
 
@@ -489,41 +506,8 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps2(JoinRelation
 
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
+//	PrintCardinalityEstimatorInitialState();
 	return node_ops;
-}
-
-void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> &node_ops,
-                                                         vector<unique_ptr<FilterInfo>> &filter_infos) {
-
-	InitColumnMappings(node_ops, filter_infos);
-	InitEquivalentRelations(filter_infos);
-	InitTotalDomains();
-	for (idx_t i = 0; i < node_ops.size(); i++) {
-		auto &join_node = *node_ops.at(i).node;
-		auto &op = node_ops[i].op;
-		join_node.SetBaseTableCardinality(op.EstimateCardinality(context));
-		if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = op.Cast<LogicalComparisonJoin>();
-			if (join.join_type == JoinType::LEFT) {
-				// If a base op is a Logical Comparison join it is probably a left join,
-				// so the cost of the larger table is a fine estimate.
-				// TODO: provide better estimates for cost of mark joins
-				// MARK joins are used for anti and semi joins, so the cost can conceivably be
-				// less than the base table cardinality.
-				join_node.SetCost(join_node.GetBaseTableCardinality());
-			}
-		} else if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			// AsOf joins have the cardinality of the LHS
-			join_node.SetCost(join_node.GetBaseTableCardinality());
-		}
-		// Total domains can be affected by filters. So we update base table cardinality first
-		EstimateBaseTableCardinality(join_node, op);
-		// Then update total domains.
-		UpdateTotalDomains(join_node, op);
-	}
-
-	// sort relations from greatest tdom to lowest tdom.
-	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 }
 
 ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
@@ -545,7 +529,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
-		ColumnBinding key = ColumnBinding(relation_id, column);
+		ColumnBinding key = ColumnBinding(relation_id, column.first);
 		auto actual_binding = GetActualBinding(key);
 		// each relation has columns that are either projected or used as filters
 		// In order to get column statistics we need to make sure the actual binding still
@@ -717,7 +701,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 	double lowest_card_found = NumericLimits<double>::Maximum();
 	for (auto &column : relation_attributes[relation_id].columns) {
 		auto card_after_filters = node.GetBaseTableCardinality();
-		ColumnBinding key = ColumnBinding(relation_id, column);
+		ColumnBinding key = ColumnBinding(relation_id, column.first);
 		optional_ptr<TableFilterSet> table_filters;
 		auto actual_binding = GetActualBinding(key);
 		table_filters = GetTableFilters(op, actual_binding.table_index);
@@ -733,6 +717,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 		lowest_card_found = MinValue(card_after_filters, lowest_card_found);
 	}
 	node.SetEstimatedCardinality(lowest_card_found);
+	relation_attributes[relation_id].cardinality = lowest_card_found;
 }
 
 } // namespace duckdb
