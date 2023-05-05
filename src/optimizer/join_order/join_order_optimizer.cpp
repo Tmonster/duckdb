@@ -45,9 +45,6 @@ bool JoinOrderOptimizer::ExtractRelationBindings(Expression &expression, unorder
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-//		auto relation_id = relation_mapping[colref.binding.table_index];
-//		auto relation_column_index = colref.binding.column_index;
-//		cardinality_estimator.AddColumnToRelationMap(relation_id, relation_column_index);
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -134,7 +131,7 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 	auto relation_id = relations.size();
 	auto table_indexes = data_retreival_op.GetTableIndex();
 	if (table_indexes.empty()) {
-		// relation represents a non-reorderable relation.
+		// relation represents a non-reorderable relation or Projection.
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
 		unordered_set<idx_t> table_references;
@@ -983,6 +980,18 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 	return get;
 }
 
+
+string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
+	string ret = "";
+#ifdef DEBUG
+	for (auto &rel_id : relation_bindings) {
+		string table = cardinality_estimator.getRelationAttributes(rel_id).original_name;
+		ret += table + "." + column_name + ", ";
+	}
+#endif
+	return ret;
+}
+
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
@@ -1017,9 +1026,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
-//			if (f_op.children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && f_op.children[0]->Cast<LogicalComparisonJoin>().join_type == JoinType::LEFT) {
-//				std::cout << "break here for tpcds query 80 fun left join debugging" << std::endl;
-//			}
 			for (auto &cond : join.conditions) {
 				auto comparison =
 				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
@@ -1062,13 +1068,10 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
-#ifdef DEBUG
-
-			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
-			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
-			filter_info->left_join_column = left_table + "." + comparison.left->ToString();
-			filter_info->right_join_column = right_table + "." + comparison.right->ToString();
-#endif
+//			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
+//			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
+			filter_info->left_join_column = GetFilterString(left_relations, comparison.left->ToString());
+			filter_info->right_join_column = GetFilterString(right_relations, comparison.left->ToString());
 			if (!left_relations.empty() && !right_relations.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
@@ -1094,18 +1097,20 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 	}
 
+	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
+	// certain table filters.
+	auto node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
+
 	// now use dynamic programming to figure out the optimal join order
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree
-//	cardinality_estimator.GetJoinOptimizerReference(*this);
-	vector<NodeOp> node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
-
 	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	for (auto &node_op : node_ops) {
 		D_ASSERT(node_op.node);
 		plans[&node_op.node->set] = std::move(node_op.node);
 	}
+
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

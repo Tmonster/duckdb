@@ -70,6 +70,9 @@ private:
 	//! A mapping of relation id -> RelationAttributes
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
+	//! The keys of this are used to discover join groups with the same total domains
+	//! The values are used to grab table statistics of the columns and initialize the
+	//! distinct counts.
 	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
 	vector<RelationsToTDom> relations_to_tdoms;
 	JoinOrderOptimizer *join_optimizer;
@@ -97,7 +100,7 @@ private:
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 
 	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
-	void InitColumnMappings(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
+	vector<NodeOp> InitColumnMappings();
 	void InitTotalDomains();
 	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
@@ -114,7 +117,7 @@ private:
 	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
 
-	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id, column_binding_set_t needed_bindings);
+	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id);
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
