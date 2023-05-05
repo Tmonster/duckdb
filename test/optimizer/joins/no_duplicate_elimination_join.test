@@ -1,4 +1,4 @@
-# name: test/optimizer/joins/order_optimizer_bindings.test
+# name: test/optimizer/joins/no_duplicate_elimination_join.test
 # description: In the join order optimizer queries need to have the correct bindings
 # group: [joins]
 
