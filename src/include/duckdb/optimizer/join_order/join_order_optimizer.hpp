@@ -105,6 +105,8 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
+	string GetFilterString(unordered_set<idx_t>, string column_name);
+
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);
