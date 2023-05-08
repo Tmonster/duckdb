@@ -35,7 +35,6 @@ string QueryGraph::ToString() const {
 void QueryGraph::Print() {
 	Printer::Print(ToString());
 }
-
 // LCOV_EXCL_STOP
 
 QueryEdge &QueryGraph::GetQueryEdge(JoinRelationSet &left) {
@@ -77,8 +76,6 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 	info.neighbors.push_back(std::move(n));
 }
 
-
-
 void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
                                        const std::function<bool(NeighborInfo &)> &callback) {
 
@@ -97,13 +94,6 @@ void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdg
 	}
 }
 
-
-// info.get() and info is the reason for the bug.
-// if [1, 2, 3] gets passed and [1, 3] -> [4]
-// We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
-// info.get() and info is the reason for the bug.
-// if [1, 2, 3] gets passed and [1, 3] -> [4]
-// We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
 void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) {
 	for (idx_t j = 0; j < node.count; j++) {
 		auto iter = root.children.find(node.relations[j]);
