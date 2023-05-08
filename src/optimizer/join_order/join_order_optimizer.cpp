@@ -404,29 +404,39 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	// Because we are traversing in reverse order, we need to add neighbors whose number is smaller than the current
 	// node to exclusion_set
 	// This avoids duplicated enumeration
+	string neighbors_added_to_ES = "[";
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); ++i) {
 		D_ASSERT(new_exclusion_set.find(neighbors[i]) == new_exclusion_set.end());
+		neighbors_added_to_ES += std::to_string(neighbors[i]);
+		if (i < neighbors.size() - 1) neighbors_added_to_ES += ", ";
 		new_exclusion_set.insert(neighbors[i]);
 	}
+	neighbors_added_to_ES += "]";
 
+	std::cout << "adding " << neighbors_added_to_ES << " to exclusion set" << std::endl;
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
+
 		auto connections = query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
-			std::cout << "calling try emit pair with " << node.ToString() << " and " << neighbor_relation.ToString() << std::endl;
+			std::cout << "calling try emit pair with node =  " << node.ToString() << " and neighbor_relation = " << neighbor_relation.ToString() << std::endl;
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
 			}
 		}
 
-		std::cout << "calling EnumerateCmpRecursive with " << node.ToString() << " and " << neighbor_relation.ToString() << std::endl;
+		string new_exclusion_set_ss = "[";
+		for (auto &i : new_exclusion_set) new_exclusion_set_ss += to_string(i) + ", ";
+		new_exclusion_set_ss += "]";
+		std::cout << "calling EnumerateCmpRecursive(" << node.ToString() << ", " << neighbor_relation.ToString() << ", " << new_exclusion_set_ss << ");" << std::endl;
 		if (!EnumerateCmpRecursive(node, neighbor_relation, new_exclusion_set)) {
 			return false;
 		}
 
+		std::cout << "removing  " << neighbor << " from exclusion set" << std::endl;
 		new_exclusion_set.erase(neighbor);
 	}
 	return true;
@@ -450,7 +460,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
-				std::cout << "calling try emit pair with " << left.ToString() << " and " << combined_set.ToString() << std::endl;
+				std::cout << "(in cmp recursive) calling try emit pair with " << left.ToString() << " and " << combined_set.ToString() << std::endl;
 				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
 				}
@@ -463,7 +473,10 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
 		new_exclusion_set.insert(neighbors[i]);
-		std::cout << "calling EnumerateCmpRecursive with " << left.ToString() << " and " << union_sets[i].get().ToString() << std::endl;
+		string new_exclusion_set_ss = "[";
+		for (auto &i : new_exclusion_set) new_exclusion_set_ss += to_string(i) + ", ";
+		new_exclusion_set_ss += "]";
+		std::cout << "(in cmp recursive) calling EnumerateCmpRecursive(" << left.ToString() << ", " << union_sets[i].get().ToString() << ", " << new_exclusion_set_ss << ");" << std::endl;
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
@@ -1058,6 +1071,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(nodes_ops, filter_infos);
+
+	query_graph.Print();
 
 	for (auto &node_op : nodes_ops) {
 		D_ASSERT(node_op.node);
