@@ -78,6 +78,29 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 }
 
 
+
+void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
+                                       const std::function<bool(NeighborInfo &)> &callback) {
+
+	for (auto &neighbor : info.get().neighbors) {
+		if (callback(*neighbor)) {
+			return;
+		}
+	}
+
+	for (idx_t node_index = index; node_index < node.count; ++node_index) {
+		auto iter = info.get().children.find(node.relations[node_index]);
+		if (iter != info.get().children.end()) {
+			reference<QueryEdge> new_info = *iter->second;
+			EnumerateNeighborsDFS(node, new_info, node_index + 1, callback);
+		}
+	}
+}
+
+
+// info.get() and info is the reason for the bug.
+// if [1, 2, 3] gets passed and [1, 3] -> [4]
+// We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
 // info.get() and info is the reason for the bug.
 // if [1, 2, 3] gets passed and [1, 3] -> [4]
 // We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
@@ -98,7 +121,6 @@ void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<b
 					return;
 				}
 			}
-
 		}
 	}
 }
