@@ -71,7 +71,7 @@ public:
 	//! Enumerate all neighbors of a given JoinRelationSet node
 	void EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback);
 	void EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
-	                          const std::function<bool(NeighborInfo &)> &callback);
+	                           const std::function<bool(NeighborInfo &)> &callback);
 
 private:
 	//! Get the QueryEdge of a specific node
