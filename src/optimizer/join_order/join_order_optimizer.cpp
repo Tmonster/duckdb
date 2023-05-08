@@ -363,7 +363,12 @@ JoinNode &JoinOrderOptimizer::EmitPair(JoinRelationSet &left, JoinRelationSet &r
 
 bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
                                      const vector<reference<NeighborInfo>> &info) {
+
 	pairs++;
+	D_ASSERT(pairs_emitted.find(left.ToString() + " + " + right.ToString()) == pairs_emitted.end());
+	D_ASSERT(pairs_emitted.find(right.ToString() + " + " + left.ToString()) == pairs_emitted.end());
+	pairs_emitted.insert(left.ToString() + " + " + right.ToString());
+	pairs_emitted.insert(right.ToString() + " + " + left.ToString());
 	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
