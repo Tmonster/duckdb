@@ -106,21 +106,10 @@ void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdg
 // We look for [2] in the children of [1] (i.e the join relation set [1, 2]).
 void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) {
 	for (idx_t j = 0; j < node.count; j++) {
-		reference<QueryEdge> info = root;
-		for (idx_t i = j; i < node.count; i++) {
-			auto entry = info.get().children.find(node.relations[i]);
-			if (entry == info.get().children.end()) {
-				// node not found, continue because combining with another relation in the node
-				// might have an edge
-				continue;
-			}
-			// check if any subset of the other set is in this sets neighbors
-			info = *entry->second;
-			for (auto &neighbor : info.get().neighbors) {
-				if (callback(*neighbor)) {
-					return;
-				}
-			}
+		auto iter = root.children.find(node.relations[j]);
+		if (iter != root.children.end()) {
+			reference<QueryEdge> new_info = *iter->second;
+			EnumerateNeighborsDFS(node, new_info, j + 1, callback);
 		}
 	}
 }
