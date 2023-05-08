@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "iostream"
 
 namespace std {
 
@@ -415,11 +416,13 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto connections = query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
+			std::cout << "calling try emit pair with " << node.ToString() << " and " << neighbor_relation.ToString() << std::endl;
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
 			}
 		}
 
+		std::cout << "calling EnumerateCmpRecursive with " << node.ToString() << " and " << neighbor_relation.ToString() << std::endl;
 		if (!EnumerateCmpRecursive(node, neighbor_relation, new_exclusion_set)) {
 			return false;
 		}
@@ -447,6 +450,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
+				std::cout << "calling try emit pair with " << left.ToString() << " and " << combined_set.ToString() << std::endl;
 				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
 				}
@@ -459,6 +463,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
 		new_exclusion_set.insert(neighbors[i]);
+		std::cout << "calling EnumerateCmpRecursive with " << left.ToString() << " and " << union_sets[i].get().ToString() << std::endl;
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
