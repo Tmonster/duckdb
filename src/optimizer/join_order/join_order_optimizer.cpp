@@ -1046,6 +1046,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
 	}
 
+	query_graph.Print();
+
 	cardinality_estimator.InitCardinalityEstimatorProps(nodes_ops, filter_infos);
 
 	for (auto &node_op : nodes_ops) {
