@@ -227,17 +227,16 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 	}
 
 	if (!(op_is_proj || op_is_get)) {
+		// Operation is probably a logical chunk get
 		if (op.type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
 			auto &chunk_get = op.Cast<LogicalColumnDataGet>();
-			std::cout << "inspect logical chunk get stuff here" << std::endl;
-			//
-			// it's a logical chunk get.
-			// look at chunk_get.collection.size() Rows? or Columns?
-			for (auto &expr : chunk_get.expressions) {
-				std::cout << expr->ToString() << std::endl;
-			}
+
+			// if operation is a logical chunk get, we can return. These are used to check
+			// if a column value is in a list of values. The list of values is the logical chunk
+			// get, and is usually not
+		} else {
+			throw InternalException("adding relation column mapping that is not a get or a projection");
 		}
-		throw InternalException("adding relation column mapping that is not a get or a projection");
 	}
 	for (idx_t it = 0; it < column_bindings.size(); it++) {
 		auto needed_binding_key = ColumnBinding(table_index, column_bindings.at(it).column_index);
@@ -248,16 +247,21 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 
 		auto key = ColumnBinding(relation_id, column_bindings.at(it).column_index);
 		ColumnBinding value;
-		string column_name;
+		string column_name = "";
 		if (op_is_get) {
 			value = ColumnBinding(table_index, get->column_ids.at(it));
 			column_name = get->names.at(it);
-		} else if (op_is_proj) {
+		} else {
+			// could also be logical chunk get.
 			value = ColumnBinding(table_index, it);
-			column_name = proj->expressions[it]->GetName();
+			if (op_is_proj) {
+				column_name = proj->expressions[it]->GetName();
+			}
 		}
-		// store the name of the column
-		relation_attributes[relation_id].columns[it] = column_name;
+		if (!column_name.empty()) {
+			// store the name of the column
+			relation_attributes[relation_id].columns[it] = column_name;
+		}
 		// add mapping (relation_id, column_id) -> (table_id, column_id)
 		AddRelationToColumnMapping(key, value);
 	}
@@ -481,12 +485,13 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 			throw InternalException("Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
 		}
-		case LogicalOperatorType::LOGICAL_UNION:
-		case LogicalOperatorType::LOGICAL_EXCEPT:
-		case LogicalOperatorType::LOGICAL_INTERSECT:
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		default:
+//		case LogicalOperatorType::LOGICAL_UNION:
+//		case LogicalOperatorType::LOGICAL_EXCEPT:
+//		case LogicalOperatorType::LOGICAL_INTERSECT:
+//		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+//		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+//		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 			// TODO: Here with have a relation mapping to one of the above types which are all currently considered
 			// non-reorderable. We can add column statistics for these types later.
 			break;
