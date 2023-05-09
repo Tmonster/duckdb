@@ -7,9 +7,6 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-
-#include "iostream"
-
 #include <algorithm>
 #include <cmath>
 
@@ -122,8 +119,10 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 
 // parent_op <- An operation with two children
 // input_op <- The operation that original is the child of parent_op and potentially gets reordered
-// data_retreival_op <- the data retreival operation that carries the projected table index & bindings needed for the cardinality estimator.
-void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op, LogicalOperator &data_retreival_op) {
+// data_retreival_op <- the data retreival operation that carries the projected table index & bindings needed for the
+// cardinality estimator.
+void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
+                                     LogicalOperator &data_retreival_op) {
 #ifdef DEBUG
 	// TODO: Here we debug if we are adding a duplicate relation to the the relations map
 #endif
@@ -154,7 +153,6 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 	cardinality_estimator.AddRelationId(relation_id, GetRelationName(&data_retreival_op));
 	relations.push_back(std::move(relation));
 }
-
 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
                                               vector<reference<LogicalOperator>> &filter_operators,
@@ -256,7 +254,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		return false;
 	}
 }
-
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet &set,
@@ -986,7 +983,6 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 	return get;
 }
 
-
 string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
 	string ret = "";
 #ifdef DEBUG
@@ -1074,8 +1070,10 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
-//			string left_table = cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name;
-//			string right_table = cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
+			//			string left_table =
+			//cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name; 			string
+			//right_table =
+			//cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
 			filter_info->left_join_column = GetFilterString(left_relations, comparison.left->ToString());
 			filter_info->right_join_column = GetFilterString(right_relations, comparison.left->ToString());
 			if (!left_relations.empty() && !right_relations.empty()) {

@@ -11,7 +11,6 @@
 #include "duckdb/common/printer.hpp"
 
 #include <cmath>
-#include "iostream"
 
 namespace duckdb {
 
@@ -30,7 +29,8 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 	return false;
 }
 
-static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding> all_bindings, vector<unique_ptr<FilterInfo>> &filter_infos) {
+static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding> all_bindings,
+                                                           vector<unique_ptr<FilterInfo>> &filter_infos) {
 	column_binding_set_t binding_intersection;
 	for (auto &binding : all_bindings) {
 		for (auto &filter : filter_infos) {
@@ -114,13 +114,6 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
 	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
-		std::cout << "overwriting relation_column_to_original_column entry" << std::endl;
-		std::cout << "key is    (" << key.table_index << ", " << key.column_index << ")" << std::endl;
-		std::cout << "values are: " << std::endl;
-		auto actual_bindings = relation_column_to_original_column[key];
-		for (auto &binding : actual_bindings) {
-			std::cout << "( " << binding.table_index << ", " << binding.column_index << ")" << std::endl;
-		}
 		relation_column_to_original_column[key].push_back(value);
 		return;
 	}
@@ -128,12 +121,10 @@ void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnB
 	relation_column_to_original_column[key].push_back(value);
 }
 
-
 RelationAttributes CardinalityEstimator::getRelationAttributes(idx_t relation_id) {
 	D_ASSERT(relation_attributes.find(relation_id) != relation_attributes.end());
 	return relation_attributes[relation_id];
 }
-
 
 void CardinalityEstimator::AddRelationId(idx_t relation_id, string original_name) {
 	D_ASSERT(relation_attributes.find(relation_id) == relation_attributes.end());
@@ -144,7 +135,8 @@ void CardinalityEstimator::AddRelationId(idx_t relation_id, string original_name
 //! Add a relation_id, column_id to the relation mapping
 //! Should only be called once for table_index, column_index
 void CardinalityEstimator::AddColumnToRelationMap(idx_t relation_id, idx_t column_index) {
-	D_ASSERT(relation_attributes[relation_id].columns.find(column_index) == relation_attributes[relation_id].columns.end());
+	D_ASSERT(relation_attributes[relation_id].columns.find(column_index) ==
+	         relation_attributes[relation_id].columns.end());
 	relation_attributes[relation_id].columns[column_index] = "__no_column_name_found__";
 }
 
@@ -198,7 +190,6 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
 }
 
-
 // This should only be called with Data source operators as defined in logical_operator_type.hpp
 void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id) {
 	auto &filter_infos = join_optimizer->filter_infos;
@@ -228,13 +219,10 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 
 	if (!(op_is_proj || op_is_get)) {
 		// Operation is probably a logical chunk get
-		if (op.type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
-			auto &chunk_get = op.Cast<LogicalColumnDataGet>();
-
+		if (op.type != LogicalOperatorType::LOGICAL_CHUNK_GET) {
 			// if operation is a logical chunk get, we can return. These are used to check
 			// if a column value is in a list of values. The list of values is the logical chunk
 			// get, and is usually not
-		} else {
 			throw InternalException("adding relation column mapping that is not a get or a projection");
 		}
 	}
@@ -483,15 +471,16 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		}
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-			throw InternalException("Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
+			throw InternalException(
+			    "Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
 		}
 		default:
-//		case LogicalOperatorType::LOGICAL_UNION:
-//		case LogicalOperatorType::LOGICAL_EXCEPT:
-//		case LogicalOperatorType::LOGICAL_INTERSECT:
-//		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-//		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-//		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+			//		case LogicalOperatorType::LOGICAL_UNION:
+			//		case LogicalOperatorType::LOGICAL_EXCEPT:
+			//		case LogicalOperatorType::LOGICAL_INTERSECT:
+			//		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+			//		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+			//		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 			// TODO: Here with have a relation mapping to one of the above types which are all currently considered
 			// non-reorderable. We can add column statistics for these types later.
 			break;
@@ -714,7 +703,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
 			idx_t cardinality_with_and_filter =
-			InspectConjunctionAND(cardinality, it.first, &filter, std::move(column_statistics));
+			    InspectConjunctionAND(cardinality, it.first, &filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 			auto &filter = (ConjunctionOrFilter &)*it.second;

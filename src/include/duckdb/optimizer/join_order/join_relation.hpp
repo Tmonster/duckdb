@@ -22,7 +22,8 @@ struct SingleJoinRelation {
 	LogicalOperator &data_op;
 	optional_ptr<LogicalOperator> parent;
 
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, LogicalOperator &data_op) : op(op), data_op(data_op), parent(parent) {
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, LogicalOperator &data_op)
+	    : op(op), data_op(data_op), parent(parent) {
 	}
 };
 

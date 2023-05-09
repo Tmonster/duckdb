@@ -61,7 +61,8 @@ struct Subgraph2Denominator {
 
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator(ClientContext &context, JoinOrderOptimizer *optimizer) : context(context), join_optimizer(optimizer) {
+	explicit CardinalityEstimator(ClientContext &context, JoinOrderOptimizer *optimizer)
+	    : context(context), join_optimizer(optimizer) {
 	}
 
 private:
