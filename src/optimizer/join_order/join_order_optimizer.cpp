@@ -110,9 +110,12 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		auto &chunkget = op->Cast<LogicalColumnDataGet>();
+		ret = chunkget.collection->ToString();
+	}
 	default:
-		auto a = "cool";
-
+		ret = "no-relation-name";
 	}
 	return ret;
 }
@@ -946,30 +949,33 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
-		// We should never be calling GetDataRetOp without a valid table_index.
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
-		// A logical join means there is a non-reorderable relation in the join plan. This means we need
-		// to know the exact table index to return.
+		// A logical comparison join here means a non-reorderable relation was created in the join plan.
+		// We still want total domain statistics of the columns projected from this non-reorderable join
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		if (join.join_type == JoinType::MARK || join.join_type == JoinType::LEFT) {
-			auto &left_child = *join.children.at(0);
-			get = GetDataRetOp(left_child, table_index);
-			auto table_indexes = get->GetTableIndex();
-			if (table_indexes.size() == 0) {
-				break;
-			}
-			if (get && table_indexes[0] == table_index) {
-				return get;
-			}
-			auto &right_child = *join.children.at(1);
-			get = GetDataRetOp(right_child, table_index);
-			table_indexes = get->GetTableIndex();
-			if (table_indexes.size() == 0) {
-				break;
-			}
-			if (get && table_indexes[0] == table_index) {
-				return get;
-			}
+		auto &left_child = *join.children.at(0);
+		get = GetDataRetOp(left_child, table_index);
+		if (!get) {
+			break;
+		}
+		auto table_indexes = get->GetTableIndex();
+		if (table_indexes.size() == 0) {
+			break;
+		}
+		if (table_indexes[0] == table_index) {
+			return get;
+		}
+		auto &right_child = *join.children.at(1);
+		get = GetDataRetOp(right_child, table_index);
+		if (!get) {
+			break;
+		}
+		table_indexes = get->GetTableIndex();
+		if (table_indexes.size() == 0) {
+			break;
+		}
+		if (table_indexes[0] == table_index) {
+			return get;
 		}
 		break;
 	}
