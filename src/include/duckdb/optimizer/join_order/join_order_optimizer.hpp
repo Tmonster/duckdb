@@ -96,7 +96,8 @@ private:
 	//! re-orderable or for some other reason. When we optimize a child, we need the cardinality estimation information
 	unique_ptr<LogicalOperator> OptimizeChildren(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent);
 	//! During the extract join relation phase, we add a relations to our relation map
-	void AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op, LogicalOperator &data_retreival_op);
+	void AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
+	                 LogicalOperator &data_retreival_op);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
