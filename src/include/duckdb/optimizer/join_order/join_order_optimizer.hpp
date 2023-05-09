@@ -30,13 +30,6 @@ struct GenerateJoinRelation {
 	unique_ptr<LogicalOperator> op;
 };
 
-struct RelationDebugInfo {
-	RelationDebugInfo(RelationDebugInfo &info) {
-	}
-
-	unordered_map<idx_t, std::string> relation_id_to_table_name;
-};
-
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
