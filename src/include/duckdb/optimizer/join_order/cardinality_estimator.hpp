@@ -82,7 +82,6 @@ public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
-	void GetJoinOptimizerReference(JoinOrderOptimizer &optimizer);
 
 	void AddRelationId(idx_t relation_id, string original_name);
 

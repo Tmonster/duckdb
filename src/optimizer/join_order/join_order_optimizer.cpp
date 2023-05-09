@@ -135,14 +135,13 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 // cardinality estimator.
 void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
                                      LogicalOperator &data_retreival_op) {
-#ifdef DEBUG
-	// TODO: Here we debug if we are adding a duplicate relation to the the relations map
-#endif
+
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(input_op, parent, data_retreival_op);
 	auto relation_id = relations.size();
+
 	auto table_indexes = data_retreival_op.GetTableIndex();
 	if (table_indexes.empty()) {
 		// relation represents a non-reorderable relation or Projection.
@@ -207,7 +206,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty
-				// can't we also just optimize the children inside of here?
 				// this can be fixed once we implement the left_projection_map properly...
 				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);

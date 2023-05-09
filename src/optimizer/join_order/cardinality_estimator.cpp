@@ -43,10 +43,10 @@ static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding>
 	return binding_intersection;
 }
 
-//! Only called for single filters. Hence no mention of the right binding, since
-//! That binding won't be initialized
+//! Only called for single filters
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	D_ASSERT(filter_info.set.count >= 1);
+	D_ASSERT(SingleColumnFilter(filter_info));
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -393,10 +393,6 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	return numerator / denom;
 }
 
-void CardinalityEstimator::GetJoinOptimizerReference(JoinOrderOptimizer &optimizer) {
-	join_optimizer = &optimizer;
-}
-
 static bool IsLogicalFilter(LogicalOperator &op) {
 	return op.type == LogicalOperatorType::LOGICAL_FILTER;
 }
@@ -506,14 +502,6 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			    "Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
 		}
 		default:
-			//		case LogicalOperatorType::LOGICAL_UNION:
-			//		case LogicalOperatorType::LOGICAL_EXCEPT:
-			//		case LogicalOperatorType::LOGICAL_INTERSECT:
-			//		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-			//		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-			//		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-			// TODO: Here with have a relation mapping to one of the above types which are all currently considered
-			// non-reorderable. We can add column statistics for these types later.
 			break;
 		}
 		node_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
