@@ -1,0 +1,15 @@
+# name: test/optimizer/joins/explain_semi_join_columns.test
+# description: Explain analyze for Semi joins should have the correct column names. Issue 7308
+# group: [joins]
+
+statement ok
+create or replace table x as select * from range(10) t(id1);
+
+statement ok
+create or replace table y as select * from range(10) t(id2);
+
+query I
+explain analyze select * from x where exists (select * from y where x.id1 = y.id2)
+----
+physical_plan	<!REGEX>:.*id1 IS NOT DISTINCT FROM.*\n.*id2.*
+

@@ -15,6 +15,8 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
@@ -163,7 +165,7 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 
 static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join,
                                       const vector<CorrelatedColumnInfo> &correlated_columns,
-                                      vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
+                                      vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim, vector<string> col_names) {
 	auto col_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < col_count; i++) {
 		auto &col = correlated_columns[i];
@@ -258,9 +260,13 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// we only need to create the join conditions between the LHS and the RHS
 		// fetch the set of columns
 		auto plan_columns = dependent_join->GetColumnBindings();
+		vector<string> plan_columns_names;
+		for (auto &dep_expr : dependent_join->expressions) {
+			plan_columns_names.push_back(dep_expr->ToString());
+		}
 
 		// now create the join conditions
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim, plan_columns_names);
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
@@ -278,11 +284,23 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
+		for (auto &op_correlated : flatten.has_correlated_expressions) {
+			// if the op is correlated
+			if (op_correlated.second && op_correlated.first->type == LogicalOperatorType::LOGICAL_FILTER) {
+				auto &filter = op_correlated.first->Cast<LogicalFilter>();
+				std::cout << filter.ToString() << std::endl;
+			}
+		}
 		// fetch the set of columns
 		auto plan_columns = dependent_join->GetColumnBindings();
 
+		vector<string> plan_columns_names;
+		for (auto &dep_expr : dependent_join->expressions) {
+			plan_columns_names.push_back(dep_expr->ToString());
+		}
+
 		// now we create the join conditions between the dependent join and the original table
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim, plan_columns_names);
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
@@ -308,9 +326,14 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 		// fetch the columns
 		auto plan_columns = dependent_join->GetColumnBindings();
+		vector<string> plan_columns_names;
+		for (auto &dep_expr : dependent_join->expressions) {
+			plan_columns_names.push_back(dep_expr->ToString());
+		}
+
 
 		// now we create the join conditions between the dependent join and the original table
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim, plan_columns_names);
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
 		compare_cond.left = std::move(expr.child);
@@ -430,12 +453,17 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	// fetch the set of columns
 	auto plan_columns = dependent_join->GetColumnBindings();
 
+	vector<string> plan_columns_names;
+	for (auto &dep_expr : dependent_join->expressions) {
+		plan_columns_names.push_back(dep_expr->ToString());
+	}
+
 	// now create the join conditions
 	// start off with the conditions that were passed in (if any)
 	D_ASSERT(delim_join->conditions.empty());
 	delim_join->conditions = std::move(conditions);
 	// then add the delim join conditions
-	CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+	CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim, plan_columns_names);
 	delim_join->AddChild(std::move(dependent_join));
 
 	// check if there are any arbitrary expressions left
