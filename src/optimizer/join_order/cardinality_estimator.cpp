@@ -9,6 +9,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
+#include "iostream"
 
 #include <cmath>
 
@@ -116,6 +117,9 @@ void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnB
 	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
 		relation_column_to_original_column[key].push_back(value);
 		return;
+	}
+	if (value.table_index == 2 && value.column_index == 2) {
+		std::cout << "stop here" << std::endl;
 	}
 	relation_column_to_original_column[key] = vector<ColumnBinding>();
 	relation_column_to_original_column[key].push_back(value);
@@ -241,8 +245,18 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 			column_name = get->names.at(it);
 		} else {
 			// could also be logical chunk get.
-			value = ColumnBinding(table_index, it);
 			if (op_is_proj) {
+				/// aaah need to be careful here. A projection can project an amount of columns not present in an original get.
+				// here we can get the name properly, but to get the column, you need to go and get the column index of the logical
+				// get from where the column is originating from.
+				// loop through each expression and find the bindings.
+				// probably needd to cast it here.
+				if (proj->expressions[it]->type == ExpressionType::BOUND_COLUMN_REF) {
+					auto &column_ref = proj->expressions[it]->Cast<BoundColumnRefExpression>();
+					value = column_ref.binding;
+				} else {
+					throw InternalException("relation doesn't have bound column ref");
+				}
 				column_name = proj->expressions[it]->GetName();
 			}
 		}
@@ -440,6 +454,23 @@ void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 	}
 }
 
+void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
+	string header = "Join node has the following relations ";
+//	string relation_ids = "";
+	for (idx_t i = 0; i < node.set.count; i++) {
+		D_ASSERT(relation_attributes.find(node.set.relations[i]) != relation_attributes.end());
+//		relation_ids += node.set.relations[i] + ", ";
+		auto attributes = relation_attributes[node.set.relations[i]];
+		string original_name = attributes.original_name;
+		string columns = "";
+		for (auto &column : attributes.columns) {
+			columns += column.second + ", ";
+		}
+		string to_print = "Table " + original_name + " with columns " + columns;
+		Printer::Print(to_print);
+	}
+}
+
 vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 	vector<NodeOp> node_ops;
 	auto &set_manager = join_optimizer->set_manager;
@@ -564,7 +595,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// refers to the same base table relation, as non-reorderable joins may involve 2+
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
-		data_op = GetDataRetOp(op, key.table_index);
+		data_op = GetDataRetOp(op, actual_binding.table_index);
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = data_op->Cast<LogicalGet>();
 			catalog_table = GetCatalogTableEntry(get);

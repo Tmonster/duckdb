@@ -110,6 +110,18 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
 		auto &chunkget = op->Cast<LogicalColumnDataGet>();
 		ret = chunkget.collection->ToString();
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		auto left_name = GetRelationName(op->children[0]);
+		auto right_name = GetRelationName(op->children[1]);
+		ret = left_name + " joined with " + right_name;
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		return GetRelationName(op->children[0]);
 	}
 	default:
 		ret = "no-relation-name";
@@ -150,7 +162,8 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 		relation_mapping[table_index] = relation_id;
 	}
 	// Add binding information from the nonreorderable join to this relation.
-	cardinality_estimator.AddRelationId(relation_id, GetRelationName(&data_retreival_op));
+	auto relation_name = GetRelationName(&data_retreival_op);
+	cardinality_estimator.AddRelationId(relation_id, relation_name);
 	relations.push_back(std::move(relation));
 }
 
@@ -219,6 +232,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		for (auto &child : op->children) {
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
+
 		}
 		AddRelation(parent, input_op, *op);
 		return true;
@@ -247,6 +261,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		}
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
+		// have to be careful here. projections can sit on joins and have more columns than
+		// the original logical get underneath. For this reason we need to copy some bindings from
+		// the optimizer just declared, so we know what columns map to
 		AddRelation(parent, input_op, *op);
 		return true;
 	}
@@ -1070,12 +1087,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
-			//			string left_table =
-			//cardinality_estimator.getRelationAttributes(filter_info->left_binding.table_index).original_name; 			string
-			//right_table =
-			//cardinality_estimator.getRelationAttributes(filter_info->right_binding.table_index).original_name;
 			filter_info->left_join_column = GetFilterString(left_relations, comparison.left->ToString());
-			filter_info->right_join_column = GetFilterString(right_relations, comparison.left->ToString());
+			filter_info->right_join_column = GetFilterString(right_relations, comparison.right->ToString());
 			if (!left_relations.empty() && !right_relations.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist

@@ -125,6 +125,7 @@ private:
 
 	//! Debugging function to print readable state of the join order optimizer
 	void PrintCardinalityEstimatorInitialState();
+	void PrintJoinNodeProperties(JoinNode &node);
 
 	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
 
