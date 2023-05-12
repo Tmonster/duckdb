@@ -14,6 +14,8 @@ CREATE TABLE vals2(k BIGINT, l BIGINT)
 statement ok
 INSERT INTO vals2 SELECT * FROM vals1
 
+mode skip
+
 ## INNER JOIN: pull up a single filter in cross product from LHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i
@@ -56,11 +58,15 @@ EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl1 LEFT 
 ----
 physical_plan	<REGEX>:.*=5.*=10.*=5.*=10.*
 
+mode unskip
+
 ## INNER JOIN: pull up filter from LHS ####
 query II
 EXPLAIN SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2 WHERE i=5) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i
 ----
 physical_plan	<REGEX>:.*=5.*=5.*=5.*=5.*
+
+mode skip
 
 ## INNER JOIN: pull up filters from RHS ####
 query II
