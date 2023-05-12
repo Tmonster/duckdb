@@ -118,9 +118,6 @@ void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnB
 		relation_column_to_original_column[key].push_back(value);
 		return;
 	}
-	if (value.table_index == 2 && value.column_index == 2) {
-		std::cout << "stop here" << std::endl;
-	}
 	relation_column_to_original_column[key] = vector<ColumnBinding>();
 	relation_column_to_original_column[key].push_back(value);
 }
@@ -244,7 +241,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 			value = ColumnBinding(table_index, get->column_ids.at(it));
 			column_name = get->names.at(it);
 		} else {
-			// could also be logical chunk get.
+
 			if (op_is_proj) {
 				/// aaah need to be careful here. A projection can project an amount of columns not present in an original get.
 				// here we can get the name properly, but to get the column, you need to go and get the column index of the logical
@@ -259,12 +256,16 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 				}
 				column_name = proj->expressions[it]->GetName();
 			}
+			// else could also be logical chunk get.
+			// else could also be a non-reorerable join? But I don't hink so
+			// what to do here?
 		}
 		if (!column_name.empty()) {
 			// store the name of the column
 			relation_attributes[relation_id].columns[it] = column_name;
 		}
 		// add mapping (relation_id, column_id) -> (table_id, column_id)
+		// Given key and values, you can 
 		AddRelationToColumnMapping(key, value);
 	}
 }
@@ -452,10 +453,8 @@ void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 
 void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
 	string header = "Join node has the following relations ";
-//	string relation_ids = "";
 	for (idx_t i = 0; i < node.set.count; i++) {
 		D_ASSERT(relation_attributes.find(node.set.relations[i]) != relation_attributes.end());
-//		relation_ids += node.set.relations[i] + ", ";
 		auto attributes = relation_attributes[node.set.relations[i]];
 		string original_name = attributes.original_name;
 		string columns = "";
@@ -482,11 +481,22 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			AddRelationColumnMapping(rel.data_op, i);
 			break;
 		}
+		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+			throw InternalException(
+			    "Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 			unordered_set<idx_t> table_indexes;
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
 			for (auto &table_index : table_indexes) {
 				auto op = GetDataRetOp(rel.data_op, table_index);
+				if (!op) {
+					break;
+				}
 				auto get_table_indexes = op->GetTableIndex();
 				if (get_table_indexes[0] != table_index) {
 					throw InternalException("something wrong happened");
@@ -496,11 +506,11 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			}
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-			throw InternalException(
-			    "Initializing CE of Logical Dummy scan or logical expression get. Need to add the logic for these");
-		}
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT:
+
+			AddRelationColumnMapping(rel.data_op, i);
 		default:
 			break;
 		}

@@ -958,14 +958,15 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		get = GetDataRetOp(*op.children.at(0), table_index);
 		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical comparison join here means a non-reorderable relation was created in the join plan.
 		// We still want total domain statistics of the columns projected from this non-reorderable join
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		auto &left_child = *join.children.at(0);
+		auto &left_child = *op.children[0];
 		get = GetDataRetOp(left_child, table_index);
 		if (!get) {
 			break;
@@ -977,7 +978,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 		if (table_indexes[0] == table_index) {
 			return get;
 		}
-		auto &right_child = *join.children.at(1);
+		auto &right_child = *op.children.at(1);
 		get = GetDataRetOp(right_child, table_index);
 		if (!get) {
 			break;
@@ -991,6 +992,9 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
 	default:
 		// return null pointer, maybe there is no logical get under this child
 		break;
