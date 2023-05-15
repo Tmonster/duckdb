@@ -265,7 +265,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 			relation_attributes[relation_id].columns[it] = column_name;
 		}
 		// add mapping (relation_id, column_id) -> (table_id, column_id)
-		// Given key and values, you can 
+		// Given key and values, you can
 		AddRelationToColumnMapping(key, value);
 	}
 }
@@ -508,9 +508,17 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		}
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
-		case LogicalOperatorType::LOGICAL_INTERSECT:
+		case LogicalOperatorType::LOGICAL_INTERSECT: {
+			auto &set_op = rel.data_op.Cast<LogicalSetOperation>();
+			// get bindings from both left and right
+			// but you need to be careful because the ordering of the projections on the left might not match
+			// the ordering of the projections on the right.
 
-			AddRelationColumnMapping(rel.data_op, i);
+			// The thing is, when estimating cardinalities for these set operations
+			// knowing the statistics for the columns can help us determine the cardinality of this op..
+			auto &what = set_op;
+			break;
+		}
 		default:
 			break;
 		}
