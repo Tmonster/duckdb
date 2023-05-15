@@ -101,7 +101,7 @@ private:
 
 	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
 	vector<NodeOp> InitColumnMappings();
-	void InitTotalDomains();
+	void RemoveEmptyDomains();
 	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
 

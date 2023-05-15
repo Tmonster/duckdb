@@ -946,18 +946,12 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t table_index = DConstants::INVALID_INDEX) {
 	optional_ptr<LogicalOperator> get;
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_GET:
-		get = &op.Cast<LogicalGet>();
-		break;
-	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		get = &op.Cast<LogicalColumnDataGet>();
-		break;
-	case LogicalOperatorType::LOGICAL_FILTER:
-		get = GetDataRetOp(*op.children.at(0), table_index);
-		break;
+		return &op;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		get = GetDataRetOp(*op.children.at(0), table_index);
-		break;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return GetDataRetOp(*op.children.at(0), table_index);
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -999,6 +993,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 		// return null pointer, maybe there is no logical get under this child
 		break;
 	}
+	get = nullptr;
 	return get;
 }
 

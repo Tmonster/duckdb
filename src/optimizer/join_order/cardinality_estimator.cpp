@@ -172,7 +172,7 @@ void CardinalityEstimator::VerifySymmetry(JoinNode &result, JoinNode &entry) {
 	}
 }
 
-void CardinalityEstimator::InitTotalDomains() {
+void CardinalityEstimator::RemoveEmptyDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
@@ -241,9 +241,8 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 			value = ColumnBinding(table_index, get->column_ids.at(it));
 			column_name = get->names.at(it);
 		} else {
-
 			if (op_is_proj) {
-				/// aaah need to be careful here. A projection can project an amount of columns not present in an original get.
+				// need to be careful here. A projection can project an amount of columns not present in an original get.
 				// here we can get the name properly, but to get the column, you need to go and get the column index of the logical
 				// get from where the column is originating from.
 				// loop through each expression and find the bindings.
@@ -490,6 +489,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			std::cout << "join thing happening here" << std::endl;
 			unordered_set<idx_t> table_indexes;
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
 			for (auto &table_index : table_indexes) {
@@ -509,14 +509,46 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT: {
-			auto &set_op = rel.data_op.Cast<LogicalSetOperation>();
-			// get bindings from both left and right
-			// but you need to be careful because the ordering of the projections on the left might not match
-			// the ordering of the projections on the right.
+			// Just add bindings for the left side. Later on we can add some extra functionality to change the
+			// total domain depending on if the op is a union/except/or intersect.
 
-			// The thing is, when estimating cardinalities for these set operations
-			// knowing the statistics for the columns can help us determine the cardinality of this op..
-			auto &what = set_op;
+			// children of set operation can be another set operation, group by, or a projection.
+			// prefer projection over anything.
+
+			// enumerate the children, if the operator is a projection or logical get
+//			auto op = &rel.data_op;
+//			while (op->type != LogicalOperatorType::LOGICAL_GET && op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+//				D_ASSERT(op->children.size() >= 1);
+//				op = op->children[0].get();
+//			}
+//			AddRelationColumnMapping(*op, i);
+			auto column_bindings = rel.data_op.GetColumnBindings();
+			// grab only the bindings from the operator that are used in filters in the plan
+
+
+			// doing something really dumb and just adding a mapping. But in reality this wont work.
+			for (auto &binding : column_bindings) {
+				// adds columns to relation_mapping[relation_id].columns
+				AddColumnToRelationMap(i, binding.column_index);
+			}
+
+			for (idx_t it = 0; it < column_bindings.size(); it++) {
+				auto key = ColumnBinding(i, column_bindings.at(it).column_index);
+				ColumnBinding value;
+				string column_name = "";
+				value = ColumnBinding(column_bindings[it].table_index, it);
+				// add mapping (relation_id, column_id) -> (table_id, column_id)
+				// Given key and values, you can
+				AddRelationToColumnMapping(key, value);
+			}
+//			if (rel.data_op.children.size() >= 1) {
+//				auto &child = rel.data_op.children[0];
+//				if (child->type == LogicalOperatorType::LOGICAL_PROJECTION || child->type == LogicalOperatorType::LOGICAL_GET) {
+//					AddRelationColumnMapping(*child, i);
+//				} else {
+//					throw InternalException("no projection or get under a set operation, why is that?");
+//				}
+//			}
 			break;
 		}
 		default:
@@ -533,18 +565,20 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 	// with table name and column naming information
 	auto node_ops = InitColumnMappings();
 
-	// This updates column bindings in our filter infos.
-	// Initially they are set to table_index.column_index in order to know what bindings to propagate from
+
+	auto &filter_infos = join_optimizer->filter_infos;
+	// This updates column bindings in the filter_infos array.
+	// Initially they are set to table_index.column_index to know what bindings to propagate from
 	// non-reorderable joins. When we update the filter bindings, they are updated to relation_id.column_index.
 	// This is because our map relation_column_to_original_column stores all bindings from relation_ids
 	// Why do we store them as relation_ids and not table_ids?
 	// The join order optimizer iterates of combinations of joins using relation ids. To estimate the cardinality
 	// of the join of relations we need some filter information that tells us what relation.column_ids are being joined.
-	auto &filter_infos = join_optimizer->filter_infos;
 	UpdateFilterInfos(filter_infos);
 
 	InitEquivalentRelations(filter_infos);
-	InitTotalDomains();
+
+	RemoveEmptyDomains();
 
 	for (idx_t i = 0; i < node_ops.size(); i++) {
 		auto &join_node = *node_ops.at(i).node;
