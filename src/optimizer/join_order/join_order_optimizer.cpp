@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "iostream"
 
 namespace std {
 
@@ -365,10 +366,10 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet &left, JoinRelationSet &rig
                                      const vector<reference<NeighborInfo>> &info) {
 
 	pairs++;
-	D_ASSERT(pairs_emitted.find(left.ToString() + " + " + right.ToString()) == pairs_emitted.end());
-	D_ASSERT(pairs_emitted.find(right.ToString() + " + " + left.ToString()) == pairs_emitted.end());
-	pairs_emitted.insert(left.ToString() + " + " + right.ToString());
-	pairs_emitted.insert(right.ToString() + " + " + left.ToString());
+//	D_ASSERT(pairs_emitted.find(left.ToString() + " + " + right.ToString()) == pairs_emitted.end());
+//	D_ASSERT(pairs_emitted.find(right.ToString() + " + " + left.ToString()) == pairs_emitted.end());
+//	pairs_emitted.insert(left.ToString() + " + " + right.ToString());
+//	pairs_emitted.insert(right.ToString() + " + " + left.ToString());
 	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
@@ -403,25 +404,34 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
 	}
+	std::cout << "adding no neighbors to exclusion set" << std::endl;
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto connections = query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
+			std::cout << "calling try emit pair with node = " << node.ToString() << " and neighbor_relation = " << neighbor_relation.ToString() << std::endl;
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
 			}
 		}
+		string exclusion_set_ss = "[";
+		for (auto &i : exclusion_set) exclusion_set_ss += std::to_string(i) + ",";
+		exclusion_set_ss += "]";
+
+		std::cout << "calling EnumerateCmpRecursive(" << node.ToString() << ", " << neighbor_relation.ToString() << ", " << exclusion_set_ss << ")" << std::endl;
 		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
 			return false;
 		}
+
+		std::cout << "removing no neighbors from the exclusion set" << std::endl;
 	}
 	return true;
 }
 
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-                                               unordered_set<idx_t> exclusion_set) {
+                                               unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
@@ -436,6 +446,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		if (combined_set.count > right.count && plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
+				std::cout << "(in cmp recursive) calling try emit pair with " << left.ToString() << " and " << combined_set.ToString() << std::endl;
 				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
 				}
@@ -448,6 +459,10 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
 		new_exclusion_set.insert(neighbors[i]);
+		string new_exclusion_set_ss = "[";
+		for (auto &i : new_exclusion_set) new_exclusion_set_ss += std::to_string(i) + ",";
+		new_exclusion_set_ss += "]";
+		std::cout << "(in cmp recursive) calling EnumerateCmpRecursive(" << left.ToString() << ", " << union_sets[i].get().ToString() << ", " << new_exclusion_set_ss << ")" << std::endl;
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
