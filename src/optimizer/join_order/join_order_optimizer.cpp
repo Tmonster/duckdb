@@ -200,8 +200,22 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			// extract join conditions from inner join
 			filter_operators.push_back(*op);
 		} else {
-			// non-inner join, not reorderable yet
 			non_reorderable_operation = true;
+		}
+	}
+	if (non_reorderable_operation) {
+		// we encountered a non-reordable operation (setop or non-inner join)
+		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
+		// non-inner joins are also tricky because we can't freely make conditions through them
+		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
+		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
+		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
+		for (auto &child : op->children) {
+			JoinOrderOptimizer optimizer(context);
+			child = optimizer.Optimize(std::move(child));
+		}
+		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = op->Cast<LogicalComparisonJoin>();
 			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
@@ -219,19 +233,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 				}
 			}
 		}
-	}
-	if (non_reorderable_operation) {
-		// we encountered a non-reordable operation (setop or non-inner join)
-		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
-		// non-inner joins are also tricky because we can't freely make conditions through them
-		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
-		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
-		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-		for (auto &child : op->children) {
-			JoinOrderOptimizer optimizer(context);
-			child = optimizer.Optimize(std::move(child));
 
-		}
 		AddRelation(parent, input_op, *op);
 		return true;
 	}
@@ -943,45 +945,59 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t table_index = DConstants::INVALID_INDEX) {
+static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding binding) {
 	optional_ptr<LogicalOperator> get;
+	auto table_index = binding.table_index;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-	case LogicalOperatorType::LOGICAL_GET:
-		return &op;
-	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto table_ids = op.GetTableIndex();
+		if (table_ids.size() == 1 && table_ids[0] == binding.table_index) {
+			return &op;
+		}
+		return nullptr;
+	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		auto &chunk_get = op.Cast<LogicalColumnDataGet>();
+		if (chunk_get.table_index == table_index) {
+			return &chunk_get;
+		}
+		return nullptr;
+	}
 	case LogicalOperatorType::LOGICAL_FILTER:
-		return GetDataRetOp(*op.children.at(0), table_index);
+		// filter is not a data ret op
+		return GetDataRetOp(*op.children.at(0), binding);
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		if (op.GetTableIndex()[0] == table_index) {
+			auto &proj = op.Cast<LogicalProjection>();
+			D_ASSERT(proj.expressions.size() > binding.column_index || binding.column_index == DConstants::INVALID_INDEX);
+			auto &new_expression = proj.expressions[binding.column_index];
+			if (new_expression->type == ExpressionType::BOUND_COLUMN_REF) {
+				auto &new_col_ref = new_expression->Cast<BoundColumnRefExpression>();
+				auto new_binding = new_col_ref.binding;
+				return GetDataRetOp(*op.children.at(0), new_binding);
+			}
+			else {
+				throw InternalException("Projection expression is not a bound column ref.");
+			}
+		}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical comparison join here means a non-reorderable relation was created in the join plan.
 		// We still want total domain statistics of the columns projected from this non-reorderable join
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
 		auto &left_child = *op.children[0];
-		get = GetDataRetOp(left_child, table_index);
-		if (!get) {
-			break;
-		}
-		auto table_indexes = get->GetTableIndex();
-		if (table_indexes.size() == 0) {
-			break;
-		}
-		if (table_indexes[0] == table_index) {
+		get = GetDataRetOp(left_child, binding);
+		if (get) {
 			return get;
 		}
 		auto &right_child = *op.children.at(1);
-		get = GetDataRetOp(right_child, table_index);
-		if (!get) {
-			break;
-		}
-		table_indexes = get->GetTableIndex();
-		if (table_indexes.size() == 0) {
-			break;
-		}
-		if (table_indexes[0] == table_index) {
+		get = GetDataRetOp(right_child, binding);
+		if (get) {
 			return get;
 		}
 		break;
@@ -989,12 +1005,12 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, idx_t tab
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
+		// still need to figure out how best to handle these cases.
 	default:
 		// return null pointer, maybe there is no logical get under this child
 		break;
 	}
-	get = nullptr;
-	return get;
+	return nullptr;
 }
 
 string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {

@@ -21,4 +21,4 @@ statement ok
 Create table test4 as select * from range(400);
 
 statement ok
-select * from test0 SEMI JOIN (Select test1.range as the_range from test1, test2, test3) other ON other.the_range = test0.range;  
+select * from test0 LEFT JOIN (Select test1.range as the_range from test1, test2, test3) other ON other.the_range = test0.range;

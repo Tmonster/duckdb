@@ -253,7 +253,13 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 				} else {
 					throw InternalException("relation doesn't have bound column ref");
 				}
-				column_name = proj->expressions[it]->GetName();
+				auto get = GetDataRetOp(*proj, value);
+				if (get) {
+					auto &actual_get = get->Cast<LogicalGet>();
+					column_name = actual_get.names.at(value.column_index) + " as " + proj->expressions[it]->GetName();
+				} else {
+					column_name = proj->expressions[it]->GetName();
+				}
 			}
 			// else could also be logical chunk get.
 			// else could also be a non-reorerable join? But I don't hink so
@@ -439,6 +445,7 @@ void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 		res += " have the same total domains.";
 		Printer::Print(res);
 	}
+	Printer::Print("\n");
 	// print the estimated base cardinality of every table.
 	for (auto &relation_attribute : relation_attributes) {
 		string to_print = "Columns ";
@@ -489,19 +496,15 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			std::cout << "join thing happening here" << std::endl;
 			unordered_set<idx_t> table_indexes;
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
 			for (auto &table_index : table_indexes) {
-				auto op = GetDataRetOp(rel.data_op, table_index);
+				auto binding = ColumnBinding(table_index, 0);
+				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
+					throw InternalException("should get a valid data ret operation");
 					break;
 				}
-				auto get_table_indexes = op->GetTableIndex();
-				if (get_table_indexes[0] != table_index) {
-					throw InternalException("something wrong happened");
-				}
-				D_ASSERT(get_table_indexes.size() == 1 && get_table_indexes[0] == table_index);
 				AddRelationColumnMapping(*op, i);
 			}
 			break;
@@ -604,6 +607,7 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
+//	PrintCardinalityEstimatorInitialState();
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 	return node_ops;
@@ -635,7 +639,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// refers to the same base table relation, as non-reorderable joins may involve 2+
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
-		data_op = GetDataRetOp(op, actual_binding.table_index);
+		data_op = GetDataRetOp(op, actual_binding);
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = data_op->Cast<LogicalGet>();
 			catalog_table = GetCatalogTableEntry(get);
@@ -686,7 +690,9 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 }
 
 optional_ptr<TableFilterSet> CardinalityEstimator::GetTableFilters(LogicalOperator &op, idx_t table_index) {
-	auto get = GetDataRetOp(op, table_index);
+	// we really only care about the logical get. Not about the binding
+	auto binding = ColumnBinding(table_index, 0);
+	auto get = GetDataRetOp(op, binding);
 	if (!get || get->type != LogicalOperatorType::LOGICAL_GET) {
 		return nullptr;
 	}
@@ -755,7 +761,8 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters,
                                                 idx_t table_index) {
 	idx_t cardinality_after_filters = cardinality;
-	auto data_op = GetDataRetOp(op, table_index);
+	auto binding = ColumnBinding(table_index, 0);
+	auto data_op = GetDataRetOp(op, binding);
 	if (data_op->type != LogicalOperatorType::LOGICAL_GET) {
 		// we should always get a logical get with the call to getdataret op.
 		if (!table_filters.filters.empty()) {
@@ -797,7 +804,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 	D_ASSERT(node.set.count == 1);
 	auto relation_id = node.set.relations[0];
 
-	double lowest_card_found = NumericLimits<double>::Maximum();
+	double lowest_card_found = node.GetBaseTableCardinality();
 	for (auto &column : relation_attributes[relation_id].columns) {
 		auto card_after_filters = node.GetBaseTableCardinality();
 		ColumnBinding key = ColumnBinding(relation_id, column.first);
