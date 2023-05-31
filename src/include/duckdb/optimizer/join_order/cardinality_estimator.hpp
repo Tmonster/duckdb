@@ -118,6 +118,7 @@ private:
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
 
 	void AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id);
+	void AddConstantRelationMapping(idx_t relation_id);
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);

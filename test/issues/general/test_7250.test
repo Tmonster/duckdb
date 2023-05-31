@@ -39,7 +39,7 @@ SELECT *
         t0 NATURAL LEFT JOIN t1 
         WHERE 
             (
-                ((DATE '2023-01-10' 
+                ((25
                     BETWEEN 
                         0
                     AND 

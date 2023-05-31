@@ -967,20 +967,25 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	case LogicalOperatorType::LOGICAL_FILTER:
 		// filter is not a data ret op
 		return GetDataRetOp(*op.children.at(0), binding);
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		if (op.GetTableIndex()[0] == table_index) {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto table_indexes = op.GetTableIndex();
+		D_ASSERT(table_indexes.size() > 0);
+		if (table_indexes[0] == table_index) {
 			auto &proj = op.Cast<LogicalProjection>();
-			D_ASSERT(proj.expressions.size() > binding.column_index || binding.column_index == DConstants::INVALID_INDEX);
+			D_ASSERT(proj.expressions.size() > binding.column_index ||
+			         binding.column_index == DConstants::INVALID_INDEX);
 			auto &new_expression = proj.expressions[binding.column_index];
 			if (new_expression->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &new_col_ref = new_expression->Cast<BoundColumnRefExpression>();
 				auto new_binding = new_col_ref.binding;
 				return GetDataRetOp(*op.children.at(0), new_binding);
 			}
-			else {
-				throw InternalException("Projection expression is not a bound column ref.");
-			}
 		}
+		if (!op.children.empty()) {
+			return GetDataRetOp(*op.children.at(0), binding);
+		}
+		return nullptr;
+	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -990,10 +995,15 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		// A logical comparison join here means a non-reorderable relation was created in the join plan.
 		// We still want total domain statistics of the columns projected from this non-reorderable join
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		auto &left_child = *op.children[0];
+		auto &left_child = *op.children.at(0);
 		get = GetDataRetOp(left_child, binding);
 		if (get) {
 			return get;
+		}
+		// test_nested_keys.test has a test where a join has < 2 children.
+		D_ASSERT(op.type != LogicalOperatorType::LOGICAL_PROJECTION);
+		if (op.children.size() < 2) {
+			break;
 		}
 		auto &right_child = *op.children.at(1);
 		get = GetDataRetOp(right_child, binding);
