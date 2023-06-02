@@ -25,7 +25,7 @@ static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op)
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
-	if (!filter_info.left_set && !filter_info.right_set) {
+	if (!filter_info.left_set && !filter_info.right_set && filter_info.set.count == 0) {
 		return true;
 	}
 	return false;
@@ -115,6 +115,9 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 }
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
+	if (value.table_index == DConstants::INVALID_INDEX) {
+		std::cout << "look here. WHY?" << std::endl;
+	}
 	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
 		relation_column_to_original_column[key].push_back(value);
 		return;
@@ -256,15 +259,15 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 				// get. here we can get the name properly, but to get the column, you need to go and get the column
 				// index of the logical get from where the column is originating from. loop through each expression and
 				// find the bindings. probably needd to cast it here.
-				if (proj->expressions[it]->type == ExpressionType::BOUND_COLUMN_REF) {
+				switch (proj->expressions[it]->type) {
+				case ExpressionType::BOUND_COLUMN_REF: {
 					auto &column_ref = proj->expressions[it]->Cast<BoundColumnRefExpression>();
 					value = column_ref.binding;
-				} else if (proj->expressions[it]->type == ExpressionType::VALUE_CONSTANT) {
-					auto &tmp = proj->expressions[it]->Cast<BoundConstantExpression>();
-					value = ColumnBinding(proj->table_index, it);
-					column_name = tmp.ToString();
-					relation_is_constant = true;
-				} else if (proj->expressions[it]->type == ExpressionType::BOUND_FUNCTION) {
+					break;
+				}
+				case ExpressionType::BOUND_FUNCTION: {
+					// look for a bound column ref in the function children. If you find one
+					// add the binding for that column ref for statistics.
 					auto &tmp = proj->expressions[it]->Cast<BoundFunctionExpression>();
 					auto found_child_column_ref = false;
 					for (auto &child : tmp.children) {
@@ -276,15 +279,21 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 						}
 					}
 					if (!found_child_column_ref) {
-						value = ColumnBinding(proj->table_index, it);
-						column_name = tmp.ToString();
 						relation_is_constant = true;
 					}
-				} else {
+					break;
+				}
+				default:
+					// the filter is not directly on a column or otherwise.
+					// set relation
+					// see ldbc-empty.test
 					relation_is_constant = true;
 				}
 
-				if (!relation_is_constant) {
+				if (relation_is_constant) {
+					value = ColumnBinding(proj->table_index, it);
+					column_name = "Coalese Function";
+				} else {
 					auto get = GetDataRetOp(*proj, value);
 					if (get) {
 						auto &actual_get = get->Cast<LogicalGet>();
@@ -300,7 +309,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 								value.column_index-=1;
 								break;
 							}
- 						}
+						}
 					} else {
 						column_name = proj->expressions[it]->GetName();
 					}
@@ -462,15 +471,21 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
 
-//! Update the filter bindings so that left and right table bindings bind to the relations now.
+//! Update the filter bindings so that left and right table bindings bind to the correct relations.
 void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos) {
 	auto relation_mapping = join_optimizer->relation_mapping;
 	for (auto &filter : filter_infos) {
-		if (filter->set.count <= 1) {
+		if (SingleColumnFilter(*filter)) {
 			continue;
 		}
-		D_ASSERT(relation_mapping.find(filter->left_binding.table_index) != relation_mapping.end());
-		D_ASSERT(relation_mapping.find(filter->right_binding.table_index) != relation_mapping.end());
+		// sometimes filters are a type of subquery that is not related to the join
+		// something like SELECT * from tb1 1 where (select 1 not in (select 2));
+		// in this case, just continue. It's a valid filter, but when we check for an actual
+		// binding to get statistics, nothing is returned, and we default to stats in the related total domain.
+		if (relation_mapping.find(filter->left_binding.table_index) == relation_mapping.end() ||
+		    relation_mapping.find(filter->right_binding.table_index) == relation_mapping.end()) {
+			continue;
+		}
 		filter->left_binding.table_index = relation_mapping[filter->left_binding.table_index];
 		filter->right_binding.table_index = relation_mapping[filter->right_binding.table_index];
 	}
@@ -549,12 +564,11 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 				auto binding = ColumnBinding(table_index, 0);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
-					// adding a relation that doesn't map to a logical get. This is potentially a constant value
+					// adding a relation that doesn't map to some data retrieval function.
+					// This is potentially a constant value (see pg_lateral.test and TODO.test)
 					// DANGER DANGER, we enter here because the logical comparison join has a
 					// table index that represents just a constant value. This should be a logical chunk get
 					// with one value instead.
-					// We just add a binding instead.s
-					// tested wuth pg_lateral.test and (TODO.test).
 					auto key = ColumnBinding(i, 0);
 					if (relation_column_to_original_column.find(key) == relation_column_to_original_column.end()) {
 						AddRelationToColumnMapping(key, binding);
