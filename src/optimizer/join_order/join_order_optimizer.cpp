@@ -144,7 +144,7 @@ void JoinOrderOptimizer::AddRelation(optional_ptr<LogicalOperator> &parent, Logi
 
 	auto table_indexes = data_retreival_op.GetTableIndex();
 	if (table_indexes.empty()) {
-		// relation represents a non-reorderable relation or Projection.
+		// relation represents a non-reorderable relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
 		unordered_set<idx_t> table_references;
