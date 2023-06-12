@@ -63,9 +63,6 @@ private:
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
 	vector<unique_ptr<FilterInfo>> filter_infos;
-	//! A map of all expressions a given expression has to be equivalent to. This is used to add "implied join edges".
-	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A = C}
-	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	friend CardinalityEstimator;
 	CardinalityEstimator cardinality_estimator;
@@ -99,6 +96,7 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
+	//! Used for debugging purposes.
 	string GetFilterString(unordered_set<idx_t>, string column_name);
 
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);

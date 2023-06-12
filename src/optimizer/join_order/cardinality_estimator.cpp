@@ -48,7 +48,7 @@ static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding>
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	D_ASSERT(filter_info.set.count >= 1);
 	D_ASSERT(SingleColumnFilter(filter_info));
-	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
+	for (const RelationsToTDom &r2tdom : relation_column_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
 			// found an equivalent filter
@@ -56,7 +56,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 		}
 	}
 	auto key = ColumnBinding(filter_info.left_binding.table_index, filter_info.left_binding.column_index);
-	relations_to_tdoms.emplace_back(column_binding_set_t({key}));
+	relation_column_to_tdoms.emplace_back(column_binding_set_t({key}));
 }
 
 bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
@@ -74,7 +74,7 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 	vector<idx_t> matching_equivalent_sets;
 	auto equivalent_relation_index = 0;
 
-	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
+	for (const RelationsToTDom &r2tdom : relation_column_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info->left_binding) != i_set.end()) {
 			matching_equivalent_sets.push_back(equivalent_relation_index);
@@ -94,14 +94,14 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		// an equivalence relation is connecting to sets of equivalence relations
 		// so push all relations from the second set into the first. Later we will delete
 		// the second set.
-		for (ColumnBinding i : relations_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations) {
-			relations_to_tdoms.at(matching_equivalent_sets[0]).equivalent_relations.insert(i);
+		for (ColumnBinding i : relation_column_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations) {
+			relation_column_to_tdoms.at(matching_equivalent_sets[0]).equivalent_relations.insert(i);
 		}
-		relations_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations.clear();
-		relations_to_tdoms.at(matching_equivalent_sets[0]).filters.push_back(filter_info);
+		relation_column_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations.clear();
+		relation_column_to_tdoms.at(matching_equivalent_sets[0]).filters.push_back(filter_info);
 		// add all values of one set to the other, delete the empty one
 	} else if (matching_equivalent_sets.size() == 1) {
-		auto &tdom_i = relations_to_tdoms.at(matching_equivalent_sets.at(0));
+		auto &tdom_i = relation_column_to_tdoms.at(matching_equivalent_sets.at(0));
 		tdom_i.equivalent_relations.insert(filter_info->left_binding);
 		tdom_i.equivalent_relations.insert(filter_info->right_binding);
 		tdom_i.filters.push_back(filter_info);
@@ -109,15 +109,12 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		column_binding_set_t tmp;
 		tmp.insert(filter_info->left_binding);
 		tmp.insert(filter_info->right_binding);
-		relations_to_tdoms.emplace_back(tmp);
-		relations_to_tdoms.back().filters.push_back(filter_info);
+		relation_column_to_tdoms.emplace_back(tmp);
+		relation_column_to_tdoms.back().filters.push_back(filter_info);
 	}
 }
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
-	if (value.table_index == DConstants::INVALID_INDEX) {
-		std::cout << "look here. WHY?" << std::endl;
-	}
 	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
 		relation_column_to_original_column[key].push_back(value);
 		return;
@@ -177,9 +174,9 @@ void CardinalityEstimator::VerifySymmetry(JoinNode &result, JoinNode &entry) {
 }
 
 void CardinalityEstimator::RemoveEmptyDomains() {
-	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
+	auto remove_start = std::remove_if(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
-	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
+	relation_column_to_tdoms.erase(remove_start, relation_column_to_tdoms.end());
 }
 
 double CardinalityEstimator::ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality) {
@@ -193,10 +190,6 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 		return NumericLimits<double>::Maximum();
 	}
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
-}
-
-void CardinalityEstimator::AddConstantRelationMapping(idx_t relation_id) {
-
 }
 
 // This should only be called with Data source operators as defined in logical_operator_type.hpp
@@ -231,7 +224,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 		if (op.type != LogicalOperatorType::LOGICAL_CHUNK_GET) {
 			// if operation is a logical chunk get, we can return. These are used to check
 			// if a column value is in a list of values. The list of values is the logical chunk
-			// get, and is usually not
+			// get, and is never needed during statistics. We add an empty relation just in case;
 			throw InternalException("adding relation column mapping that is not a get or a projection");
 		}
 	}
@@ -268,8 +261,11 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 				case ExpressionType::BOUND_FUNCTION: {
 					// look for a bound column ref in the function children. If you find one
 					// add the binding for that column ref for statistics.
+					// TODO: be more careful for joins that have complex expressions (i.e t1.a - t1.b = t2.d + t2.w)
 					auto &tmp = proj->expressions[it]->Cast<BoundFunctionExpression>();
 					auto found_child_column_ref = false;
+					// Need to call enumerate children here to get the first bound column ref.
+					// Maybe it's a function on rowid though? Should also check that
 					for (auto &child : tmp.children) {
 						if (child->type == ExpressionType::BOUND_COLUMN_REF) {
 							auto &column_ref = child->Cast<BoundColumnRefExpression>();
@@ -297,27 +293,31 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 					auto get = GetDataRetOp(*proj, value);
 					if (get) {
 						auto &actual_get = get->Cast<LogicalGet>();
-						column_name =
-						    actual_get.names.at(actual_get.column_ids.at(value.column_index)) + " as " + proj->expressions[it]->GetName();
+						column_name = actual_get.names.at(actual_get.column_ids.at(value.column_index));
 
-						// sometimes a rowid is propagated as a column id, and affects the bindings.
+						// sometimes the rowid() or count() function is propagated as a column id, and affects the bindings.
 						// if we try to get statistics for a column when a row_id is present, our column id is off
-						// so we need to adjust our binding.
+						// so we need to adjust our bindings by one.
 						// see empty_joins.test
-						for (idx_t i = 0; i < actual_get.column_ids.size(); i++) {
-							if (actual_get.column_ids.at(i) == DConstants::INVALID_INDEX && i < value.column_index) {
-								value.column_index-=1;
-								break;
-							}
-						}
+//						for (idx_t i = 0; i < actual_get.column_ids.size(); i++) {
+//							if (actual_get.column_ids.at(i) == DConstants::INVALID_INDEX && i < value.column_index) {
+//								value.column_index -= 1;
+//								break;
+//							}
+//						}
+
+						auto true_column_index =  actual_get.column_ids.at(value.column_index);
+						value.column_index = true_column_index;
 					} else {
+						// We didn't get the underlying get from the projection. At this point we just get the name
+						// from the expression
 						column_name = proj->expressions[it]->GetName();
 					}
 				}
 			}
 			// else could also be logical chunk get.
-			// else could also be a non-reorerable join? But I don't think so
-			// what to do here?
+			// If it's a logical Chunk get we add a relation mapping with empty column attributes or something
+			// We can't get here with a non-reorderable join, the calling function handles that case
 		}
 		if (!column_name.empty()) {
 			// store the name of the column
@@ -369,7 +369,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// time the cardinality of a new set is requested
 
 	// relations_to_tdoms has already been sorted.
-	for (auto &relation_2_tdom : relations_to_tdoms) {
+	for (auto &relation_2_tdom : relation_column_to_tdoms) {
 		// loop through each filter in the tdom.
 		if (done) {
 			break;
@@ -481,7 +481,7 @@ void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &fil
 		// sometimes filters are a type of subquery that is not related to the join
 		// something like SELECT * from tb1 1 where (select 1 not in (select 2));
 		// in this case, just continue. It's a valid filter, but when we check for an actual
-		// binding to get statistics, nothing is returned, and we default to stats in the related total domain.
+		// binding to get statistics, nothing is returned, and we default to stats in the related total domain set
 		if (relation_mapping.find(filter->left_binding.table_index) == relation_mapping.end() ||
 		    relation_mapping.find(filter->right_binding.table_index) == relation_mapping.end()) {
 			continue;
@@ -494,7 +494,7 @@ void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &fil
 void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 	// Print what table.columns have the same "total domain"
 	// and print the total domain
-	for (auto &r2tdom : relations_to_tdoms) {
+	for (auto &r2tdom : relation_column_to_tdoms) {
 		string res = "Columns ";
 		for (auto &rel : r2tdom.equivalent_relations) {
 			auto attributes = getRelationAttributes(rel.table_index);
@@ -550,8 +550,9 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		}
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+			throw InternalException("try to break this dummy scan or expression get test");
 			auto key = ColumnBinding(i, 0);
-			auto value = ColumnBinding(0,0);
+			auto value = ColumnBinding(0, 0);
 			AddRelationToColumnMapping(key, value);
 		}
 		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
@@ -565,7 +566,8 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
 					// adding a relation that doesn't map to some data retrieval function.
-					// This is potentially a constant value (see pg_lateral.test and TODO.test)
+					// This is potentially a constant value (see ptest/sql/subquery/lateral/pg_lateral.test and
+					// TODO.test)
 					// DANGER DANGER, we enter here because the logical comparison join has a
 					// table index that represents just a constant value. This should be a logical chunk get
 					// with one value instead.
@@ -573,6 +575,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 					if (relation_column_to_original_column.find(key) == relation_column_to_original_column.end()) {
 						AddRelationToColumnMapping(key, binding);
 					}
+					throw InternalException("Try to break this test #2");
 					break;
 				}
 				AddRelationColumnMapping(*op, i);
@@ -585,19 +588,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			// Just add bindings for the left side. Later on we can add some extra functionality to change the
 			// total domain depending on if the op is a union/except/or intersect.
 
-			// children of set operation can be another set operation, group by, or a projection.
-			// prefer projection over anything.
-
-			// enumerate the children, if the operator is a projection or logical get
-			//			auto op = &rel.data_op;
-			//			while (op->type != LogicalOperatorType::LOGICAL_GET && op->type !=
-			//LogicalOperatorType::LOGICAL_PROJECTION) { 				D_ASSERT(op->children.size() >= 1); 				op = op->children[0].get();
-			//			}
-			//			AddRelationColumnMapping(*op, i);
 			auto column_bindings = rel.data_op.GetColumnBindings();
-			// grab only the bindings from the operator that are used in filters in the plan
-
-			// doing something really dumb and just adding a mapping. But in reality this wont work.
 			for (auto &binding : column_bindings) {
 				// adds columns to relation_mapping[relation_id].columns
 				AddColumnToRelationMap(i, binding.column_index);
@@ -605,20 +596,12 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 
 			for (idx_t it = 0; it < column_bindings.size(); it++) {
 				auto key = ColumnBinding(i, column_bindings.at(it).column_index);
-				ColumnBinding value;
-				string column_name = "";
-				value = ColumnBinding(column_bindings[it].table_index, it);
+				auto value = ColumnBinding(column_bindings[it].table_index, it);
 				// add mapping (relation_id, column_id) -> (table_id, column_id)
 				// Given key and values, you can
 				AddRelationToColumnMapping(key, value);
 			}
-			//			if (rel.data_op.children.size() >= 1) {
-			//				auto &child = rel.data_op.children[0];
-			//				if (child->type == LogicalOperatorType::LOGICAL_PROJECTION || child->type ==
-			//LogicalOperatorType::LOGICAL_GET) { 					AddRelationColumnMapping(*child, i); 				} else { 					throw
-			//InternalException("no projection or get under a set operation, why is that?");
-			//				}
-			//			}
+
 			break;
 		}
 		default:
@@ -673,9 +656,9 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
-	//	PrintCardinalityEstimatorInitialState();
+	//
 	// sort relations from greatest tdom to lowest tdom.
-	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
+	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
 	return node_ops;
 }
 
@@ -685,6 +668,16 @@ ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 		throw InternalException("either 0 or 2+ column bindings. Need to fix this");
 	}
 	return potential_bindings->second.at(0);
+}
+
+void assertColumnNameMatchesGet(vector<string> column_names, idx_t column_binding, string column_name) {
+#ifdef DEBUG
+	// make sure the name we stored, matches the name of the column from the actual binding.)
+	bool is_row_id = column_binding == DConstants::INVALID_INDEX && column_name.compare("rowid") == 0;
+	// if is_row_id=True column_names_match should be true and we shouldn't evaluate column_names[column_binding]
+	bool column_names_match = is_row_id || column_names[column_binding].compare(column_name) == 0;
+	D_ASSERT(is_row_id || column_names_match);
+#endif
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &op) {
@@ -714,6 +707,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		}
 
 		if (catalog_table) {
+			assertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
 			// Get HLL stats here
 			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
 			if (base_stats) {
@@ -728,7 +722,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			distinct_count = node.GetBaseTableCardinality();
 		}
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
-		for (auto &relation_to_tdom : relations_to_tdoms) {
+		for (auto &relation_to_tdom : relation_column_to_tdoms) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.count(key) != 1) {
 				continue;

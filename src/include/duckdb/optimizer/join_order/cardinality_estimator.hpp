@@ -71,11 +71,11 @@ private:
 	//! A mapping of relation id -> RelationAttributes
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
-	//! The keys of this are used to discover join groups with the same total domains
-	//! The values are used to grab table statistics of the columns and initialize the
-	//! distinct counts.
+	//! The keys of this are used to discover joined columns with the same total domains (populates relations_to_tdoms)
+	//! The values are used to grab table statistics of the columns and initialize the distinct counts of the columms.
 	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
-	vector<RelationsToTDom> relations_to_tdoms;
+	//! Group of relation columns to total domains
+	vector<RelationsToTDom> relation_column_to_tdoms;
 	JoinOrderOptimizer *join_optimizer;
 
 public:
