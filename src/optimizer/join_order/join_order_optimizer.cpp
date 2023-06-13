@@ -1011,6 +1011,11 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 				auto &new_col_ref = new_expression->Cast<BoundColumnRefExpression>();
 				auto new_binding = new_col_ref.binding;
 				return GetDataRetOp(*op.children.at(0), new_binding);
+			} else {
+				// we have a projection that matches the table scan. The expression does not have a bound
+				// column ref anywhere in it. So just return the projection, it can be a function or a constant
+				// value being projected
+				return &proj;
 			}
 		}
 		if (!op.children.empty()) {

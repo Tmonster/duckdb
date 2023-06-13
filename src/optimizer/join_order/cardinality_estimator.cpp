@@ -116,11 +116,11 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 
 void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
 	if (relation_column_to_original_column.find(key) != relation_column_to_original_column.end()) {
-		relation_column_to_original_column[key].push_back(value);
+		relation_column_to_original_column[key].insert(value);
 		return;
 	}
-	relation_column_to_original_column[key] = vector<ColumnBinding>();
-	relation_column_to_original_column[key].push_back(value);
+	relation_column_to_original_column[key] = unordered_set<ColumnBinding>;
+	relation_column_to_original_column[key].insert(value);
 }
 
 RelationAttributes CardinalityEstimator::getRelationAttributes(idx_t relation_id) {
@@ -192,113 +192,128 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
 }
 
+
 // This should only be called with Data source operators as defined in logical_operator_type.hpp
-void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t relation_id) {
-	auto &filter_infos = join_optimizer->filter_infos;
-	auto column_bindings = op.GetColumnBindings();
+// Adds one mapping of (relation, column_id) -> (table_index, column_id)
+void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx_t relation_id) {
 
-	// grab only the bindings from the operator that are used in filters in the plan
-	auto needed_column_bindings = GetColumnBindingsUsedInFilters(column_bindings, filter_infos);
-	for (auto &binding : needed_column_bindings) {
-		// adds columns to relation_mapping[relation_id].columns
-		AddColumnToRelationMap(relation_id, binding.column_index);
+	auto rel_bindings = rel_op->GetColumnBindings();
+	auto rel_column_id = 0;
+	ColumnBinding key, value;
+	for (auto &binding : rel_bindings) {
+		AddColumnToRelationMap(relation_id, rel_column_id);
+
+		key = ColumnBinding(relation_id, rel_column_id);
+		value = binding;
+		AddRelationToColumnMapping(key, value);
+		rel_column_id += 1;
 	}
+}
 
-	auto table_indexes = op.GetTableIndex();
+void CardinalityEstimator::AddRelationColumnDebugInfo(LogicalOperator *data_op, idx_t relation_id, idx_t column_id) {
+	auto table_indexes = data_op->GetTableIndex();
 	D_ASSERT(table_indexes.size() == 1);
 	idx_t table_index = table_indexes.at(0);
 
-	bool op_is_get = op.type == LogicalOperatorType::LOGICAL_GET;
-	bool op_is_proj = op.type == LogicalOperatorType::LOGICAL_PROJECTION;
+	bool op_is_get = data_op->type == LogicalOperatorType::LOGICAL_GET;
+	bool op_is_proj = data_op->type == LogicalOperatorType::LOGICAL_PROJECTION;
 	LogicalProjection *proj;
 	LogicalGet *get;
 	if (op_is_get) {
-		get = &op.Cast<LogicalGet>();
+		get = &data_op->Cast<LogicalGet>();
 	}
 	if (op_is_proj) {
-		proj = &op.Cast<LogicalProjection>();
+		proj = &data_op->Cast<LogicalProjection>();
 	}
 
 	if (!(op_is_proj || op_is_get)) {
 		// Operation is probably a logical chunk get
-		if (op.type != LogicalOperatorType::LOGICAL_CHUNK_GET) {
+		if (data_op->type != LogicalOperatorType::LOGICAL_CHUNK_GET) {
 			// if operation is a logical chunk get, we can return. These are used to check
 			// if a column value is in a list of values. The list of values is the logical chunk
 			// get, and is never needed during statistics. We add an empty relation just in case;
 			throw InternalException("adding relation column mapping that is not a get or a projection");
 		}
 	}
-	for (idx_t it = 0; it < column_bindings.size(); it++) {
-		auto needed_binding_key = ColumnBinding(table_index, column_bindings.at(it).column_index);
-		if (needed_column_bindings.find(needed_binding_key) == needed_column_bindings.end()) {
-			// if the binding isn't used in any filters, no need to add it
-			continue;
-		}
 
-		auto key = ColumnBinding(relation_id, column_bindings.at(it).column_index);
-		ColumnBinding value;
-		string column_name = "";
-		if (op_is_get) {
-			value = ColumnBinding(table_index, get->column_ids.at(it));
-			if (get->column_ids.at(it) == DConstants::INVALID_INDEX) {
-				column_name = "rowid";
-			} else {
-				column_name = get->names.at(get->column_ids.at(it));
+	auto key = ColumnBinding(relation_id, column_id);
+	ColumnBinding value;
+
+	idx_t column_idee = 0;
+	auto relation_binding = ColumnBinding(relation_id, column_idee);
+	while (relation_column_to_original_column.find(relation_binding) != relation_column_to_original_column.end()) {
+		auto potential_bindings = relation_column_to_original_column.at(relation_binding);
+		for (auto &binding : data_op->GetColumnBindings()) {
+			if (potential_bindings.find(binding) != potential_bindings.end()) {
+				key = relation_binding;
+				value = binding;
 			}
+		}
+	}
+
+
+	string column_name = "";
+	if (op_is_get) {
+		value = ColumnBinding(table_index, get->column_ids.at(index));
+		if (get->column_ids.at(index) == DConstants::INVALID_INDEX) {
+			column_name = "rowid";
 		} else {
-			bool relation_is_constant = false;
-			if (op_is_proj) {
-				// need to be careful here. A projection can project an amount of columns not present in an original
-				// get. here we can get the name properly, but to get the column, you need to go and get the column
-				// index of the logical get from where the column is originating from. loop through each expression and
-				// find the bindings. probably needd to cast it here.
-				switch (proj->expressions[it]->type) {
-				case ExpressionType::BOUND_COLUMN_REF: {
-					auto &column_ref = proj->expressions[it]->Cast<BoundColumnRefExpression>();
-					value = column_ref.binding;
-					break;
-				}
-				case ExpressionType::BOUND_FUNCTION: {
-					// look for a bound column ref in the function children. If you find one
-					// add the binding for that column ref for statistics.
-					// TODO: be more careful for joins that have complex expressions (i.e t1.a - t1.b = t2.d + t2.w)
-					auto &tmp = proj->expressions[it]->Cast<BoundFunctionExpression>();
-					auto found_child_column_ref = false;
-					// Need to call enumerate children here to get the first bound column ref.
-					// Maybe it's a function on rowid though? Should also check that
-					for (auto &child : tmp.children) {
-						if (child->type == ExpressionType::BOUND_COLUMN_REF) {
-							auto &column_ref = child->Cast<BoundColumnRefExpression>();
-							value = column_ref.binding;
-							found_child_column_ref = true;
-							break;
-						}
+			column_name = get->names.at(get->column_ids.at(it));
+		}
+	} else {
+		bool relation_is_constant = false;
+		if (op_is_proj) {
+			// need to be careful here. A projection can project an amount of columns not present in an original
+			// get. here we can get the name properly, but to get the column, you need to go and get the column
+			// index of the logical get from where the column is originating from. loop through each expression and
+			// find the bindings. probably needd to cast it here.
+			switch (proj->expressions.at(index)->type) {
+			case ExpressionType::BOUND_COLUMN_REF: {
+				auto &column_ref = proj->expressions[index]->Cast<BoundColumnRefExpression>();
+				value = column_ref.binding;
+				break;
+			}
+			case ExpressionType::BOUND_FUNCTION: {
+				// look for a bound column ref in the function children. If you find one
+				// add the binding for that column ref for statistics.
+				// TODO: be more careful for joins that have complex expressions (i.e t1.a - t1.b = t2.d + t2.w)
+				auto &tmp = proj->expressions.at(index)->Cast<BoundFunctionExpression>();
+				auto found_child_column_ref = false;
+				// Need to call enumerate children here to get the first bound column ref.
+				// Maybe it's a function on rowid though? Should also check that
+				for (auto &child : tmp.children) {
+					if (child->type == ExpressionType::BOUND_COLUMN_REF) {
+						auto &column_ref = child->Cast<BoundColumnRefExpression>();
+						value = column_ref.binding;
+						found_child_column_ref = true;
+						break;
 					}
-					if (!found_child_column_ref) {
-						relation_is_constant = true;
-					}
-					break;
 				}
-				default:
-					// the filter is not directly on a column or otherwise.
-					// set relation
-					// see ldbc-empty.test
+				if (!found_child_column_ref) {
 					relation_is_constant = true;
 				}
+				break;
+			}
+			default:
+				// the filter is not directly on a column or otherwise.
+				// set relation
+				// see ldbc-empty.test
+				relation_is_constant = true;
+			}
 
-				if (relation_is_constant) {
-					value = ColumnBinding(proj->table_index, it);
-					column_name = "Coalese Function";
-				} else {
-					auto get = GetDataRetOp(*proj, value);
-					if (get) {
-						auto &actual_get = get->Cast<LogicalGet>();
-						column_name = actual_get.names.at(actual_get.column_ids.at(value.column_index));
+			if (relation_is_constant) {
+				value = ColumnBinding(proj->table_index, index);
+				column_name = "Coalese Function";
+			} else {
+				auto get = GetDataRetOp(*proj, value);
+				if (get) {
+					auto &actual_get = get->Cast<LogicalGet>();
+					column_name = actual_get.names.at(actual_get.column_ids.at(value.column_index));
 
-						// sometimes the rowid() or count() function is propagated as a column id, and affects the bindings.
-						// if we try to get statistics for a column when a row_id is present, our column id is off
-						// so we need to adjust our bindings by one.
-						// see empty_joins.test
+					// sometimes the rowid() or count() function is propagated as a column id, and affects the bindings.
+					// if we try to get statistics for a column when a row_id is present, our column id is off
+					// so we need to adjust our bindings by one.
+					// see empty_joins.test
 //						for (idx_t i = 0; i < actual_get.column_ids.size(); i++) {
 //							if (actual_get.column_ids.at(i) == DConstants::INVALID_INDEX && i < value.column_index) {
 //								value.column_index -= 1;
@@ -306,28 +321,27 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator &op, idx_t r
 //							}
 //						}
 
-						auto true_column_index =  actual_get.column_ids.at(value.column_index);
-						value.column_index = true_column_index;
-					} else {
-						// We didn't get the underlying get from the projection. At this point we just get the name
-						// from the expression
-						column_name = proj->expressions[it]->GetName();
-					}
+					auto true_column_index =  actual_get.column_ids.at(value.column_index);
+					value.column_index = true_column_index;
+				} else {
+					// We didn't get the underlying get from the projection. At this point we just get the name
+					// from the expression
+					column_name = proj->expressions[index]->GetName();
 				}
 			}
-			// else could also be logical chunk get.
-			// If it's a logical Chunk get we add a relation mapping with empty column attributes or something
-			// We can't get here with a non-reorderable join, the calling function handles that case
 		}
-		if (!column_name.empty()) {
-			// store the name of the column
-			relation_attributes[relation_id].columns[it] = column_name;
-		}
-
-		// add mapping (relation_id, column_id) -> (table_id, column_id)
-		// Given key and values, you can
-		AddRelationToColumnMapping(key, value);
+		// else could also be logical chunk get.
+		// If it's a logical Chunk get we add a relation mapping with empty column attributes or something
+		// We can't get here with a non-reorderable join, the calling function handles that case
 	}
+	if (!column_name.empty()) {
+		// store the name of the column
+		relation_attributes[relation_id].columns[column_id] = column_name;
+	}
+
+	// add mapping (relation_id, column_id) -> (table_id, column_id)
+	// Given key and values, you can
+	AddRelationToColumnMapping(key, value);
 }
 
 void UpdateDenom(Subgraph2Denominator &relation_2_denom, RelationsToTDom &relation_to_tdom) {
@@ -541,11 +555,14 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto &node = set_manager.GetJoinRelation(i);
-		switch (rel.data_op.type) {
+		switch (rel.data_op->type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_GET: {
-			// adds (relation_id, column_binding) -> (table_index, actual_column)
-			AddRelationColumnMapping(rel.data_op, i);
+			// adds (relation_id, column_binding) -> (table_index, actual_column)a
+			auto a = 0;
+			for (auto &binding : rel.data_op->GetColumnBindings()) {
+				AddRelationColumnMapping(&rel.data_op, nullptr, i, binding.column_index);
+			}
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -559,36 +576,31 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			unordered_set<idx_t> table_indexes;
-			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
-			for (auto &table_index : table_indexes) {
-				auto binding = ColumnBinding(table_index, 0);
+			AddRelationColumnMapping(&rel.data_op, i);
+
+			auto join_bindings = rel.data_op.GetColumnBindings();
+			for (idx_t binding_index = 0; i < join_bindings.size(); binding_index++) {
+				auto binding = join_bindings.at(binding_index);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
-					// adding a relation that doesn't map to some data retrieval function.
-					// This is potentially a constant value (see ptest/sql/subquery/lateral/pg_lateral.test and
-					// TODO.test)
-					// DANGER DANGER, we enter here because the logical comparison join has a
-					// table index that represents just a constant value. This should be a logical chunk get
-					// with one value instead.
+					// adding a relation that doesn't map to some data retrieval function (projection or logical Get).
+					// This shouldn't happen, but to avoid crashes, we add an empty mapping
+					D_ASSERT(false);
 					auto key = ColumnBinding(i, 0);
 					if (relation_column_to_original_column.find(key) == relation_column_to_original_column.end()) {
 						AddRelationToColumnMapping(key, binding);
 					}
-					throw InternalException("Try to break this test #2");
-					break;
 				}
-				AddRelationColumnMapping(*op, i);
+				// Add a mapping for (relation, column_index) -> (table index,
+				AddRelationColumnDebugInfo(&rel.data_op, op, i, binding_index);
 			}
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT: {
-			// Just add bindings for the left side. Later on we can add some extra functionality to change the
-			// total domain depending on if the op is a union/except/or intersect.
 
-			auto column_bindings = rel.data_op.GetColumnBindings();
+			auto column_bindings = rel.data_op->GetColumnBindings();
 			for (auto &binding : column_bindings) {
 				// adds columns to relation_mapping[relation_id].columns
 				AddColumnToRelationMap(i, binding.column_index);
@@ -605,6 +617,8 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			break;
 		}
 		default:
+			// rel.data_op types should always match types where relations are added in JoinOrderOptimizer::ExtractJoinRelations
+			D_ASSERT(false);
 			break;
 		}
 		node_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
@@ -664,7 +678,14 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 
 ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 	auto potential_bindings = relation_column_to_original_column.find(key);
-	if (potential_bindings->second.size() != 1) {
+	if (potential_bindings == relation_column_to_original_column.end()) {
+		throw InternalException("Could not find actual binding for relational binding " + to_string(key.table_index) + ", " + to_string(key.column_index));
+	}
+	auto what = potential_bindings;
+	if ((*what)->size() > 0) {
+		auto asdfgs = 0;
+	}
+	if (true) {
 		throw InternalException("either 0 or 2+ column bindings. Need to fix this");
 	}
 	return potential_bindings->second.at(0);

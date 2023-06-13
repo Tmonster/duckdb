@@ -75,3 +75,27 @@ insert into cities_i_have_been_to VALUES ('Amsterdam'), ('Seattle'), ('New York 
 
 statement ok
 select * from (PIVOT Cities ON Year USING SUM(Population)) t1, cities_i_have_been_to t2 where t1.Name=t2.Name;
+
+statement ok
+insert into t1 (select * from range(100));
+
+statement ok
+insert into t2 (select * from range(100));
+
+statement ok
+insert into t3 (select * from range(100));
+
+# join on a constant value column from reorderable to non-reorderable to reorderable 
+statement ok
+select outer_table_1.a from 
+	t1 as outer_table_1
+	inner join t2 as outer_table_2
+	on outer_table_1.a = outer_table_2.a
+	inner join
+		t3 as inner_table_1
+		left join t1 as left_join_table_1
+			inner join (select 50 as rand_int,
+						from t3 where t3.a >= 0)  as constant_table
+		on left_join_table_1.a = constant_table.rand_int
+	on inner_table_1.a = left_join_table_1.a
+  on outer_table_1.a = constant_table.rand_int;
