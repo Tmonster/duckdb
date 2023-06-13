@@ -73,7 +73,8 @@ private:
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	//! The keys of this are used to discover joined columns with the same total domains (populates relations_to_tdoms)
 	//! The values are used to grab table statistics of the columns and initialize the distinct counts of the columms.
-	column_binding_map_t<unordered_set<ColumnBinding>> relation_column_to_original_column;
+	//! Can't make this an unordered_set, otherwise the compiler yells at you
+	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
 	//! Group of relation columns to total domains
 	vector<RelationsToTDom> relation_column_to_tdoms;
 	JoinOrderOptimizer *join_optimizer;
@@ -118,7 +119,7 @@ private:
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
 
 	void AddRelationColumnMapping(LogicalOperator *rel_op, idx_t relation_id);
-	void AddRelationColumnDebugInfo(LogicalOperator *rel_op, optional_ptr<LogicalOperator> *data_op, idx_t relation_id, idx_t column_id);
+	void UpdateRelationColumnIDs(optional_ptr<LogicalOperator> data_op, idx_t relation_id, idx_t column_id);
 	void AddConstantRelationMapping(idx_t relation_id);
 
 	//! Add a column to the relation_to_columns map.
