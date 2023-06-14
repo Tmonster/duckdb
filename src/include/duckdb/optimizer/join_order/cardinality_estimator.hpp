@@ -113,17 +113,20 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 	ColumnBinding GetActualBinding(ColumnBinding key);
+	ColumnBinding GetRelationColumnMapping(ColumnBinding key);
 
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
+	bool RemoveRelationToColumnMapping(ColumnBinding key);
 
 	void AddRelationColumnMapping(LogicalOperator *rel_op, idx_t relation_id);
-	void UpdateRelationColumnIDs(optional_ptr<LogicalOperator> data_op, idx_t relation_id, idx_t column_id);
+	void UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_op, idx_t relation_id);
 	void AddConstantRelationMapping(idx_t relation_id);
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
+	ColumnBinding GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op, idx_t relation_id, ColumnBinding binding, idx_t new_binding_column_id);
 
 	//! Debugging function to print readable state of the join order optimizer
 	void PrintCardinalityEstimatorInitialState();

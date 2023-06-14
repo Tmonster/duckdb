@@ -977,7 +977,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding binding) {
+static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding &binding) {
 	optional_ptr<LogicalOperator> get;
 	auto table_index = binding.table_index;
 	switch (op.type) {
@@ -1009,8 +1009,8 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			auto &new_expression = proj.expressions[binding.column_index];
 			if (new_expression->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &new_col_ref = new_expression->Cast<BoundColumnRefExpression>();
-				auto new_binding = new_col_ref.binding;
-				return GetDataRetOp(*op.children.at(0), new_binding);
+				binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+				return GetDataRetOp(*op.children.at(0), binding);
 			} else {
 				// we have a projection that matches the table scan. The expression does not have a bound
 				// column ref anywhere in it. So just return the projection, it can be a function or a constant

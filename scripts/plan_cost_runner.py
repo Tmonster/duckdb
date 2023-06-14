@@ -102,8 +102,8 @@ def cardinality_is_higher(card_a, card_b):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    # init_db(old, OLD_DB_NAME, benchmark_dir)
+    # init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
