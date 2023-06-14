@@ -31,19 +31,6 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 	return false;
 }
 
-static column_binding_set_t GetColumnBindingsUsedInFilters(vector<ColumnBinding> all_bindings,
-                                                           vector<unique_ptr<FilterInfo>> &filter_infos) {
-	column_binding_set_t binding_intersection;
-	for (auto &binding : all_bindings) {
-		for (auto &filter : filter_infos) {
-			if (binding == filter->left_binding || binding == filter->right_binding) {
-				binding_intersection.insert(binding);
-			}
-		}
-	}
-	return binding_intersection;
-}
-
 //! Only called for single filters
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	D_ASSERT(filter_info.set.count >= 1);
@@ -294,7 +281,7 @@ ColumnBinding CardinalityEstimator::GetAccurateColumnInformation(optional_ptr<Lo
 				column_name = "Coalese Function";
 			} else {
 				auto get = GetDataRetOp(*proj, value);
-				if (get) {
+				if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
 					auto &actual_get = get->Cast<LogicalGet>();
 					column_name = actual_get.names.at(actual_get.column_ids.at(value.column_index));
 
@@ -347,14 +334,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 		AddColumnToRelationMap(relation_id, rel_column_id);
 		key = ColumnBinding(relation_id, rel_column_id);
 		auto relational_binding_copy = ColumnBinding(relation_binding.table_index, relation_binding.column_index);
-		auto tmp_op = GetDataRetOp(*rel_op, relational_binding_copy);
-		// You have a sneaky sneaky case here. If a logical get has a filter on a row id
-		// the row id doesn't show up as a binding if there is a filter on the row id on the get
-		// so you have to fix the binding if that is the case.
-		//		if (tmp_op->type == LogicalOperatorType::LOGICAL_GET) {
-		//			auto &tmp_get = tmp_op->Cast<LogicalGet>();
-		//			relational_binding_copy.column_index = tmp_get.column_ids[relational_binding_copy.column_index];
-		//		}
+		GetDataRetOp(*rel_op, relational_binding_copy);
 		AddRelationToColumnMapping(key, relational_binding_copy);
 		rel_column_id += 1;
 	}
