@@ -195,7 +195,9 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
 }
 
-ColumnBinding CardinalityEstimator::GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op, idx_t relation_id, ColumnBinding binding, idx_t new_binding_column_id) {
+ColumnBinding CardinalityEstimator::GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op,
+                                                                 idx_t relation_id, ColumnBinding binding,
+                                                                 idx_t new_binding_column_id) {
 	auto table_indexes = data_op->GetTableIndex();
 	D_ASSERT(table_indexes.size() == 1);
 	idx_t table_index = table_indexes.at(0);
@@ -290,13 +292,12 @@ ColumnBinding CardinalityEstimator::GetAccurateColumnInformation(optional_ptr<Lo
 					// so we need to adjust our bindings by one.
 					// see empty_joins.test
 					//						for (idx_t i = 0; i < actual_get.column_ids.size(); i++) {
-					//							if (actual_get.column_ids.at(i) == DConstants::INVALID_INDEX && i < value.column_index) {
-					//								value.column_index -= 1;
-					//								break;
+					//							if (actual_get.column_ids.at(i) == DConstants::INVALID_INDEX && i <
+					//value.column_index) { 								value.column_index -= 1; 								break;
 					//							}
 					//						}
 
-					auto true_column_index =  actual_get.column_ids.at(value.column_index);
+					auto true_column_index = actual_get.column_ids.at(value.column_index);
 					value.column_index = true_column_index;
 				} else {
 					// We didn't get the underlying get from the projection. At this point we just get the name
@@ -338,10 +339,10 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 		AddRelationToColumnMapping(key, relational_binding_copy);
 		rel_column_id += 1;
 	}
-
 }
 
-void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op, idx_t relation_id) {
+void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op,
+                                                   idx_t relation_id) {
 	D_ASSERT(data_get_op);
 	D_ASSERT(rel_op);
 
@@ -352,13 +353,14 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 		auto rel_binding = rel_bindings.at(i);
 		GetDataRetOp(*rel_op, rel_binding);
 		binding_column_id = i;
-//		if (rel_binding.column_index > i) {
-//			binding_column_id = rel_binding.column_index;
-//		}
+		//		if (rel_binding.column_index > i) {
+		//			binding_column_id = rel_binding.column_index;
+		//		}
 		auto relation_binding = ColumnBinding(relation_id, binding_column_id);
 		for (auto &data_binding : data_get_bindings) {
 			if (rel_binding == data_binding) {
-				auto binding_value = GetAccurateColumnInformation(data_get_op, relation_id, rel_binding, binding_column_id);
+				auto binding_value =
+				    GetAccurateColumnInformation(data_get_op, relation_id, rel_binding, binding_column_id);
 				RemoveRelationToColumnMapping(relation_binding);
 				AddRelationToColumnMapping(relation_binding, binding_value);
 				continue;
@@ -612,7 +614,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			auto join_bindings = rel.data_op.GetColumnBindings();
 			unordered_set<idx_t> table_indexes;
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
-			for (auto &table_index: table_indexes) {
+			for (auto &table_index : table_indexes) {
 				auto binding = ColumnBinding(table_index, 0);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
@@ -650,7 +652,8 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			break;
 		}
 		default:
-			// rel.data_op types should always match types where relations are added in JoinOrderOptimizer::ExtractJoinRelations
+			// rel.data_op types should always match types where relations are added in
+			// JoinOrderOptimizer::ExtractJoinRelations
 			D_ASSERT(false);
 			break;
 		}
@@ -712,7 +715,8 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 	auto potential_bindings = relation_column_to_original_column.find(key);
 	if (potential_bindings == relation_column_to_original_column.end()) {
-		throw InternalException("Could not find actual binding for relational binding " + to_string(key.table_index) + ", " + to_string(key.column_index));
+		throw InternalException("Could not find actual binding for relational binding " + to_string(key.table_index) +
+		                        ", " + to_string(key.column_index));
 	}
 	if (potential_bindings->second.size() != 1) {
 		throw InternalException("either 0 or 2+ column bindings. Need to fix this");
@@ -755,7 +759,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			catalog_table = nullptr;
 		}
 
-		if (catalog_table && assertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second)) {
+		if (catalog_table && assertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
+		                                                actual_binding.column_index, column.second)) {
 			// Get HLL stats here
 			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
 			if (base_stats) {

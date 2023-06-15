@@ -126,7 +126,8 @@ private:
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
-	ColumnBinding GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op, idx_t relation_id, ColumnBinding binding, idx_t new_binding_column_id);
+	ColumnBinding GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op, idx_t relation_id,
+	                                           ColumnBinding binding, idx_t new_binding_column_id);
 
 	//! Debugging function to print readable state of the join order optimizer
 	void PrintCardinalityEstimatorInitialState();
