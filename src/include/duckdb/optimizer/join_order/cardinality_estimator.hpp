@@ -122,12 +122,13 @@ private:
 
 	void AddRelationColumnMapping(LogicalOperator *rel_op, idx_t relation_id);
 	void UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_op, idx_t relation_id);
-	void AddConstantRelationMapping(idx_t relation_id);
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
-	ColumnBinding GetAccurateColumnInformation(optional_ptr<LogicalOperator> data_op, idx_t relation_id,
-	                                           ColumnBinding binding, idx_t new_binding_column_id);
+	ColumnBinding GetAccurateColumnInformationGet(optional_ptr<LogicalGet> get, idx_t relation_id,
+	                                              ColumnBinding binding, idx_t new_binding_column_id);
+	ColumnBinding GetAccurateColumnInformationProj(optional_ptr<LogicalProjection> proj, idx_t relation_id,
+	                                               ColumnBinding binding, idx_t new_binding_column_id);
 
 	//! Debugging function to print readable state of the join order optimizer
 	void PrintCardinalityEstimatorInitialState();

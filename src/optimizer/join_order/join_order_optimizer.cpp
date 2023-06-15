@@ -104,6 +104,10 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
+		ret = "DUMMY_SCAN";
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
 		auto &chunkget = op->Cast<LogicalColumnDataGet>();
 		ret = chunkget.collection->ToString();
@@ -120,8 +124,11 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		return GetRelationName(op->children[0]);
 	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		return GetRelationName(op->children[0]);
+	}
 	default:
-		ret = "no-relation-name";
+		break;
 	}
 	return ret;
 }
@@ -1012,6 +1019,20 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 				binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
 				return GetDataRetOp(*op.children.at(0), binding);
 			} else {
+				// if the projection is not immediately a bound column reference, it could be a function
+				// that affects the cardinality. In this case return the projection.
+				//				optional_ptr<LogicalOperator> ret = nullptr;
+				//
+				//				ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
+				//					if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+				//						auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
+				//						binding = ColumnBinding(new_col_ref.binding.table_index,
+				//new_col_ref.binding.column_index); 						ret = GetDataRetOp(*op.children.at(0), binding); 						return;
+				//					}
+				//				});
+				//				if (ret != nullptr) {
+				//					return GetDataRetOp(*ret, binding);
+				//				}
 				// we have a projection that matches the table scan. The expression does not have a bound
 				// column ref anywhere in it. So just return the projection, it can be a function or a constant
 				// value being projected
@@ -1021,19 +1042,22 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (!op.children.empty()) {
 			return GetDataRetOp(*op.children.at(0), binding);
 		}
-		return nullptr;
+		break;
 	}
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
-		// A logical comparison join here means a non-reorderable relation was created in the join plan.
+		// any relation here represents a non-reorderable relation from the join plan with at least two children
 		// We still want total domain statistics of the columns projected from this non-reorderable join
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		auto &left_child = *op.children.at(0);
-		get = GetDataRetOp(left_child, binding);
+		auto &left_child = op.children.at(0);
+		get = GetDataRetOp(*left_child, binding);
 		if (get) {
 			return get;
 		}
@@ -1042,18 +1066,45 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (op.children.size() < 2) {
 			break;
 		}
-		auto &right_child = *op.children.at(1);
-		get = GetDataRetOp(right_child, binding);
+		auto &right_child = op.children.at(1);
+		get = GetDataRetOp(*right_child, binding);
 		if (get) {
 			return get;
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-		// still need to figure out how best to handle these cases.
+	// anything with a child that isn't one of the operators above, just pass through.
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		auto &unnest = op.Cast<LogicalUnnest>();
+		auto table_ids = unnest.GetTableIndex();
+		D_ASSERT(table_ids.size() == 1);
+		if (table_ids.at(0) != table_index) {
+			break;
+		}
+		if (unnest.children.size() == 0) {
+			return nullptr;
+		}
+		auto &child = unnest.children.at(0);
+		auto child_tables = child->GetTableIndex();
+		// Go through bound unnest expressions and look for a bound column ref.
+		if (child_tables.size() == 0) {
+			return GetDataRetOp(*child, binding);
+		}
+		auto child_table_index = child->GetTableIndex()[0];
+		binding = ColumnBinding(child_table_index, binding.column_index);
+		for (idx_t column_index = 0; column_index < unnest.expressions.size(); column_index++) {
+			auto ret = GetDataRetOp(*child, binding);
+			if (ret) {
+				return ret;
+			}
+		}
+		break;
+	}
 	default:
+		if (op.children.size() == 1) {
+			return GetDataRetOp(*op.children.at(0), binding);
+		}
+		D_ASSERT(false);
 		// return null pointer, maybe there is no logical get under this child
 		break;
 	}
