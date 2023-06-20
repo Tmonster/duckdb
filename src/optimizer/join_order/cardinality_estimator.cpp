@@ -283,7 +283,7 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 					    GetAccurateColumnInformationProj(&proj, relation_id, rel_binding, binding_column_id);
 					break;
 				}
-				case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+				case LogicalOperatorType::LOGICAL_CHUNK_GET:
 				case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
 					string column_name = "dummy_data_fetch";
@@ -576,7 +576,6 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT: {
-
 			auto column_bindings = rel.data_op.GetColumnBindings();
 			for (auto &binding : column_bindings) {
 				// adds columns to relation_mapping[relation_id].columns

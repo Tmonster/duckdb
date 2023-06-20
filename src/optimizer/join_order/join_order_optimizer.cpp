@@ -984,28 +984,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-static bool RecursiveenumerateProjectionExpressions(unique_ptr<Expression> new_expression, ColumnBinding &binding) {
-	optional_ptr<LogicalOperator> ret = nullptr;
-	ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
-		if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
-			binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
-			ret = GetDataRetOp(*op.children.at(0), binding);
-			return;
-		}
-		else if ( RecursiveenumerateProjectionExpressions((expr, binding)) {
-
-		}
-	});
-	if (ret != nullptr) {
-		return GetDataRetOp(*ret, binding);
-	}
-}
+static bool RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding);
 
 static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding &binding) {
 	optional_ptr<LogicalOperator> get;
 	auto table_index = binding.table_index;
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+		return &op;
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto table_ids = op.GetTableIndex();
@@ -1027,39 +1013,22 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto table_indexes = op.GetTableIndex();
 		D_ASSERT(table_indexes.size() > 0);
+		auto &proj = op.Cast<LogicalProjection>();
 		if (table_indexes[0] == table_index) {
-			auto &proj = op.Cast<LogicalProjection>();
 			D_ASSERT(proj.expressions.size() > binding.column_index ||
 			         binding.column_index == DConstants::INVALID_INDEX);
 			auto &new_expression = proj.expressions[binding.column_index];
-			if (new_expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &new_col_ref = new_expression->Cast<BoundColumnRefExpression>();
-				binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+			// TODO: If a constant value is projected, Recursive Enumerate Projection Expressions should report this
+			// somehow.
+			if (RecursiveEnumerateProjectionExpressions(new_expression.get(), binding)) {
 				return GetDataRetOp(*op.children.at(0), binding);
-			} else {
-				// if the projection is not immediately a bound column reference, it could be a function
-				// that affects the cardinality. In this case return the projection.
-				optional_ptr<LogicalOperator> ret = nullptr;
-				ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
-				if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-					auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
-					binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
-					ret = GetDataRetOp(*op.children.at(0), binding);
-					return;
-				}
-			});
-			if (ret != nullptr) {
-				return GetDataRetOp(*ret, binding);
-			}
-				// we have a projection that matches the table scan. The expression does not have a bound
-				// column ref anywhere in it. So just return the projection, it can be a function or a constant
-				// value being projected
-				return &proj;
 			}
 		}
 		if (!op.children.empty()) {
 			return GetDataRetOp(*op.children.at(0), binding);
 		}
+		// no expressions in the projection come from a bound_column_ref
+		return &proj;
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
@@ -1072,7 +1041,8 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// any relation here represents a non-reorderable relation from the join plan with at least two children
-		// We still want total domain statistics of the columns projected from this non-reorderable join
+		// We still want total domain statistics of the columns from the relations that are found within these
+		// non-reorderable relations.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
 		auto &left_child = op.children.at(0);
 		get = GetDataRetOp(*left_child, binding);
@@ -1127,6 +1097,24 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		break;
 	}
 	return nullptr;
+}
+
+// Takes an expression and converts a list of known column_refs to constants
+static bool RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding) {
+	auto ret = false;
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
+		binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+		return true;
+	} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
+		return true;
+	} else {
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			ret = ret || RecursiveEnumerateProjectionExpressions(child.get(), binding);
+		});
+	}
+	// we didn't find a Bound Column Ref
+	return ret;
 }
 
 string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
