@@ -984,6 +984,24 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
+static bool RecursiveenumerateProjectionExpressions(unique_ptr<Expression> new_expression, ColumnBinding &binding) {
+	optional_ptr<LogicalOperator> ret = nullptr;
+	ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
+		if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
+			binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+			ret = GetDataRetOp(*op.children.at(0), binding);
+			return;
+		}
+		else if ( RecursiveenumerateProjectionExpressions((expr, binding)) {
+
+		}
+	});
+	if (ret != nullptr) {
+		return GetDataRetOp(*ret, binding);
+	}
+}
+
 static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding &binding) {
 	optional_ptr<LogicalOperator> get;
 	auto table_index = binding.table_index;
@@ -1021,18 +1039,18 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			} else {
 				// if the projection is not immediately a bound column reference, it could be a function
 				// that affects the cardinality. In this case return the projection.
-				//				optional_ptr<LogicalOperator> ret = nullptr;
-				//
-				//				ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
-				//					if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-				//						auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
-				//						binding = ColumnBinding(new_col_ref.binding.table_index,
-				//new_col_ref.binding.column_index); 						ret = GetDataRetOp(*op.children.at(0), binding); 						return;
-				//					}
-				//				});
-				//				if (ret != nullptr) {
-				//					return GetDataRetOp(*ret, binding);
-				//				}
+				optional_ptr<LogicalOperator> ret = nullptr;
+				ExpressionIterator::EnumerateChildren(*new_expression, [&](Expression &expr) {
+				if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+					auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
+					binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+					ret = GetDataRetOp(*op.children.at(0), binding);
+					return;
+				}
+			});
+			if (ret != nullptr) {
+				return GetDataRetOp(*ret, binding);
+			}
 				// we have a projection that matches the table scan. The expression does not have a bound
 				// column ref anywhere in it. So just return the projection, it can be a function or a constant
 				// value being projected

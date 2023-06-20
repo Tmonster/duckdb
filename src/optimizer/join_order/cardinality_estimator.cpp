@@ -283,34 +283,16 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 					    GetAccurateColumnInformationProj(&proj, relation_id, rel_binding, binding_column_id);
 					break;
 				}
+				case LogicalOperatorType::LOGICAL_CHUNK_GET: {
 				case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					auto &chunk_get = data_get_op->Cast<LogicalDummyScan>();
-					string column_name;
-					if (chunk_get.expressions.size() > 0) {
-						throw InternalException("oh hello check me out here");
-						column_name = chunk_get.expressions.at(binding_column_id)->ToString();
-					}
-					column_name = "dummy_scan_column";
-					relation_attributes[relation_id].columns[binding_column_id] = column_name;
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_CHUNK_GET: {
-					// we don't really care here, we will never ask for stats on a logical chunk get
-					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					auto &chunk_get = data_get_op->Cast<LogicalColumnDataGet>();
-					string column_name;
-					if (chunk_get.expressions.size() > 0) {
-						throw InternalException("oh hello check me out here");
-						column_name = chunk_get.expressions.at(binding_column_id)->ToString();
-					}
-					column_name = "chunk_get_column";
+					string column_name = "dummy_data_fetch";
 					relation_attributes[relation_id].columns[binding_column_id] = column_name;
 					break;
 				}
 				default:
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					throw InternalException("adding relation column mapping that is not a get or a projection");
+					throw InternalException("adding relation column mapping that is not a get/projection/or dummy data fetch");
 					D_ASSERT(false);
 				}
 				RemoveRelationToColumnMapping(relation_binding);
