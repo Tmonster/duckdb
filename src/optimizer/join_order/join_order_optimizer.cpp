@@ -326,6 +326,10 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			if (ret) {
 				return ret;
 			}
+			// if the next relation doesn't have a data source operation for the binding
+			// chances are the binding was a constant value or some other data generation
+			// operator. we just return the projection in this case.
+			return &proj;
 		}
 		if (expression_binding_translation.expression_is_constant) {
 			return &proj;

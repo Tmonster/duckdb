@@ -291,6 +291,17 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 					relation_attributes[relation_id].columns[binding_column_id] = column_name;
 					break;
 				}
+				case LogicalOperatorType::LOGICAL_DELIM_GET: {
+					string column_name = "LOGICAL_DELIM_GET";
+					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
+					relation_attributes[relation_id].columns[binding_column_id] = column_name;
+					break;
+				}
+				case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+				case LogicalOperatorType::LOGICAL_CTE_REF:
+				case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+					throw InternalException("Need to write a case to handle a " + LogicalOperatorToString(data_get_op->type) + " operator when updating relation column ids");
+				}
 				default:
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
 					throw InternalException(
