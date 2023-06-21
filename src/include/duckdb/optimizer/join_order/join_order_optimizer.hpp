@@ -12,6 +12,8 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/optimizer/join_order/join_order_enumerator.hpp"
+#include "duckdb/optimizer/join_order/relation_extractor.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -33,7 +35,8 @@ struct GenerateJoinRelation {
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), cardinality_estimator(context, this), full_plan_found(false), must_update_full_plan(false) {
+	    : context(context), cardinality_estimator(context, this), relation_extractor(context, this),
+	      join_enumerator(context, this) {
 	}
 
 	//! Perform join reordering inside a plan
@@ -45,8 +48,6 @@ public:
 
 private:
 	ClientContext &context;
-	//! The total amount of join pairs that have been considered
-	idx_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
 
@@ -54,10 +55,6 @@ private:
 	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
-	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
-	//! The optimal join plan found for the specific JoinRelationSet*
-	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 
 	//! The set of filters extracted from the query graph
 	vector<unique_ptr<Expression>> filters;
@@ -66,10 +63,10 @@ private:
 
 	friend CardinalityEstimator;
 	CardinalityEstimator cardinality_estimator;
-
-	bool full_plan_found;
-	bool must_update_full_plan;
-	unordered_set<std::string> join_nodes_in_full_plan;
+	friend RelationExtractor;
+	RelationExtractor relation_extractor;
+	friend JoinOrderEnumerator;
+	JoinOrderEnumerator join_enumerator;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings);
@@ -77,49 +74,43 @@ private:
 	//! Get column bindings from a filter
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
-	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
-	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
-	                          optional_ptr<LogicalOperator> parent = nullptr);
+	//	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
+	//	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
+	//	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
+	//	                          optional_ptr<LogicalOperator> parent = nullptr);
 
-	//! When extracting join relations, you sometimes run the join order optimizer on children if they are non
-	//! re-orderable or for some other reason. When we optimize a child, we need the cardinality estimation information
-	unique_ptr<LogicalOperator> OptimizeChildren(LogicalOperator &input_op, optional_ptr<LogicalOperator> &parent);
 	//! During the extract join relation phase, we add a relations to our relation map
-	void AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
-	                 LogicalOperator &data_retreival_op);
+	//	void AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
+	//	                 LogicalOperator &data_retreival_op);
 
-	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
-	//! the newly created plan, or an existing plan)
-	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
-	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
-	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	//	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection
+	//(either
+	//	//! the newly created plan, or an existing plan)
+	//	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	//	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
+	//	//! cancelling the dynamic programming step.
+	//	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
 	//! Used for debugging purposes.
 	string GetFilterString(unordered_set<idx_t>, string column_name);
 
-	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
-	//! Emit a relation set node
-	bool EmitCSG(JoinRelationSet &node);
-	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
+	//	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
+	//	//! Emit a relation set node
+	//	bool EmitCSG(JoinRelationSet &node);
+	//	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
+	//	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
-	//! Generate cross product edges inside the side
-	void GenerateCrossProducts();
-	//! Perform the join order solving
-	void SolveJoinOrder();
-	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e. did
-	//! not time-out)
-	bool SolveJoinOrderExactly();
-	//! Solve the join order approximately using a greedy algorithm
-	void SolveJoinOrderApproximately();
-
-	void UpdateDPTree(JoinNode &new_plan);
-
-	void UpdateJoinNodesInFullPlan(JoinNode &node);
-	bool NodeInFullPlan(JoinNode &node);
+	//	//! Generate cross product edges inside the side
+	//	void GenerateCrossProducts();
+	//	//! Perform the join order solving
+	//	void SolveJoinOrder();
+	//	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e.
+	//did
+	//	//! not time-out)
+	//	bool SolveJoinOrderExactly();
+	//	//! Solve the join order approximately using a greedy algorithm
+	//	void SolveJoinOrderApproximately();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 };

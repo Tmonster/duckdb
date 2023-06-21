@@ -283,6 +283,7 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 					    GetAccurateColumnInformationProj(&proj, relation_id, rel_binding, binding_column_id);
 					break;
 				}
+				case LogicalOperatorType::LOGICAL_DELIM_GET:
 				case LogicalOperatorType::LOGICAL_CHUNK_GET:
 				case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
@@ -292,7 +293,8 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 				}
 				default:
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					throw InternalException("adding relation column mapping that is not a get/projection/or dummy data fetch");
+					throw InternalException(
+					    "adding relation column mapping that is not a get/projection/or dummy data fetch");
 					D_ASSERT(false);
 				}
 				RemoveRelationToColumnMapping(relation_binding);
@@ -416,8 +418,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	for (auto &match : subgraphs) {
 		// It's possible that in production, one of the D_ASSERTS above will fail and not all subgraphs
 		// were connected. When this happens, just use the largest denominator of all the subgraphs.
-		if (match.denom > denom) {
-			denom = match.denom;
+		if (match.denom >= 1) {
+			denom *= match.denom;
 		}
 	}
 	// can happen if a table has cardinality 0, or a tdom is set to 0
@@ -647,7 +649,7 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
-	//	PrintCardinalityEstimatorInitialState();
+	// PrintCardinalityEstimatorInitialState();
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
 	return node_ops;
