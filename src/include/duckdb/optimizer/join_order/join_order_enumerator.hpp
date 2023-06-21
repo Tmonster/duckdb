@@ -18,8 +18,8 @@ class JoinOrderOptimizer;
 
 class JoinOrderEnumerator {
 public:
-	explicit JoinOrderEnumerator(ClientContext &context, JoinOrderOptimizer *optimizer)
-	    : context(context), join_optimizer(optimizer), full_plan_found(false), must_update_full_plan(false) {
+	explicit JoinOrderEnumerator(JoinOrderOptimizer *optimizer)
+	    : join_optimizer(optimizer), full_plan_found(false), must_update_full_plan(false) {
 	}
 
 	//! The optimal join plan found for the specific JoinRelationSet*
@@ -28,7 +28,6 @@ public:
 	QueryGraph query_graph;
 
 private:
-	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	JoinOrderOptimizer *join_optimizer;
 

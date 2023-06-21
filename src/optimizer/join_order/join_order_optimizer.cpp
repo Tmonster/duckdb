@@ -257,7 +257,33 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-static bool RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding);
+struct BindingTranslationResult {
+	bool found_expression = false;
+	bool expression_is_constant = false;
+	ColumnBinding new_binding;
+};
+
+static BindingTranslationResult RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding) {
+	auto ret = BindingTranslationResult();
+	ret.new_binding = ColumnBinding(binding.table_index, binding.column_index);
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		ret.found_expression = true;
+		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
+		ret.new_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+	} else if (expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
+		ret.found_expression = true;
+		ret.expression_is_constant = true;
+	} else {
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			auto recursive_result = RecursiveEnumerateProjectionExpressions(child.get(), binding);
+			if (recursive_result.found_expression) {
+				ret = recursive_result;
+			}
+		});
+	}
+	// we didn't find a Bound Column Ref
+	return ret;
+}
 
 static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding &binding) {
 	optional_ptr<LogicalOperator> get;
@@ -287,26 +313,30 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		auto table_indexes = op.GetTableIndex();
 		D_ASSERT(table_indexes.size() > 0);
 		auto &proj = op.Cast<LogicalProjection>();
-		if (table_indexes[0] == table_index) {
-			D_ASSERT(proj.expressions.size() > binding.column_index ||
-			         binding.column_index == DConstants::INVALID_INDEX);
-			auto &new_expression = proj.expressions[binding.column_index];
-			// TODO: If a constant value is projected, Recursive Enumerate Projection Expressions should report this
-			// somehow.
-			if (RecursiveEnumerateProjectionExpressions(new_expression.get(), binding)) {
-				auto ret = GetDataRetOp(*op.children.at(0), binding);
-				if (ret) {
-					return ret;
-				}
-				return &proj;
+		if (table_indexes[0] != table_index) {
+			return nullptr;
+		}
+		D_ASSERT(proj.expressions.size() > binding.column_index ||
+				 binding.column_index == DConstants::INVALID_INDEX);
+		auto &new_expression = proj.expressions[binding.column_index];
+		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression.get(), binding);
+		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
+			// we have an expression at the binding. If the
+			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
+			if (ret) {
+				return ret;
 			}
 		}
+		if (expression_binding_translation.expression_is_constant) {
+			return &proj;
+		}
+		D_ASSERT(false);
+		return &proj;
 		if (!op.children.empty()) {
 			return GetDataRetOp(*op.children.at(0), binding);
 		}
 		// no expressions in the projection come from a bound_column_ref
 		return &proj;
-		break;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -365,6 +395,33 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto table_indexes = op.GetTableIndex();
+		D_ASSERT(table_indexes.size() > 0);
+		auto &aggr = op.Cast<LogicalAggregate>();
+		if (std::find(table_indexes.begin(), table_indexes.end(), table_index) == table_indexes.end()) {
+			return nullptr;
+		}
+		Expression *new_expression;
+		if (aggr.expressions.size() < binding.column_index) {
+			new_expression = aggr.groups[binding.column_index].get();
+		} else {
+			new_expression = aggr.expressions[binding.column_index].get();
+		}
+		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression, binding);
+		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
+			// we have an expression at the binding. If the
+			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
+			if (ret) {
+				return ret;
+			}
+		}
+		if (expression_binding_translation.expression_is_constant) {
+			return &aggr;
+		}
+		D_ASSERT(false);
+		return &aggr;
+	}
 	default:
 		if (op.children.size() == 1) {
 			return GetDataRetOp(*op.children.at(0), binding);
@@ -376,23 +433,6 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	return nullptr;
 }
 
-// Takes an expression and converts a list of known column_refs to constants
-static bool RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding) {
-	auto ret = false;
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
-		binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
-		return true;
-	} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
-		return true;
-	} else {
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			ret = ret || RecursiveEnumerateProjectionExpressions(child.get(), binding);
-		});
-	}
-	// we didn't find a Bound Column Ref
-	return ret;
-}
 
 string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
 	string ret = "";

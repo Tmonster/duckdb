@@ -36,7 +36,7 @@ class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
 	    : context(context), cardinality_estimator(context, this), relation_extractor(context, this),
-	      join_enumerator(context, this) {
+	      join_enumerator(this) {
 	}
 
 	//! Perform join reordering inside a plan
