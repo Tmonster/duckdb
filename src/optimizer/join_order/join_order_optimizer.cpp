@@ -273,14 +273,20 @@ static BindingTranslationResult RecursiveEnumerateProjectionExpressions(Expressi
 	} else if (expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
 		ret.found_expression = true;
 		ret.expression_is_constant = true;
-	} else {
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			auto recursive_result = RecursiveEnumerateProjectionExpressions(child.get(), binding);
-			if (recursive_result.found_expression) {
-				ret = recursive_result;
-			}
-		});
+	} else if (expr->expression_class == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr->Cast<BoundFunctionExpression>();
+		// no children some sort of gen_random_uuid() or equivalent.
+		if (func.children.size() == 0) {
+			ret.found_expression = true;
+			ret.expression_is_constant = true;
+		}
 	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		auto recursive_result = RecursiveEnumerateProjectionExpressions(child.get(), binding);
+		if (recursive_result.found_expression) {
+			ret = recursive_result;
+		}
+	});
 	// we didn't find a Bound Column Ref
 	return ret;
 }
@@ -324,6 +330,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			// we have an expression at the binding. If the
 			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
 			if (ret) {
+				binding = expression_binding_translation.new_binding;
 				return ret;
 			}
 			// if the next relation doesn't have a data source operation for the binding
@@ -407,11 +414,21 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			return nullptr;
 		}
 		Expression *new_expression;
-		if (aggr.expressions.size() < binding.column_index) {
+//		std::cout << "error occurs here??" << std::end;
+		if (table_index == aggr.group_index) {
 			new_expression = aggr.groups[binding.column_index].get();
-		} else {
-			new_expression = aggr.expressions[binding.column_index].get();
 		}
+		else {
+//			D_ASSERT(false);
+			// maybe the desired dataret op is in another operator
+			return nullptr;
+		}
+//		else if (table_index == aggr.aggregate_index) {
+//			new_expression = aggr.grouping_sets[binding.column_index].get();
+//		} else if (table_index == aggr.groupings_index){
+//			new_expression = aggr.expressions[binding.column_index].get();
+//		}
+
 		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression, binding);
 		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
 			// we have an expression at the binding. If the

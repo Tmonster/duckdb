@@ -291,12 +291,6 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 					relation_attributes[relation_id].columns[binding_column_id] = column_name;
 					break;
 				}
-				case LogicalOperatorType::LOGICAL_DELIM_GET: {
-					string column_name = "LOGICAL_DELIM_GET";
-					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					relation_attributes[relation_id].columns[binding_column_id] = column_name;
-					break;
-				}
 				case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 				case LogicalOperatorType::LOGICAL_CTE_REF:
 				case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
@@ -556,10 +550,14 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		}
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-			throw InternalException("try to break this dummy scan or expression get test");
-			auto key = ColumnBinding(i, 0);
-			auto value = ColumnBinding(0, 0);
-			AddRelationToColumnMapping(key, value);
+//			throw InternalException("try to break this dummy scan or expression get test");
+			// TODO: is there a table index for dummy scans and expression gets?
+			auto bindings = rel.data_op.GetColumnBindings();
+			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
+				auto key = ColumnBinding(i, binding_index);
+				auto value = ColumnBinding(0, binding_index);
+				AddRelationToColumnMapping(key, value);
+			}
 		}
 		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -705,12 +703,11 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// refers to the same base table relation, as non-reorderable joins may involve 2+
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
+		catalog_table = nullptr;
 		data_op = GetDataRetOp(op, actual_binding);
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = data_op->Cast<LogicalGet>();
 			catalog_table = GetCatalogTableEntry(get);
-		} else {
-			catalog_table = nullptr;
 		}
 
 		if (catalog_table && assertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
