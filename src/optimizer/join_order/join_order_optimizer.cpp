@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "iostream"
 
 namespace duckdb {
 
@@ -266,20 +267,34 @@ struct BindingTranslationResult {
 static BindingTranslationResult RecursiveEnumerateProjectionExpressions(Expression *expr, ColumnBinding &binding) {
 	auto ret = BindingTranslationResult();
 	ret.new_binding = ColumnBinding(binding.table_index, binding.column_index);
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		ret.found_expression = true;
-		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
-		ret.new_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
-	} else if (expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
-		ret.found_expression = true;
-		ret.expression_is_constant = true;
-	} else if (expr->expression_class == ExpressionClass::BOUND_FUNCTION) {
+	switch (expr->expression_class) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr->Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
 		if (func.children.size() == 0) {
 			ret.found_expression = true;
 			ret.expression_is_constant = true;
+			return ret;
 		}
+		break;
+	}
+	case ExpressionClass::BOUND_COLUMN_REF: {
+		ret.found_expression = true;
+		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
+		ret.new_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+		return ret;
+	}
+	case ExpressionClass::BOUND_LAMBDA_REF:
+	case ExpressionClass::BOUND_CONSTANT:
+	case ExpressionClass::BOUND_DEFAULT:
+	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::BOUND_REF:
+		ret.found_expression = true;
+		ret.expression_is_constant = true;
+		return ret;
+	default:
+		break;
 	}
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
 		auto recursive_result = RecursiveEnumerateProjectionExpressions(child.get(), binding);
@@ -341,6 +356,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (expression_binding_translation.expression_is_constant) {
 			return &proj;
 		}
+//		std::cout << "dassert falese" << std::endl;
 		D_ASSERT(false);
 		return &proj;
 		if (!op.children.empty()) {
@@ -413,21 +429,11 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (std::find(table_indexes.begin(), table_indexes.end(), table_index) == table_indexes.end()) {
 			return nullptr;
 		}
-		Expression *new_expression;
-//		std::cout << "error occurs here??" << std::end;
-		if (table_index == aggr.group_index) {
-			new_expression = aggr.groups[binding.column_index].get();
-		}
-		else {
-//			D_ASSERT(false);
-			// maybe the desired dataret op is in another operator
+		if (table_index != aggr.group_index) {
+			// dataret op is in another operator
 			return nullptr;
 		}
-//		else if (table_index == aggr.aggregate_index) {
-//			new_expression = aggr.grouping_sets[binding.column_index].get();
-//		} else if (table_index == aggr.groupings_index){
-//			new_expression = aggr.expressions[binding.column_index].get();
-//		}
+		auto new_expression = aggr.groups[binding.column_index].get();
 
 		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression, binding);
 		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
@@ -440,13 +446,17 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (expression_binding_translation.expression_is_constant) {
 			return &aggr;
 		}
+		std::cout << "dassert false 2" << std::endl;
 		D_ASSERT(false);
 		return &aggr;
 	}
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		return nullptr;
 	default:
 		if (op.children.size() == 1) {
 			return GetDataRetOp(*op.children.at(0), binding);
 		}
+		std::cout << "dassert false 3" << std::endl;
 		D_ASSERT(false);
 		// return null pointer, maybe there is no logical get under this child
 		break;

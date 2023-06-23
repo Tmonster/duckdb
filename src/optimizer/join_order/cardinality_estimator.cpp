@@ -558,6 +558,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 				auto value = ColumnBinding(0, binding_index);
 				AddRelationToColumnMapping(key, value);
 			}
+			break;
 		}
 		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
