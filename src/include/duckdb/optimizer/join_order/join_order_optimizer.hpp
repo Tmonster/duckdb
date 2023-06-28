@@ -106,7 +106,7 @@ private:
 	//	//! Perform the join order solving
 	//	void SolveJoinOrder();
 	//	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e.
-	//did
+	// did
 	//	//! not time-out)
 	//	bool SolveJoinOrderExactly();
 	//	//! Solve the join order approximately using a greedy algorithm

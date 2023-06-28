@@ -338,8 +338,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (table_indexes[0] != table_index) {
 			return nullptr;
 		}
-		D_ASSERT(proj.expressions.size() > binding.column_index ||
-				 binding.column_index == DConstants::INVALID_INDEX);
+		D_ASSERT(proj.expressions.size() > binding.column_index || binding.column_index == DConstants::INVALID_INDEX);
 		auto &new_expression = proj.expressions[binding.column_index];
 		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression.get(), binding);
 		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
@@ -462,7 +461,6 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	}
 	return nullptr;
 }
-
 
 string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
 	string ret = "";

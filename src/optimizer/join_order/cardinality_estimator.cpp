@@ -294,7 +294,9 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 				case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 				case LogicalOperatorType::LOGICAL_CTE_REF:
 				case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-					throw InternalException("Need to write a case to handle a " + LogicalOperatorToString(data_get_op->type) + " operator when updating relation column ids");
+					throw InternalException("Need to write a case to handle a " +
+					                        LogicalOperatorToString(data_get_op->type) +
+					                        " operator when updating relation column ids");
 				}
 				case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 					auto &agg_op = data_get_op->Cast<LogicalAggregate>();
@@ -310,8 +312,9 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 				default:
 					auto type_string = LogicalOperatorToString(data_get_op->type);
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					throw InternalException(
-					    "adding relation column mapping that is not a get/projection/or dummy data fetch. Instead it is an " + type_string);
+					throw InternalException("adding relation column mapping that is not a get/projection/or dummy data "
+					                        "fetch. Instead it is an " +
+					                        type_string);
 					D_ASSERT(false);
 				}
 				RemoveRelationToColumnMapping(relation_binding);
@@ -562,7 +565,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		}
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-//			throw InternalException("try to break this dummy scan or expression get test");
+			//			throw InternalException("try to break this dummy scan or expression get test");
 			// TODO: is there a table index for dummy scans and expression gets?
 			auto bindings = rel.data_op.GetColumnBindings();
 			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
