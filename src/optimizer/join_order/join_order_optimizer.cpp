@@ -447,7 +447,6 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (expression_binding_translation.expression_is_constant) {
 			return &aggr;
 		}
-		std::cout << "dassert false 2" << std::endl;
 		D_ASSERT(false);
 		return &aggr;
 	}
