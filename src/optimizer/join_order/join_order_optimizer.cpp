@@ -456,9 +456,9 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (op.children.size() == 1) {
 			return GetDataRetOp(*op.children.at(0), binding);
 		}
-		std::cout << "dassert false 3" << std::endl;
 		D_ASSERT(false);
-		// return null pointer, maybe there is no logical get under this child
+		// return null pointer, there are no children, so the data source operation is
+		// somewhere else in the logical plan.
 		break;
 	}
 	return nullptr;
