@@ -529,7 +529,8 @@ void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
 }
 
 // For each relation, add a mapping of (relation_id, column_id) -> (Table_ID, column_id)
-// The (table_id, column_id) represent the table, column of the catalog table where the column originates from
+// The (table_id, column_id) represent the table, column of the operator where the column statistics can be inferred
+// Usually this is a Logical Get or an Aggregate.
 // this is so we can easily initialize total domains for join groups
 vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 	vector<NodeOp> node_ops;
