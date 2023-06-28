@@ -191,7 +191,7 @@ bool JoinOrderEnumerator::EmitCSG(JoinRelationSet &node) {
 }
 
 bool JoinOrderEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-                                                unordered_set<idx_t> exclusion_set) {
+                                                unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {

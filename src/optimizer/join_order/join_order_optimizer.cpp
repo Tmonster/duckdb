@@ -1,11 +1,9 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/common/queue.hpp"
 
 #include <algorithm>
 #include <cmath>
