@@ -298,11 +298,15 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 				}
 				case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 					auto &agg_op = data_get_op->Cast<LogicalAggregate>();
-					// binding returned should be the binding on the logical aggregate because
-					// because I say so.
-
+					// binding returned should be the binding on the logical aggregate
+					// when the cardinality estimator get the data_ret op, when the aggregate
+					// is returned, it can estimate the cardinality as the number of distinct
+					// values within the binding column.
+					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), data_binding.column_index);
+					string column_name = agg_op.groups[data_binding.column_index]->ToString();
+					relation_attributes[relation_id].columns[binding_column_id] = column_name;
+					break;
 				}
-
 				default:
 					auto type_string = LogicalOperatorToString(data_get_op->type);
 					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);

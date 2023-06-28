@@ -357,12 +357,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		if (expression_binding_translation.expression_is_constant) {
 			return &proj;
 		}
-//		std::cout << "dassert falese" << std::endl;
 		D_ASSERT(false);
-		return &proj;
-		if (!op.children.empty()) {
-			return GetDataRetOp(*op.children.at(0), binding);
-		}
 		// no expressions in the projection come from a bound_column_ref
 		return &proj;
 	}
@@ -423,6 +418,10 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		}
 		break;
 	}
+	// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
+	// Logical Aggregates and Group by's are non-reorderable relations
+	// We still want total domain statistics of the columns from the relations that are found within these
+	// non-reorderable relations.
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto table_indexes = op.GetTableIndex();
 		D_ASSERT(table_indexes.size() > 0);
