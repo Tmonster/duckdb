@@ -65,6 +65,156 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 	throw Exception("Could not find relation in parent node (?)");
 }
 
+// the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
+// Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
+// https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
+// FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
+unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
+	D_ASSERT(filters.empty() && relations.empty()); // assert that the JoinOrderOptimizer has not been used before
+	LogicalOperator *op = plan.get();
+
+	// now we begin optimizing the current plan
+	// Skip all operators until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
+	// group by and this filter cannot be reordered
+	// Then we extract a list of all relations that have to be joined together
+	// and a list of all conditions/join filters that are applied to them
+	vector<reference<LogicalOperator>> filter_operators;
+	// Here we need a parent op for some reason. Makes no sense to me.
+	if (!relation_extractor.ExtractJoinRelations(*op, filter_operators)) {
+		// do not support reordering this type of plan
+		return plan;
+	}
+	if (relations.size() <= 1) {
+		// at most one relation, nothing to reorder
+		return plan;
+	}
+	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
+	// filters in the process
+	expression_set_t filter_set;
+
+	// Inspect filter operations so we can create edges in our query graph.
+	for (auto &filter_op : filter_operators) {
+		auto &f_op = filter_op.get();
+		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			auto &join = f_op.Cast<LogicalComparisonJoin>();
+			D_ASSERT(join.join_type == JoinType::INNER);
+			D_ASSERT(join.expressions.empty());
+			for (auto &cond : join.conditions) {
+				auto comparison =
+				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+				if (filter_set.find(*comparison) == filter_set.end()) {
+					filter_set.insert(*comparison);
+					filters.push_back(std::move(comparison));
+				}
+			}
+			join.conditions.clear();
+		} else {
+			for (auto &expression : f_op.expressions) {
+				if (filter_set.find(*expression) == filter_set.end()) {
+					filter_set.insert(*expression);
+					filters.push_back(std::move(expression));
+				}
+			}
+			f_op.expressions.clear();
+		}
+	}
+	// create potential edges from the comparisons
+	for (idx_t i = 0; i < filters.size(); i++) {
+		auto &filter = filters[i];
+		// first extract the relation set for the entire filter
+		unordered_set<idx_t> relations;
+		relation_extractor.ExtractRelationBindings(*filter, relations);
+		auto &set = set_manager.GetJoinRelation(relations);
+		auto info = make_uniq<FilterInfo>(set, i);
+
+		auto filter_info = info.get();
+		filter_infos.push_back(std::move(info));
+
+		// now check if it can be used as a join predicate
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comparison = filter->Cast<BoundComparisonExpression>();
+			// extract the relation_ids that are required for the left and right side of the comparison
+			unordered_set<idx_t> left_relations, right_relations;
+			relation_extractor.ExtractRelationBindings(*comparison.left, left_relations);
+			relation_extractor.ExtractRelationBindings(*comparison.right, right_relations);
+			// Get Column Bindings to know exactly what columns between relations are being joined with each other
+			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
+			GetColumnBinding(*comparison.left, filter_info->left_binding);
+			GetColumnBinding(*comparison.right, filter_info->right_binding);
+			filter_info->left_join_column = GetFilterString(left_relations, comparison.left->ToString());
+			filter_info->right_join_column = GetFilterString(right_relations, comparison.right->ToString());
+			if (!left_relations.empty() && !right_relations.empty()) {
+				// both the left and the right side have bindings
+				// first create the relation sets, if they do not exist
+				filter_info->left_set = &set_manager.GetJoinRelation(left_relations);
+				filter_info->right_set = &set_manager.GetJoinRelation(right_relations);
+				// we can only create a meaningful edge if the sets are not exactly the same
+				if (filter_info->left_set != filter_info->right_set) {
+					// check if the sets are disjoint
+					if (Disjoint(left_relations, right_relations)) {
+						// they are disjoint, we only need to create one set of edges in the join graph
+						join_enumerator.query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set,
+						                                       filter_info);
+						join_enumerator.query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set,
+						                                       filter_info);
+					} else {
+						continue;
+					}
+					continue;
+				}
+			}
+		} else {
+			// potentially a single node filter (i.e table.a > 100)
+			// populate left_join_column for future debugging
+			filter_info->left_join_column = filter->ToString();
+		}
+	}
+
+	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
+	// certain table filters.
+	auto node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
+
+	// now use dynamic programming to figure out the optimal join order
+	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
+	// nodes of the join tree
+	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	for (auto &node_op : node_ops) {
+		D_ASSERT(node_op.node);
+		join_enumerator.plans[&node_op.node->set] = std::move(node_op.node);
+	}
+
+	// now we perform the actual dynamic programming to compute the final result
+	join_enumerator.SolveJoinOrder();
+
+	// now the optimal join path should have been found
+	// get it from the node
+	unordered_set<idx_t> bindings;
+	for (idx_t i = 0; i < relations.size(); i++) {
+		bindings.insert(i);
+	}
+	auto &total_relation = set_manager.GetJoinRelation(bindings);
+	auto final_plan = join_enumerator.plans.find(&total_relation);
+	if (final_plan == join_enumerator.plans.end()) {
+		// could not find the final plan
+		// this should only happen in case the sets are actually disjunct
+		// in this case we need to generate cross product to connect the disjoint sets
+		if (context.config.force_no_cross_product) {
+			throw InvalidInputException(
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+		}
+		join_enumerator.GenerateCrossProducts();
+		//! solve the join order again
+		join_enumerator.SolveJoinOrder();
+		// now we can obtain the final plan!
+		final_plan = join_enumerator.plans.find(&total_relation);
+		D_ASSERT(final_plan != join_enumerator.plans.end());
+	}
+	// now perform the actual reordering
+	return RewritePlan(std::move(plan), *final_plan->second);
+}
+
 GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                        JoinNode &node) {
 	optional_ptr<JoinRelationSet> left_node;
@@ -471,153 +621,6 @@ string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_binding
 	return ret;
 }
 
-// the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
-// Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
-// https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
-// FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
-unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	D_ASSERT(filters.empty() && relations.empty()); // assert that the JoinOrderOptimizer has not been used before
-	LogicalOperator *op = plan.get();
-	// now we optimize the current plan
-	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
-	// group by and this filter cannot be reordered
-	// extract a list of all relations that have to be joined together
-	// and a list of all conditions that is applied to them
-	vector<reference<LogicalOperator>> filter_operators;
-	// Here we need a parent op for some reason. Makes no sense to me.
-	if (!relation_extractor.ExtractJoinRelations(*op, filter_operators)) {
-		// do not support reordering this type of plan
-		return plan;
-	}
-	if (relations.size() <= 1) {
-		// at most one relation, nothing to reorder
-		return plan;
-	}
-	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
-	// filters in the process
-	expression_set_t filter_set;
 
-	// Inspect filter operations so we can create edges in our query graph.
-	for (auto &filter_op : filter_operators) {
-		auto &f_op = filter_op.get();
-		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			auto &join = f_op.Cast<LogicalComparisonJoin>();
-			D_ASSERT(join.join_type == JoinType::INNER);
-			D_ASSERT(join.expressions.empty());
-			for (auto &cond : join.conditions) {
-				auto comparison =
-				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-				if (filter_set.find(*comparison) == filter_set.end()) {
-					filter_set.insert(*comparison);
-					filters.push_back(std::move(comparison));
-				}
-			}
-			join.conditions.clear();
-		} else {
-			for (auto &expression : f_op.expressions) {
-				if (filter_set.find(*expression) == filter_set.end()) {
-					filter_set.insert(*expression);
-					filters.push_back(std::move(expression));
-				}
-			}
-			f_op.expressions.clear();
-		}
-	}
-	// create potential edges from the comparisons
-	for (idx_t i = 0; i < filters.size(); i++) {
-		auto &filter = filters[i];
-		// first extract the relation set for the entire filter
-		unordered_set<idx_t> relations;
-		relation_extractor.ExtractRelationBindings(*filter, relations);
-		auto &set = set_manager.GetJoinRelation(relations);
-		auto info = make_uniq<FilterInfo>(set, i);
-
-		auto filter_info = info.get();
-		filter_infos.push_back(std::move(info));
-
-		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			auto &comparison = filter->Cast<BoundComparisonExpression>();
-			// extract the relation_ids that are required for the left and right side of the comparison
-			unordered_set<idx_t> left_relations, right_relations;
-			relation_extractor.ExtractRelationBindings(*comparison.left, left_relations);
-			relation_extractor.ExtractRelationBindings(*comparison.right, right_relations);
-			// Get Column Bindings to know exactly what columns between relations are being joined with each other
-			// In the function GetColumnBindings we can add debug info telling us exactly what filters we have gathered.
-			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			GetColumnBinding(*comparison.right, filter_info->right_binding);
-			filter_info->left_join_column = GetFilterString(left_relations, comparison.left->ToString());
-			filter_info->right_join_column = GetFilterString(right_relations, comparison.right->ToString());
-			if (!left_relations.empty() && !right_relations.empty()) {
-				// both the left and the right side have bindings
-				// first create the relation sets, if they do not exist
-				filter_info->left_set = &set_manager.GetJoinRelation(left_relations);
-				filter_info->right_set = &set_manager.GetJoinRelation(right_relations);
-				// we can only create a meaningful edge if the sets are not exactly the same
-				if (filter_info->left_set != filter_info->right_set) {
-					// check if the sets are disjoint
-					if (Disjoint(left_relations, right_relations)) {
-						// they are disjoint, we only need to create one set of edges in the join graph
-						join_enumerator.query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set,
-						                                       filter_info);
-						join_enumerator.query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set,
-						                                       filter_info);
-					} else {
-						continue;
-					}
-					continue;
-				}
-			}
-		} else {
-			// potentially a single node filter (i.e table.a > 100)
-			// populate left_join_column for future debugging
-			filter_info->left_join_column = filter->ToString();
-		}
-	}
-
-	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
-	// certain table filters.
-	auto node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
-
-	// now use dynamic programming to figure out the optimal join order
-	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree
-	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
-	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
-	for (auto &node_op : node_ops) {
-		D_ASSERT(node_op.node);
-		join_enumerator.plans[&node_op.node->set] = std::move(node_op.node);
-	}
-
-	// now we perform the actual dynamic programming to compute the final result
-	join_enumerator.SolveJoinOrder();
-
-	// now the optimal join path should have been found
-	// get it from the node
-	unordered_set<idx_t> bindings;
-	for (idx_t i = 0; i < relations.size(); i++) {
-		bindings.insert(i);
-	}
-	auto &total_relation = set_manager.GetJoinRelation(bindings);
-	auto final_plan = join_enumerator.plans.find(&total_relation);
-	if (final_plan == join_enumerator.plans.end()) {
-		// could not find the final plan
-		// this should only happen in case the sets are actually disjunct
-		// in this case we need to generate cross product to connect the disjoint sets
-		if (context.config.force_no_cross_product) {
-			throw InvalidInputException(
-			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
-		}
-		join_enumerator.GenerateCrossProducts();
-		//! solve the join order again
-		join_enumerator.SolveJoinOrder();
-		// now we can obtain the final plan!
-		final_plan = join_enumerator.plans.find(&total_relation);
-		D_ASSERT(final_plan != join_enumerator.plans.end());
-	}
-	// now perform the actual reordering
-	return RewritePlan(std::move(plan), *final_plan->second);
-}
 
 } // namespace duckdb

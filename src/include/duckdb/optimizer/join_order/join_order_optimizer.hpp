@@ -74,44 +74,10 @@ private:
 	//! Get column bindings from a filter
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
-	//	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
-	//	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	//	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
-	//	                          optional_ptr<LogicalOperator> parent = nullptr);
-
-	//! During the extract join relation phase, we add a relations to our relation map
-	//	void AddRelation(optional_ptr<LogicalOperator> &parent, LogicalOperator &input_op,
-	//	                 LogicalOperator &data_retreival_op);
-
-	//	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection
-	//(either
-	//	//! the newly created plan, or an existing plan)
-	//	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
-	//	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
-	//	//! cancelling the dynamic programming step.
-	//	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
-
 	//! Used for debugging purposes.
 	string GetFilterString(unordered_set<idx_t>, string column_name);
-
-	//	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
-	//	//! Emit a relation set node
-	//	bool EmitCSG(JoinRelationSet &node);
-	//	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	//	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
-	//	//! Generate cross product edges inside the side
-	//	void GenerateCrossProducts();
-	//	//! Perform the join order solving
-	//	void SolveJoinOrder();
-	//	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e.
-	// did
-	//	//! not time-out)
-	//	bool SolveJoinOrderExactly();
-	//	//! Solve the join order approximately using a greedy algorithm
-	//	void SolveJoinOrderApproximately();
-
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 };
 

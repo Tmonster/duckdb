@@ -255,6 +255,20 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 	}
 }
 
+
+// We pass both the relation op and the data_get_op in case we have a non-reorderable join
+// that has multiple children. Imagine the following scenario
+// LEFT JOIN : t1.c1, t1.c2, t2.c1, t2.c2
+// the relation op column bindings have 4 binding
+// but the data_get_op is either logical_get(t1), or logical_get(t2)
+// So we loop through the relation column bindings ({0,1}, {0, 2}, {0, 3}, {0, 4})
+// 		and get the data ret ops ({0,1}, {0, 2}, {1, 1}, {1, 2})
+// then we loop through the data get bindings ({1, 1}, {1, 2})
+// If the two bindings match, we can create a mapping relation_id, column_id -> table_id, column_id
+// 												of 	  {0, 3} -> {1, 2}
+// You need to be careful here because join bindings don't keep track of the exact column id
+// join_operator.GetColumnBindings() can return something like ({0, 0}, {0, 1}, {1, 0}, {2, 0}, {3, 0})
+// and our logic needs to be careful to properly assign unique relation columns.
 void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op,
                                                    idx_t relation_id) {
 	D_ASSERT(data_get_op);
@@ -263,11 +277,14 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, opti
 	auto rel_bindings = rel_op->GetColumnBindings();
 	auto data_get_bindings = data_get_op->GetColumnBindings();
 	auto binding_column_id = 0;
+	// loop through relation bindings
 	for (idx_t i = 0; i < rel_bindings.size(); i++) {
 		auto rel_binding = rel_bindings.at(i);
+		// get the data op of the relation binding
 		GetDataRetOp(*rel_op, rel_binding);
 		binding_column_id = i;
 		auto relation_binding = ColumnBinding(relation_id, binding_column_id);
+		// check if the data binding is the same as the data get op binding we are adding
 		for (auto &data_binding : data_get_bindings) {
 			if (rel_binding == data_binding) {
 				ColumnBinding binding_value;
@@ -486,48 +503,6 @@ void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &fil
 	}
 }
 
-void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
-	// Print what table.columns have the same "total domain"
-	// and print the total domain
-	for (auto &r2tdom : relation_column_to_tdoms) {
-		string res = "Columns ";
-		for (auto &rel : r2tdom.equivalent_relations) {
-			auto attributes = getRelationAttributes(rel.table_index);
-			auto table_name = attributes.original_name;
-			D_ASSERT(attributes.columns.find(rel.column_index) != attributes.columns.end());
-			auto column_name = attributes.columns.find(rel.column_index)->second;
-			res += table_name + "." + column_name + ", ";
-		}
-		res += " have the same total domains.";
-		Printer::Print(res);
-	}
-	Printer::Print("\n");
-	// print the estimated base cardinality of every table.
-	for (auto &relation_attribute : relation_attributes) {
-		string to_print = "Columns ";
-		for (auto &column : relation_attribute.second.columns) {
-			to_print += relation_attribute.second.original_name + "." + column.second + ", ";
-		}
-		to_print += " have an estimated cardinality of " + to_string(relation_attribute.second.cardinality);
-		Printer::Print(to_print);
-	}
-}
-
-void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
-	string header = "Join node has the following relations ";
-	for (idx_t i = 0; i < node.set.count; i++) {
-		D_ASSERT(relation_attributes.find(node.set.relations[i]) != relation_attributes.end());
-		auto attributes = relation_attributes[node.set.relations[i]];
-		string original_name = attributes.original_name;
-		string columns = "";
-		for (auto &column : attributes.columns) {
-			columns += column.second + ", ";
-		}
-		string to_print = "Table " + original_name + " with columns " + columns;
-		Printer::Print(to_print);
-	}
-}
-
 // For each relation, add a mapping of (relation_id, column_id) -> (Table_ID, column_id)
 // The (table_id, column_id) represent the table, column of the operator where the column statistics can be inferred
 // Usually this is a Logical Get or an Aggregate.
@@ -580,15 +555,18 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			// first we add relation column mapping, so for every column
+			// in the relation add a binding
 			AddRelationColumnMapping(&rel.data_op, i);
 			auto join_bindings = rel.data_op.GetColumnBindings();
 			unordered_set<idx_t> table_indexes;
+			// now we get the table references and start to update the bindings.
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
 			for (auto &table_index : table_indexes) {
 				auto binding = ColumnBinding(table_index, 0);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
-					// adding a relation that doesn't map to some data retrieval function (projection or logical Get).
+					// adding a relation that doesn't map to a datasource function.
 					// This shouldn't happen, but to avoid crashes, we add an empty mapping
 					D_ASSERT(false);
 					auto key = ColumnBinding(i, 0);
@@ -596,7 +574,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 						AddRelationToColumnMapping(key, binding);
 					}
 				}
-				// Add a mapping for (relation, column_index) -> (table index,
+				// Add a mapping for (relation, column_index) -> (table index, relation_column_index)
 				UpdateRelationColumnIDs(&rel.data_op, op, i);
 			}
 			break;
@@ -906,5 +884,54 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 	node.SetEstimatedCardinality(lowest_card_found);
 	relation_attributes[relation_id].cardinality = lowest_card_found;
 }
+
+// ----------------------- CARDINALITY ESTIMATION HELPER FUNCTIONS ---------------------------
+
+//LCOV_EXCL_START
+
+void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
+	// Print what table.columns have the same "total domain"
+	// and print the total domain
+	for (auto &r2tdom : relation_column_to_tdoms) {
+		string res = "Columns ";
+		for (auto &rel : r2tdom.equivalent_relations) {
+			auto attributes = getRelationAttributes(rel.table_index);
+			auto table_name = attributes.original_name;
+			D_ASSERT(attributes.columns.find(rel.column_index) != attributes.columns.end());
+			auto column_name = attributes.columns.find(rel.column_index)->second;
+			res += table_name + "." + column_name + ", ";
+		}
+		res += " have the same total domains.";
+		Printer::Print(res);
+	}
+	Printer::Print("\n");
+	// print the estimated base cardinality of every table.
+	for (auto &relation_attribute : relation_attributes) {
+		string to_print = "Columns ";
+		for (auto &column : relation_attribute.second.columns) {
+			to_print += relation_attribute.second.original_name + "." + column.second + ", ";
+		}
+		to_print += " have an estimated cardinality of " + to_string(relation_attribute.second.cardinality);
+		Printer::Print(to_print);
+	}
+}
+
+void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
+	string header = "Join node has the following relations ";
+	for (idx_t i = 0; i < node.set.count; i++) {
+		D_ASSERT(relation_attributes.find(node.set.relations[i]) != relation_attributes.end());
+		auto attributes = relation_attributes[node.set.relations[i]];
+		string original_name = attributes.original_name;
+		string columns = "";
+		for (auto &column : attributes.columns) {
+			columns += column.second + ", ";
+		}
+		string to_print = "Table " + original_name + " with columns " + columns;
+		Printer::Print(to_print);
+	}
+}
+
+//LCOV_EXCL_STOP
+
 
 } // namespace duckdb
