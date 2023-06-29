@@ -74,10 +74,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	LogicalOperator *op = plan.get();
 
 	// now we begin optimizing the current plan
-	// Skip all operators until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
-	// group by and this filter cannot be reordered
-	// Then we extract a list of all relations that have to be joined together
-	// and a list of all conditions/join filters that are applied to them
+	// Skip all operators until we find the first projection, we do this because the HAVING clause inserts a Filter
+	// AFTER the group by and this filter cannot be reordered Then we extract a list of all relations that have to be
+	// joined together and a list of all conditions/join filters that are applied to them
 	vector<reference<LogicalOperator>> filter_operators;
 	// Here we need a parent op for some reason. Makes no sense to me.
 	if (!relation_extractor.ExtractJoinRelations(*op, filter_operators)) {
@@ -620,7 +619,5 @@ string JoinOrderOptimizer::GetFilterString(unordered_set<idx_t> relation_binding
 #endif
 	return ret;
 }
-
-
 
 } // namespace duckdb

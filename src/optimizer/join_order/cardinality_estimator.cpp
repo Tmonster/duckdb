@@ -255,7 +255,6 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 	}
 }
 
-
 // We pass both the relation op and the data_get_op in case we have a non-reorderable join
 // that has multiple children. Imagine the following scenario
 // LEFT JOIN : t1.c1, t1.c2, t2.c1, t2.c2
@@ -269,7 +268,8 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 // You need to be careful here because join bindings don't keep track of the exact column id
 // join_operator.GetColumnBindings() can return something like ({0, 0}, {0, 1}, {1, 0}, {2, 0}, {3, 0})
 // and our logic needs to be careful to properly assign unique relation columns.
-void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_t relation_id, ColumnBinding data_binding) {
+void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_t relation_id,
+                                                   ColumnBinding data_binding) {
 	D_ASSERT(rel_op);
 
 	auto rel_op_bindings = rel_op->GetColumnBindings();
@@ -292,13 +292,14 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_
 			switch (data_get_op->type) {
 			case LogicalOperatorType::LOGICAL_GET: {
 				auto &get = data_get_op->Cast<LogicalGet>();
-				binding_value = GetAccurateColumnInformationGet(&get, relation_id, rel_op_col_binding, binding_column_id);
+				binding_value =
+				    GetAccurateColumnInformationGet(&get, relation_id, rel_op_col_binding, binding_column_id);
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_PROJECTION: {
 				auto &proj = data_get_op->Cast<LogicalProjection>();
 				binding_value =
-					GetAccurateColumnInformationProj(&proj, relation_id, rel_op_col_binding, binding_column_id);
+				    GetAccurateColumnInformationProj(&proj, relation_id, rel_op_col_binding, binding_column_id);
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -313,8 +314,8 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_
 			case LogicalOperatorType::LOGICAL_CTE_REF:
 			case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 				throw InternalException("Need to write a case to handle a " +
-										LogicalOperatorToString(data_get_op->type) +
-										" operator when updating relation column ids");
+				                        LogicalOperatorToString(data_get_op->type) +
+				                        " operator when updating relation column ids");
 			}
 			case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 				auto &agg_op = data_get_op->Cast<LogicalAggregate>();
@@ -331,8 +332,8 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_
 				auto type_string = LogicalOperatorToString(data_get_op->type);
 				binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
 				throw InternalException("adding relation column mapping that is not a get/projection/or dummy data "
-										"fetch. Instead it is an " +
-										type_string);
+				                        "fetch. Instead it is an " +
+				                        type_string);
 				D_ASSERT(false);
 			}
 			RemoveRelationToColumnMapping(relation_binding);
@@ -648,7 +649,7 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
-	// PrintCardinalityEstimatorInitialState();
+	PrintCardinalityEstimatorInitialState();
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
 	return node_ops;
@@ -882,7 +883,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 
 // ----------------------- CARDINALITY ESTIMATION HELPER FUNCTIONS ---------------------------
 
-//LCOV_EXCL_START
+// LCOV_EXCL_START
 
 void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 	// Print what table.columns have the same "total domain"
@@ -890,6 +891,10 @@ void CardinalityEstimator::PrintCardinalityEstimatorInitialState() {
 	for (auto &r2tdom : relation_column_to_tdoms) {
 		string res = "Columns ";
 		for (auto &rel : r2tdom.equivalent_relations) {
+			// TODO: why?
+			if (rel.table_index == DConstants::INVALID_INDEX) {
+				continue;
+			}
 			auto attributes = getRelationAttributes(rel.table_index);
 			auto table_name = attributes.original_name;
 			D_ASSERT(attributes.columns.find(rel.column_index) != attributes.columns.end());
@@ -926,7 +931,6 @@ void CardinalityEstimator::PrintJoinNodeProperties(JoinNode &node) {
 	}
 }
 
-//LCOV_EXCL_STOP
-
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
