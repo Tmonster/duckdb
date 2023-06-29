@@ -696,6 +696,9 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// base table relations
 		catalog_table = nullptr;
 		data_op = GetDataRetOp(op, actual_binding);
+
+		// TODO: if data_op passes a logical aggregate, other functionality should happen.
+		// The stats are then the distinct count of the column aggregated by AFTER FILTERS (if possible)
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = data_op->Cast<LogicalGet>();
 			catalog_table = GetCatalogTableEntry(get);
