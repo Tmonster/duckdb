@@ -269,23 +269,25 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 // You need to be careful here because join bindings don't keep track of the exact column id
 // join_operator.GetColumnBindings() can return something like ({0, 0}, {0, 1}, {1, 0}, {2, 0}, {3, 0})
 // and our logic needs to be careful to properly assign unique relation columns.
-void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op,
-                                                   idx_t relation_id, ColumnBinding data_binding) {
-	D_ASSERT(data_get_op);
+void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_t relation_id, ColumnBinding data_binding) {
 	D_ASSERT(rel_op);
 
 	auto rel_op_bindings = rel_op->GetColumnBindings();
-	auto data_get_bindings = data_get_op->GetColumnBindings();
 	auto binding_column_id = 0;
 	// loop through relation bindings
 	for (idx_t i = 0; i < rel_op_bindings.size(); i++) {
-		auto rel_op_col_binding = rel_op_bindings.at(i);
-		// get the data op of the relation binding
-		GetDataRetOp(*rel_op, rel_op_col_binding);
 		binding_column_id = i;
+		// relation binding is the "key"
 		auto relation_binding = ColumnBinding(relation_id, binding_column_id);
+
+		auto rel_op_col_binding = rel_op_bindings.at(i);
+		// update the rel_op_col_binding to the binding of the
+		// data source operator
+
+		auto data_get_op = GetDataRetOp(*rel_op, rel_op_col_binding);
 		// check if the data binding is the same as the data get op binding we are adding
 		if (rel_op_col_binding == data_binding) {
+			// now we attempt to find the value based on the data get operation type.
 			ColumnBinding binding_value;
 			switch (data_get_op->type) {
 			case LogicalOperatorType::LOGICAL_GET: {
@@ -519,12 +521,9 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			auto all_bindings = rel.data_op.GetColumnBindings();
 			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
 				auto binding = all_bindings.at(binding_index);
-				auto op = GetDataRetOp(rel.data_op, binding);
-				if (op) {
-					UpdateRelationColumnIDs(&rel.data_op, op, i, binding);
-				} else {
-					UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i, binding);
-				}
+				// translate the binding to the the real data source operation
+				GetDataRetOp(rel.data_op, binding);
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
 			}
 			break;
 		}
@@ -534,7 +533,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			auto all_bindings = rel.data_op.GetColumnBindings();
 			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
 				auto binding = all_bindings.at(binding_index);
-				UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i, binding);
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
 			}
 			break;
 		}
@@ -558,12 +557,8 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			// in the relation add a binding
 			AddRelationColumnMapping(&rel.data_op, i);
 			auto join_bindings = rel.data_op.GetColumnBindings();
-			unordered_set<idx_t> table_indexes;
 			// now we get the table references and start to update the bindings.
-			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
 			for (auto &binding : join_bindings) {
-				// TODO: why is our start binding table_index 0?
-//				auto binding = ColumnBinding(table_index, 0);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
 					// adding a relation that doesn't map to a datasource function.
@@ -575,7 +570,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 					}
 				}
 				// Add a mapping for (relation, column_index) -> (table index, relation_column_index)
-				UpdateRelationColumnIDs(&rel.data_op, op, i, binding);
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
 			}
 			break;
 		}

@@ -121,8 +121,7 @@ private:
 	bool RemoveRelationToColumnMapping(ColumnBinding key);
 
 	void AddRelationColumnMapping(LogicalOperator *rel_op, idx_t relation_id);
-	void UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op,
-	                                                   idx_t relation_id, ColumnBinding data_binding);
+	void UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_t relation_id, ColumnBinding data_binding);
 
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t relation_id, idx_t column_index);
