@@ -270,74 +270,72 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 // join_operator.GetColumnBindings() can return something like ({0, 0}, {0, 1}, {1, 0}, {2, 0}, {3, 0})
 // and our logic needs to be careful to properly assign unique relation columns.
 void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, optional_ptr<LogicalOperator> data_get_op,
-                                                   idx_t relation_id) {
+                                                   idx_t relation_id, ColumnBinding data_binding) {
 	D_ASSERT(data_get_op);
 	D_ASSERT(rel_op);
 
-	auto rel_bindings = rel_op->GetColumnBindings();
+	auto rel_op_bindings = rel_op->GetColumnBindings();
 	auto data_get_bindings = data_get_op->GetColumnBindings();
 	auto binding_column_id = 0;
 	// loop through relation bindings
-	for (idx_t i = 0; i < rel_bindings.size(); i++) {
-		auto rel_binding = rel_bindings.at(i);
+	for (idx_t i = 0; i < rel_op_bindings.size(); i++) {
+		auto rel_op_col_binding = rel_op_bindings.at(i);
 		// get the data op of the relation binding
-		GetDataRetOp(*rel_op, rel_binding);
+		GetDataRetOp(*rel_op, rel_op_col_binding);
 		binding_column_id = i;
 		auto relation_binding = ColumnBinding(relation_id, binding_column_id);
 		// check if the data binding is the same as the data get op binding we are adding
-		for (auto &data_binding : data_get_bindings) {
-			if (rel_binding == data_binding) {
-				ColumnBinding binding_value;
-				switch (data_get_op->type) {
-				case LogicalOperatorType::LOGICAL_GET: {
-					auto &get = data_get_op->Cast<LogicalGet>();
-					binding_value = GetAccurateColumnInformationGet(&get, relation_id, rel_binding, binding_column_id);
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_PROJECTION: {
-					auto &proj = data_get_op->Cast<LogicalProjection>();
-					binding_value =
-					    GetAccurateColumnInformationProj(&proj, relation_id, rel_binding, binding_column_id);
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_DELIM_GET:
-				case LogicalOperatorType::LOGICAL_CHUNK_GET:
-				case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
-					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					string column_name = "dummy_data_fetch";
-					relation_attributes[relation_id].columns[binding_column_id] = column_name;
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-				case LogicalOperatorType::LOGICAL_CTE_REF:
-				case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-					throw InternalException("Need to write a case to handle a " +
-					                        LogicalOperatorToString(data_get_op->type) +
-					                        " operator when updating relation column ids");
-				}
-				case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-					auto &agg_op = data_get_op->Cast<LogicalAggregate>();
-					// binding returned should be the binding on the logical aggregate
-					// when the cardinality estimator get the data_ret op, when the aggregate
-					// is returned, it can estimate the cardinality as the number of distinct
-					// values within the binding column.
-					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), data_binding.column_index);
-					string column_name = agg_op.groups[data_binding.column_index]->ToString();
-					relation_attributes[relation_id].columns[binding_column_id] = column_name;
-					break;
-				}
-				default:
-					auto type_string = LogicalOperatorToString(data_get_op->type);
-					binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
-					throw InternalException("adding relation column mapping that is not a get/projection/or dummy data "
-					                        "fetch. Instead it is an " +
-					                        type_string);
-					D_ASSERT(false);
-				}
-				RemoveRelationToColumnMapping(relation_binding);
-				AddRelationToColumnMapping(relation_binding, binding_value);
-				continue;
+		if (rel_op_col_binding == data_binding) {
+			ColumnBinding binding_value;
+			switch (data_get_op->type) {
+			case LogicalOperatorType::LOGICAL_GET: {
+				auto &get = data_get_op->Cast<LogicalGet>();
+				binding_value = GetAccurateColumnInformationGet(&get, relation_id, rel_op_col_binding, binding_column_id);
+				break;
 			}
+			case LogicalOperatorType::LOGICAL_PROJECTION: {
+				auto &proj = data_get_op->Cast<LogicalProjection>();
+				binding_value =
+					GetAccurateColumnInformationProj(&proj, relation_id, rel_op_col_binding, binding_column_id);
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_DELIM_GET:
+			case LogicalOperatorType::LOGICAL_CHUNK_GET:
+			case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
+				binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
+				string column_name = "dummy_data_fetch";
+				relation_attributes[relation_id].columns[binding_column_id] = column_name;
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+			case LogicalOperatorType::LOGICAL_CTE_REF:
+			case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+				throw InternalException("Need to write a case to handle a " +
+										LogicalOperatorToString(data_get_op->type) +
+										" operator when updating relation column ids");
+			}
+			case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+				auto &agg_op = data_get_op->Cast<LogicalAggregate>();
+				// binding returned should be the binding on the logical aggregate
+				// when the cardinality estimator get the data_ret op, when the aggregate
+				// is returned, it can estimate the cardinality as the number of distinct
+				// values within the binding column.
+				binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), data_binding.column_index);
+				string column_name = agg_op.groups[data_binding.column_index]->ToString();
+				relation_attributes[relation_id].columns[binding_column_id] = column_name;
+				break;
+			}
+			default:
+				auto type_string = LogicalOperatorToString(data_get_op->type);
+				binding_value = ColumnBinding(data_get_op->GetTableIndex().at(0), 0);
+				throw InternalException("adding relation column mapping that is not a get/projection/or dummy data "
+										"fetch. Instead it is an " +
+										type_string);
+				D_ASSERT(false);
+			}
+			RemoveRelationToColumnMapping(relation_binding);
+			AddRelationToColumnMapping(relation_binding, binding_value);
+			continue;
 		}
 	}
 }
@@ -523,9 +521,9 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 				auto binding = all_bindings.at(binding_index);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (op) {
-					UpdateRelationColumnIDs(&rel.data_op, op, i);
+					UpdateRelationColumnIDs(&rel.data_op, op, i, binding);
 				} else {
-					UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i);
+					UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i, binding);
 				}
 			}
 			break;
@@ -535,7 +533,8 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			AddRelationColumnMapping(&rel.data_op, i);
 			auto all_bindings = rel.data_op.GetColumnBindings();
 			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
-				UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i);
+				auto binding = all_bindings.at(binding_index);
+				UpdateRelationColumnIDs(&rel.data_op, &rel.data_op, i, binding);
 			}
 			break;
 		}
@@ -562,8 +561,9 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			unordered_set<idx_t> table_indexes;
 			// now we get the table references and start to update the bindings.
 			LogicalJoin::GetTableReferences(rel.data_op, table_indexes);
-			for (auto &table_index : table_indexes) {
-				auto binding = ColumnBinding(table_index, 0);
+			for (auto &binding : join_bindings) {
+				// TODO: why is our start binding table_index 0?
+//				auto binding = ColumnBinding(table_index, 0);
 				auto op = GetDataRetOp(rel.data_op, binding);
 				if (!op) {
 					// adding a relation that doesn't map to a datasource function.
@@ -575,7 +575,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 					}
 				}
 				// Add a mapping for (relation, column_index) -> (table index, relation_column_index)
-				UpdateRelationColumnIDs(&rel.data_op, op, i);
+				UpdateRelationColumnIDs(&rel.data_op, op, i, binding);
 			}
 			break;
 		}
