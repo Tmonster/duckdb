@@ -697,7 +697,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		catalog_table = nullptr;
 		bool have_stats = false;
 		data_op = GetDataRetOp(op, actual_binding);
-		D_ASSERT(data_op);
 
 		optional_ptr<LogicalOperator> get;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
@@ -707,17 +706,18 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			catalog_table = GetCatalogTableEntry(*get);
 		}
 
-		if (get && DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
-		                                       actual_binding.column_index, column.second)) {
+		if (catalog_table) {
+			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
+		}
+
+		if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
 			// Get HLL stats here
-			if (get->type == LogicalOperatorType::LOGICAL_GET) {
-				auto &actual_get = get->Cast<LogicalGet>();
-				auto stats =
-				    actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
-				if (stats) {
-					distinct_count = stats->GetDistinctCount();
-					have_stats = true;
-				}
+			auto &actual_get = get->Cast<LogicalGet>();
+			auto stats =
+				actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+			if (stats) {
+				distinct_count = stats->GetDistinctCount();
+				have_stats = true;
 			} else {
 				have_stats = false;
 			}
@@ -729,6 +729,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			distinct_count = node.GetBaseTableCardinality();
 			have_stats = false;
 		}
+
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		for (auto &relation_to_tdom : relation_column_to_tdoms) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;

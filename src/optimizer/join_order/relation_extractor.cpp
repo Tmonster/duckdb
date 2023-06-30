@@ -98,7 +98,6 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 		if (op->children.size() >= 1) {
 			return GetRelationName(op->children[0]);
 		}
-		D_ASSERT(false);
 		break;
 	}
 	return ret;
