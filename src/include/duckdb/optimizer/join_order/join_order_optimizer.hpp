@@ -38,13 +38,12 @@ public:
 private:
 	ClientContext &context;
 
-	friend CardinalityEstimator;
 	CardinalityEstimator cardinality_estimator;
-	friend RelationExtractor;
+
 	RelationExtractor relation_extractor;
-	friend JoinOrderEnumerator;
+
 	JoinOrderEnumerator join_enumerator;
-	friend PlanRewriter;
+
 	PlanRewriter plan_rewriter;
 
 	//! Set of all relations considered in the join optimizer

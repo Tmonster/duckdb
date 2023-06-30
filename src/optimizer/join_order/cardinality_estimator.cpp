@@ -249,7 +249,7 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalOperator *rel_op, idx
 		AddColumnToRelationMap(relation_id, rel_column_id);
 		key = ColumnBinding(relation_id, rel_column_id);
 		auto relational_binding_copy = ColumnBinding(relation_binding.table_index, relation_binding.column_index);
-		GetDataRetOp(*rel_op, relational_binding_copy);
+		GetDataSourceOperator(*rel_op, relational_binding_copy);
 		AddRelationToColumnMapping(key, relational_binding_copy);
 		rel_column_id += 1;
 	}
@@ -284,7 +284,7 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_
 		// update the rel_op_col_binding to the binding of the
 		// data source operator
 
-		auto data_get_op = GetDataRetOp(*rel_op, rel_op_col_binding);
+		auto data_get_op = GetDataSourceOperator(*rel_op, rel_op_col_binding);
 		// check if the data binding is the same as the data get op binding we are adding
 		if (rel_op_col_binding == data_binding) {
 			// now we attempt to find the value based on the data get operation type.
@@ -523,7 +523,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
 				auto binding = all_bindings.at(binding_index);
 				// translate the binding to the the real data source operation
-				GetDataRetOp(rel.data_op, binding);
+				GetDataSourceOperator(rel.data_op, binding);
 				UpdateRelationColumnIDs(&rel.data_op, i, binding);
 			}
 			break;
@@ -560,7 +560,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 			auto join_bindings = rel.data_op.GetColumnBindings();
 			// now we get the table references and start to update the bindings.
 			for (auto &binding : join_bindings) {
-				auto op = GetDataRetOp(rel.data_op, binding);
+				auto op = GetDataSourceOperator(rel.data_op, binding);
 				if (!op) {
 					// adding a relation that doesn't map to a datasource function.
 					// This shouldn't happen, but to avoid crashes, we add an empty mapping
@@ -696,8 +696,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// base table relations
 		catalog_table = nullptr;
 		bool have_stats = false;
-		data_op = GetDataRetOp(op, actual_binding);
-		D_ASSERT(data_op);
+		data_op = GetDataSourceOperator(op, actual_binding);
+//		D_ASSERT(data_op );
 
 		optional_ptr<LogicalOperator> get;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
@@ -707,17 +707,18 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			catalog_table = GetCatalogTableEntry(*get);
 		}
 
-		if (get && DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
-		                                       actual_binding.column_index, column.second)) {
+		if (catalog_table) {
+			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
+		}
+
+		if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
 			// Get HLL stats here
-			if (get->type == LogicalOperatorType::LOGICAL_GET) {
-				auto &actual_get = get->Cast<LogicalGet>();
-				auto stats =
-				    actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
-				if (stats) {
-					distinct_count = stats->GetDistinctCount();
-					have_stats = true;
-				}
+			auto &actual_get = get->Cast<LogicalGet>();
+			auto stats =
+				actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+			if (stats) {
+				distinct_count = stats->GetDistinctCount();
+				have_stats = true;
 			} else {
 				have_stats = false;
 			}
@@ -760,7 +761,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 optional_ptr<TableFilterSet> CardinalityEstimator::GetTableFilters(LogicalOperator &op, idx_t table_index) {
 	// we really only care about the logical get. Not about the binding
 	auto binding = ColumnBinding(table_index, 0);
-	auto get = GetDataRetOp(op, binding);
+	auto get = GetDataSourceOperator(op, binding);
 	if (!get || get->type != LogicalOperatorType::LOGICAL_GET) {
 		return nullptr;
 	}
@@ -830,7 +831,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
                                                 idx_t table_index) {
 	idx_t cardinality_after_filters = cardinality;
 	auto binding = ColumnBinding(table_index, 0);
-	auto data_op = GetDataRetOp(op, binding);
+	auto data_op = GetDataSourceOperator(op, binding);
 	if (data_op->type != LogicalOperatorType::LOGICAL_GET) {
 		// we should always get a logical get with the call to getdataret op.
 		if (!table_filters.filters.empty()) {

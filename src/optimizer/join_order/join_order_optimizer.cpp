@@ -42,11 +42,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	// TODO: This should return the filters to make the code more declarative
-	relation_extractor.ExtractFilters();
+	filters = relation_extractor.ExtractFilters();
 
 	// create edges between relations from the join comparisons
 	// TODO: this should return a query graph to make the code more declarative
-	relation_extractor.CreateQueryGraph();
+	relation_extractor.CreateQueryGraph(filters);
 
 	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
 	// certain table filters.
@@ -68,6 +68,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now perform the actual reordering
 	return plan_rewriter.RewritePlan(std::move(plan), *final_plan);
 }
+
+// Helper Functions to get proper bindings projection from relations.
 
 struct BindingTranslationResult {
 	bool found_expression = false;
@@ -117,7 +119,7 @@ static BindingTranslationResult RecursiveEnumerateProjectionExpressions(Expressi
 	return ret;
 }
 
-static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBinding &binding) {
+static optional_ptr<LogicalOperator> GetDataSourceOperator(LogicalOperator &op, ColumnBinding &binding) {
 	optional_ptr<LogicalOperator> get;
 	auto table_index = binding.table_index;
 	switch (op.type) {
@@ -140,7 +142,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 		// filter is not a data ret op
-		return GetDataRetOp(*op.children.at(0), binding);
+		return GetDataSourceOperator(*op.children.at(0), binding);
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto table_indexes = op.GetTableIndex();
 		D_ASSERT(table_indexes.size() > 0);
@@ -153,7 +155,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression.get(), binding);
 		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
 			// we have an expression at the binding. If the
-			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
+			auto ret = GetDataSourceOperator(*op.children.at(0), expression_binding_translation.new_binding);
 			if (ret) {
 				binding = expression_binding_translation.new_binding;
 				return ret;
@@ -184,7 +186,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		// non-reorderable relations.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
 		auto &left_child = op.children.at(0);
-		get = GetDataRetOp(*left_child, binding);
+		get = GetDataSourceOperator(*left_child, binding);
 		if (get) {
 			return get;
 		}
@@ -194,7 +196,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			break;
 		}
 		auto &right_child = op.children.at(1);
-		get = GetDataRetOp(*right_child, binding);
+		get = GetDataSourceOperator(*right_child, binding);
 		if (get) {
 			return get;
 		}
@@ -215,12 +217,12 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		auto child_tables = child->GetTableIndex();
 		// Go through bound unnest expressions and look for a bound column ref.
 		if (child_tables.size() == 0) {
-			return GetDataRetOp(*child, binding);
+			return GetDataSourceOperator(*child, binding);
 		}
 		auto child_table_index = child->GetTableIndex()[0];
 		binding = ColumnBinding(child_table_index, binding.column_index);
 		for (idx_t column_index = 0; column_index < unnest.expressions.size(); column_index++) {
-			auto ret = GetDataRetOp(*child, binding);
+			auto ret = GetDataSourceOperator(*child, binding);
 			if (ret) {
 				return ret;
 			}
@@ -247,7 +249,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression, binding);
 		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
 			// we have an expression at the binding. If the
-			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
+			auto ret = GetDataSourceOperator(*op.children.at(0), expression_binding_translation.new_binding);
 			if (ret) {
 				return ret;
 			}
@@ -262,7 +264,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		return nullptr;
 	default:
 		if (op.children.size() == 1) {
-			return GetDataRetOp(*op.children.at(0), binding);
+			return GetDataSourceOperator(*op.children.at(0), binding);
 		}
 		D_ASSERT(false);
 		// return null pointer, there are no children, so the data source operation is

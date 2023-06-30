@@ -57,6 +57,7 @@ bool RelationExtractor::ExtractRelationBindings(Expression &expression, unordere
 }
 
 string static GetRelationName(optional_ptr<LogicalOperator> op) {
+	// Could be empty result
 	string ret = op->GetName();
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET: {
@@ -98,7 +99,6 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 		if (op->children.size() >= 1) {
 			return GetRelationName(op->children[0]);
 		}
-		D_ASSERT(false);
 		break;
 	}
 	return ret;
@@ -137,11 +137,11 @@ void RelationExtractor::AddRelation(optional_ptr<LogicalOperator> &parent, Logic
 		join_optimizer->relation_mapping[table_index] = relation_id;
 	}
 	// Add binding information from the nonreorderable join to this relation.
-	auto relation_name = GetRelationName(&data_retreival_op);
+//	auto relation_name = GetRelationName(&data_retreival_op);
 	// TODO: figure out how to remove this. Relation extractor and cardinality estimator should not
 	//       be calling each others functions. Can probably just add every relation during a cardinality_estimator init
 	//       phase.
-	join_optimizer->cardinality_estimator.AddRelationId(relation_id, relation_name);
+//	join_optimizer->cardinality_estimator.AddRelationId(relation_id, relation_name);
 	join_optimizer->relations.push_back(std::move(relation));
 }
 
@@ -273,9 +273,10 @@ bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op, optional
 	}
 }
 
-void RelationExtractor::ExtractFilters() {
+vector<unique_ptr<Expression>> RelationExtractor::ExtractFilters() {
 
 	expression_set_t filter_set;
+	vector<unique_ptr<Expression>> filters;
 	// Inspect filter operations so we can create edges in our query graph.
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
@@ -289,7 +290,7 @@ void RelationExtractor::ExtractFilters() {
 				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
 				if (filter_set.find(*comparison) == filter_set.end()) {
 					filter_set.insert(*comparison);
-					join_optimizer->filters.push_back(std::move(comparison));
+					filters.push_back(std::move(comparison));
 				}
 			}
 			join.conditions.clear();
@@ -297,12 +298,13 @@ void RelationExtractor::ExtractFilters() {
 			for (auto &expression : f_op.expressions) {
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
-					join_optimizer->filters.push_back(std::move(expression));
+					filters.push_back(std::move(expression));
 				}
 			}
 			f_op.expressions.clear();
 		}
 	}
+	return filters;
 }
 
 string RelationExtractor::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
@@ -316,9 +318,9 @@ string RelationExtractor::GetFilterString(unordered_set<idx_t> relation_bindings
 	return ret;
 }
 
-void RelationExtractor::CreateQueryGraph() {
-	for (idx_t i = 0; i < join_optimizer->filters.size(); i++) {
-		auto &filter = join_optimizer->filters[i];
+void RelationExtractor::CreateQueryGraph(vector<unique_ptr<Expression>> &filters) {
+	for (idx_t i = 0; i < filters.size(); i++) {
+		auto &filter = filters[i];
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> relations;
 		ExtractRelationBindings(*filter, relations);

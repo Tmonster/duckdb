@@ -36,8 +36,8 @@ public:
 	bool ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	//! Extract the join&SingleColumn filters from the join plan. Join Filters are used to create edges between
 	//! the relations
-	void ExtractFilters();
-	void CreateQueryGraph();
+	vector<unique_ptr<Expression>> ExtractFilters();
+	void CreateQueryGraph(vector<unique_ptr<Expression>> &filters);
 
 private:
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
