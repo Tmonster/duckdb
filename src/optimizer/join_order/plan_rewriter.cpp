@@ -229,4 +229,4 @@ unique_ptr<LogicalOperator> PlanRewriter::RewritePlan(unique_ptr<LogicalOperator
 	return std::move(plan);
 }
 
-}
+} // namespace duckdb

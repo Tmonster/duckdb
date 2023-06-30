@@ -24,8 +24,7 @@ struct GenerateJoinRelation {
 
 class PlanRewriter {
 public:
-	explicit PlanRewriter(JoinOrderOptimizer *optimizer)
-	    : join_optimizer(optimizer) {
+	explicit PlanRewriter(JoinOrderOptimizer *optimizer) : join_optimizer(optimizer) {
 	}
 
 private:
@@ -37,8 +36,7 @@ public:
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
 
 private:
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
-	                                   JoinNode &node);
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 };
 
 } // namespace duckdb

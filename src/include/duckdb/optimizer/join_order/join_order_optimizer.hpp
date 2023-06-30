@@ -35,7 +35,6 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-
 private:
 	ClientContext &context;
 
@@ -63,7 +62,6 @@ private:
 
 	//! The set of edges used in the join optimizer
 	QueryGraph query_graph;
-
 
 	//! Get column bindings from a filter
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);

@@ -649,7 +649,7 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
-//	PrintCardinalityEstimatorInitialState();
+	//	PrintCardinalityEstimatorInitialState();
 	// sort relations from greatest tdom to 	lowest tdom.
 	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
 	return node_ops;
@@ -708,7 +708,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		}
 
 		if (get && DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
-		                                                actual_binding.column_index, column.second)) {
+		                                       actual_binding.column_index, column.second)) {
 			// Get HLL stats here
 			if (get->type == LogicalOperatorType::LOGICAL_GET) {
 				auto &actual_get = get->Cast<LogicalGet>();

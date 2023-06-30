@@ -19,7 +19,8 @@ void RelationExtractor::GetColumnBinding(Expression &expression, ColumnBinding &
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		D_ASSERT(join_optimizer->relation_mapping.find(colref.binding.table_index) != join_optimizer->relation_mapping.end());
+		D_ASSERT(join_optimizer->relation_mapping.find(colref.binding.table_index) !=
+		         join_optimizer->relation_mapping.end());
 		// Add to the table index, later when we add the columns to the relational mapping for the
 		// cardinality estimator, we will grab the relation_id using relation_mapping[table_index]
 		binding = ColumnBinding(colref.binding.table_index, colref.binding.column_index);
@@ -27,7 +28,6 @@ void RelationExtractor::GetColumnBinding(Expression &expression, ColumnBinding &
 	// TODO: handle inequality filters with functions.
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
 }
-
 
 //! Extract the set of relations referred to inside an expression
 bool RelationExtractor::ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings) {
@@ -139,14 +139,15 @@ void RelationExtractor::AddRelation(optional_ptr<LogicalOperator> &parent, Logic
 	// Add binding information from the nonreorderable join to this relation.
 	auto relation_name = GetRelationName(&data_retreival_op);
 	// TODO: figure out how to remove this. Relation extractor and cardinality estimator should not
-	//       be calling each others functions. Can probably just add every relation during a cardinality_estimator init phase.
+	//       be calling each others functions. Can probably just add every relation during a cardinality_estimator init
+	//       phase.
 	join_optimizer->cardinality_estimator.AddRelationId(relation_id, relation_name);
 	join_optimizer->relations.push_back(std::move(relation));
 }
 
-bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op,
-                                             optional_ptr<LogicalOperator> parent) {
+bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op, optional_ptr<LogicalOperator> parent) {
 	LogicalOperator *op = &input_op;
+	// pass through single child operators
 	while (op->children.size() == 1 &&
 	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
 	        op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET && op->type != LogicalOperatorType::LOGICAL_GET)) {
@@ -239,7 +240,6 @@ bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 
 	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
@@ -254,6 +254,7 @@ bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op,
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
+	// FIXME: See if we can get rid of NOP() projection first, so we can reorder more join.
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
 			AddRelation(parent, input_op, *op);
@@ -351,9 +352,9 @@ void RelationExtractor::CreateQueryGraph() {
 					if (Disjoint(left_relations, right_relations)) {
 						// they are disjoint, we only need to create one set of edges in the join graph
 						join_optimizer->query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set,
-						                       filter_info);
+						                                       filter_info);
 						join_optimizer->query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set,
-						                       filter_info);
+						                                       filter_info);
 					} else {
 						continue;
 					}
@@ -367,6 +368,5 @@ void RelationExtractor::CreateQueryGraph() {
 		}
 	}
 }
-
 
 } // namespace duckdb
