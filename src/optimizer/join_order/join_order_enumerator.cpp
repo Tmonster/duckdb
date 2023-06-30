@@ -163,7 +163,7 @@ bool JoinOrderEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 	UpdateExclusionSet(node, exclusion_set);
 	// find the neighbors given this exclusion set
-	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
+	auto neighbors = join_optimizer->query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -177,7 +177,7 @@ bool JoinOrderEnumerator::EmitCSG(JoinRelationSet &node) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto &neighbor_relation = join_optimizer->set_manager.GetJoinRelation(neighbor);
-		auto connections = query_graph.GetConnections(node, neighbor_relation);
+		auto connections = join_optimizer->query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
@@ -193,7 +193,7 @@ bool JoinOrderEnumerator::EmitCSG(JoinRelationSet &node) {
 bool JoinOrderEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
                                                 unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
-	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
+	auto neighbors = join_optimizer->query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -204,7 +204,7 @@ bool JoinOrderEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelat
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = join_optimizer->set_manager.Union(right, neighbor);
 		if (combined_set.count > right.count && plans.find(&combined_set) != plans.end()) {
-			auto connections = query_graph.GetConnections(left, combined_set);
+			auto connections = join_optimizer->query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
 				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
@@ -227,7 +227,7 @@ bool JoinOrderEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelat
 
 bool JoinOrderEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
 	// find neighbors of S under the exclusion set
-	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
+	auto neighbors = join_optimizer->query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -351,7 +351,7 @@ void JoinOrderEnumerator::UpdateDPTree(JoinNode &new_plan) {
 	for (idx_t i = 0; i < new_set.count; i++) {
 		exclusion_set.insert(new_set.relations[i]);
 	}
-	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	auto neighbors = join_optimizer->query_graph.GetNeighbors(new_set, exclusion_set);
 	auto all_neighbors = GetAllNeighborSets(exclusion_set, neighbors);
 	for (auto neighbor : all_neighbors) {
 		auto &neighbor_relation = join_optimizer->set_manager.GetJoinRelation(neighbor);
@@ -363,7 +363,7 @@ void JoinOrderEnumerator::UpdateDPTree(JoinNode &new_plan) {
 		}
 
 		double combined_set_plan_cost = combined_set_plan->second->GetCost();
-		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
+		auto connections = join_optimizer->query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
 		auto right_plan = plans.find(&neighbor_relation);
@@ -398,7 +398,7 @@ void JoinOrderEnumerator::SolveJoinOrderApproximately() {
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
 				auto right = join_relations[j];
 				// check if we can connect these two relations
-				auto connection = query_graph.GetConnections(left, right);
+				auto connection = join_optimizer->query_graph.GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
 					auto &node = EmitPair(left, right, connection);
@@ -456,9 +456,9 @@ void JoinOrderEnumerator::SolveJoinOrderApproximately() {
 			auto &left = smallest_plans[0]->set;
 			auto &right = smallest_plans[1]->set;
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
-			query_graph.CreateEdge(left, right, nullptr);
+			join_optimizer->query_graph.CreateEdge(left, right, nullptr);
 			// now emit the pair and continue with the algorithm
-			auto connections = query_graph.GetConnections(left, right);
+			auto connections = join_optimizer->query_graph.GetConnections(left, right);
 			D_ASSERT(!connections.empty());
 
 			best_connection = &EmitPair(left, right, connections);
@@ -483,12 +483,34 @@ void JoinOrderEnumerator::SolveJoinOrderApproximately() {
 	}
 }
 
-void JoinOrderEnumerator::SolveJoinOrder() {
+unique_ptr<JoinNode> JoinOrderEnumerator::SolveJoinOrder(bool force_no_cross_product) {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
 		SolveJoinOrderApproximately();
 	}
+
+	// now the optimal join path should have been found
+	// get it from the node
+	unordered_set<idx_t> bindings;
+	for (idx_t i = 0; i < join_optimizer->relations.size(); i++) {
+		bindings.insert(i);
+	}
+	auto &total_relation = join_optimizer->set_manager.GetJoinRelation(bindings);
+	auto final_plan = plans.find(&total_relation);
+	if (final_plan == plans.end()) {
+		// could not find the final plan
+		// this should only happen in case the sets are actually disjunct
+		// in this case we need to generate cross product to connect the disjoint sets
+		if (force_no_cross_product) {
+			throw InvalidInputException(
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+		}
+		GenerateCrossProducts();
+		//! solve the join order again, returning the final plan
+		return SolveJoinOrder(force_no_cross_product);
+	}
+	return std::move(final_plan->second);
 }
 
 void JoinOrderEnumerator::GenerateCrossProducts() {
@@ -499,8 +521,8 @@ void JoinOrderEnumerator::GenerateCrossProducts() {
 		for (idx_t j = 0; j < join_optimizer->relations.size(); j++) {
 			if (i != j) {
 				auto &right = join_optimizer->set_manager.GetJoinRelation(j);
-				query_graph.CreateEdge(left, right, nullptr);
-				query_graph.CreateEdge(right, left, nullptr);
+				join_optimizer->query_graph.CreateEdge(left, right, nullptr);
+				join_optimizer->query_graph.CreateEdge(right, left, nullptr);
 			}
 		}
 	}

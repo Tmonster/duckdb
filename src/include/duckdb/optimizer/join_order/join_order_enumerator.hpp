@@ -24,8 +24,6 @@ public:
 
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
-	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
 
 private:
 	//! Set of all relations considered in the join optimizer
@@ -40,7 +38,7 @@ private:
 
 public:
 	//! Perform the join order solving
-	void SolveJoinOrder();
+	unique_ptr<JoinNode> SolveJoinOrder(bool force_no_cross_product);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 

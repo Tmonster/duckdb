@@ -8,7 +8,8 @@ add_library_unity(
   join_order_optimizer.cpp
   cardinality_estimator.cpp
   relation_extractor.cpp
-  join_order_enumerator.cpp)
+  join_order_enumerator.cpp
+  plan_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_join_order>
     PARENT_SCOPE)

@@ -649,8 +649,8 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 		UpdateTotalDomains(join_node, op);
 	}
 
-	PrintCardinalityEstimatorInitialState();
-	// sort relations from greatest tdom to lowest tdom.
+//	PrintCardinalityEstimatorInitialState();
+	// sort relations from greatest tdom to 	lowest tdom.
 	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
 	return node_ops;
 }
