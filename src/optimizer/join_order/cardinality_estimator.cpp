@@ -667,13 +667,13 @@ ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 	return potential_bindings->second.at(0);
 }
 
-bool assertColumnNameMatchesGet(vector<string> column_names, idx_t column_binding, string column_name) {
+static bool DassertColumnNameMatchesGet(vector<string> column_names, idx_t column_binding, string column_name) {
 	// make sure the name we stored, matches the name of the column from the actual binding.)
 	bool is_row_id = column_binding == DConstants::INVALID_INDEX && column_name.compare("rowid") == 0;
 	// if is_row_id=True column_names_match should be true and we shouldn't evaluate column_names[column_binding]
 	bool column_names_match = is_row_id || column_names[column_binding].compare(column_name) == 0;
 	D_ASSERT(is_row_id || column_names_match);
-	return (is_row_id || column_names_match);
+	return true;
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &op) {
@@ -695,29 +695,39 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
 		catalog_table = nullptr;
+		bool have_stats = false;
 		data_op = GetDataRetOp(op, actual_binding);
+		D_ASSERT(data_op);
 
+		optional_ptr<LogicalOperator> get;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
 		// The stats are then the distinct count of the column aggregated by AFTER FILTERS (if possible)
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = data_op->Cast<LogicalGet>();
-			catalog_table = GetCatalogTableEntry(get);
+			get = &data_op->Cast<LogicalGet>();
+			catalog_table = GetCatalogTableEntry(*get);
 		}
 
-		if (catalog_table && assertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
+		if (get && DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(),
 		                                                actual_binding.column_index, column.second)) {
 			// Get HLL stats here
-			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
-			if (base_stats) {
-				distinct_count = base_stats->GetDistinctCount();
+			if (get->type == LogicalOperatorType::LOGICAL_GET) {
+				auto &actual_get = get->Cast<LogicalGet>();
+				auto stats =
+				    actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+				if (stats) {
+					distinct_count = stats->GetDistinctCount();
+					have_stats = true;
+				}
+			} else {
+				have_stats = false;
 			}
-
 			// HLL has estimation error, distinct_count can't be greater than cardinality of the table before filters
 			if (distinct_count > node.GetBaseTableCardinality()) {
 				distinct_count = node.GetBaseTableCardinality();
 			}
 		} else {
 			distinct_count = node.GetBaseTableCardinality();
+			have_stats = false;
 		}
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		for (auto &relation_to_tdom : relation_column_to_tdoms) {
@@ -725,7 +735,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			if (i_set.count(key) != 1) {
 				continue;
 			}
-			if (catalog_table) {
+			if (have_stats) {
 				if (relation_to_tdom.tdom_hll < distinct_count) {
 					relation_to_tdom.tdom_hll = distinct_count;
 					relation_to_tdom.has_tdom_hll = true;

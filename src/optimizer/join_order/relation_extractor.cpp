@@ -95,6 +95,9 @@ string static GetRelationName(optional_ptr<LogicalOperator> op) {
 	}
 	default:
 		// should be able to find a relation name
+		if (op->children.size() >= 1) {
+			return GetRelationName(op->children[0]);
+		}
 		D_ASSERT(false);
 		break;
 	}
