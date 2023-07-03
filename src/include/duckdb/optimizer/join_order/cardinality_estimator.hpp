@@ -78,7 +78,6 @@ private:
 	column_binding_map_t<vector<ColumnBinding>> relation_column_to_original_column;
 	//! Group of relation columns to total domains
 	vector<RelationsToTDom> relation_column_to_tdoms;
-	JoinOrderOptimizer *join_optimizer;
 
 	//! cache for keeping track of cardinality per JoinRelationSet.
 	unordered_map<JoinRelationSet*, double> cardinality_cache;

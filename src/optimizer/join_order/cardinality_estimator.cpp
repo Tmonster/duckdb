@@ -510,8 +510,8 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 // this is so we can easily initialize total domains for join groups
 vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 	vector<NodeOp> node_ops;
-	auto &set_manager = join_optimizer->set_manager;
-	auto &relations = join_optimizer->relations;
+	auto &set_manager = set_manager;
+	auto &relations = relations;
 	// This should be in its own function, here we are adding relation->columns information
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
