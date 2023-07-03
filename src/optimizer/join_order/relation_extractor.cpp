@@ -19,11 +19,11 @@ void RelationExtractor::GetColumnBinding(Expression &expression, ColumnBinding &
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		D_ASSERT(join_optimizer->relation_mapping.find(colref.binding.table_index) !=
-		         join_optimizer->relation_mapping.end());
+		D_ASSERT(relation_mapping.find(colref.binding.table_index) !=
+		         relation_mapping.end());
 		// Add to the table index, later when we add the columns to the relational mapping for the
 		// cardinality estimator, we will grab the relation_id using relation_mapping[table_index]
-		binding = ColumnBinding(colref.binding.table_index, colref.binding.column_index);
+		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
 	}
 	// TODO: handle inequality filters with functions.
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
@@ -36,9 +36,9 @@ bool RelationExtractor::ExtractRelationBindings(Expression &expression, unordere
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		D_ASSERT(join_optimizer->relation_mapping.find(colref.binding.table_index) !=
-		         join_optimizer->relation_mapping.end());
-		bindings.insert(join_optimizer->relation_mapping[colref.binding.table_index]);
+		D_ASSERT(relation_mapping.find(colref.binding.table_index) !=
+		         relation_mapping.end());
+		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
 		// bound expression
@@ -115,7 +115,7 @@ void RelationExtractor::AddRelation(optional_ptr<LogicalOperator> &parent, Logic
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(input_op, parent, data_retreival_op);
-	auto relation_id = join_optimizer->relations.size();
+	auto relation_id = relations.size();
 
 	auto table_indexes = data_retreival_op.GetTableIndex();
 	if (table_indexes.empty()) {
@@ -126,15 +126,15 @@ void RelationExtractor::AddRelation(optional_ptr<LogicalOperator> &parent, Logic
 		LogicalJoin::GetTableReferences(data_retreival_op, table_references);
 		D_ASSERT(table_references.size() > 0);
 		for (auto &reference : table_references) {
-			D_ASSERT(join_optimizer->relation_mapping.find(reference) == join_optimizer->relation_mapping.end());
-			join_optimizer->relation_mapping[reference] = relation_id;
+			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
+			relation_mapping[reference] = relation_id;
 		}
 	} else {
 		// Relations should never return more than 1 table index
 		D_ASSERT(table_indexes.size() == 1);
 		idx_t table_index = table_indexes.at(0);
-		D_ASSERT(join_optimizer->relation_mapping.find(table_index) == join_optimizer->relation_mapping.end());
-		join_optimizer->relation_mapping[table_index] = relation_id;
+		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
+		relation_mapping[table_index] = relation_id;
 	}
 	// Add binding information from the nonreorderable join to this relation.
 //	auto relation_name = GetRelationName(&data_retreival_op);
@@ -142,7 +142,7 @@ void RelationExtractor::AddRelation(optional_ptr<LogicalOperator> &parent, Logic
 	//       be calling each others functions. Can probably just add every relation during a cardinality_estimator init
 	//       phase.
 //	join_optimizer->cardinality_estimator.AddRelationId(relation_id, relation_name);
-	join_optimizer->relations.push_back(std::move(relation));
+	relations.push_back(std::move(relation));
 }
 
 bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op, optional_ptr<LogicalOperator> parent) {
@@ -273,10 +273,28 @@ bool RelationExtractor::ExtractJoinRelations(LogicalOperator &input_op, optional
 	}
 }
 
-vector<unique_ptr<Expression>> RelationExtractor::ExtractFilters() {
+vector<unique_ptr<SingleJoinRelation>> RelationExtractor::GetRelations() {
+	return relations;
+}
 
+vector<unique_ptr<Expression>> RelationExtractor::GetFilters() {
+	return filters;
+}
+
+JoinRelationSetManager &RelationExtractor::GetSetManager() {
+	return set_manager;
+}
+
+bool RelationExtractor::FiltersEmpty() {
+	return filters.empty();
+}
+
+bool RelationExtractor::RelationsEmpty() {
+	return relations.empty();
+}
+
+void RelationExtractor::ExtractFilters() {
 	expression_set_t filter_set;
-	vector<unique_ptr<Expression>> filters;
 	// Inspect filter operations so we can create edges in our query graph.
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
@@ -304,31 +322,31 @@ vector<unique_ptr<Expression>> RelationExtractor::ExtractFilters() {
 			f_op.expressions.clear();
 		}
 	}
-	return filters;
 }
 
 string RelationExtractor::GetFilterString(unordered_set<idx_t> relation_bindings, string column_name) {
 	string ret = "";
 #ifdef DEBUG
-	for (auto &rel_id : relation_bindings) {
-		string table = join_optimizer->cardinality_estimator.getRelationAttributes(rel_id).original_name;
-		ret += table + "." + column_name + ", ";
-	}
+//	for (auto &rel_id : relation_bindings) {
+//		string table = cardinality_estimator.getRelationAttributes(rel_id).original_name;
+//		ret += table + "." + column_name + ", ";
+//	}
 #endif
 	return ret;
 }
 
-void RelationExtractor::CreateQueryGraph(vector<unique_ptr<Expression>> &filters) {
+const QueryGraph RelationExtractor::CreateQueryGraph() {
+	QueryGraph query_graph;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &filter = filters[i];
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> relations;
 		ExtractRelationBindings(*filter, relations);
-		auto &set = join_optimizer->set_manager.GetJoinRelation(relations);
+		auto &set = set_manager.GetJoinRelation(relations);
 		auto info = make_uniq<FilterInfo>(set, i);
 
 		auto filter_info = info.get();
-		join_optimizer->filter_infos.push_back(std::move(info));
+		filter_infos.push_back(std::move(info));
 
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
@@ -346,16 +364,16 @@ void RelationExtractor::CreateQueryGraph(vector<unique_ptr<Expression>> &filters
 			if (!left_relations.empty() && !right_relations.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = &join_optimizer->set_manager.GetJoinRelation(left_relations);
-				filter_info->right_set = &join_optimizer->set_manager.GetJoinRelation(right_relations);
+				filter_info->left_set = &set_manager.GetJoinRelation(left_relations);
+				filter_info->right_set = &set_manager.GetJoinRelation(right_relations);
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
 					if (Disjoint(left_relations, right_relations)) {
 						// they are disjoint, we only need to create one set of edges in the join graph
-						join_optimizer->query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set,
+						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set,
 						                                       filter_info);
-						join_optimizer->query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set,
+						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set,
 						                                       filter_info);
 					} else {
 						continue;
@@ -369,6 +387,7 @@ void RelationExtractor::CreateQueryGraph(vector<unique_ptr<Expression>> &filters
 			filter_info->left_join_column = filter->ToString();
 		}
 	}
+	return query_graph;
 }
 
 } // namespace duckdb

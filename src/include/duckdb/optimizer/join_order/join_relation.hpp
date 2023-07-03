@@ -62,6 +62,8 @@ public:
 	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)
 	// JoinRelationSet *Difference(JoinRelationSet *left, JoinRelationSet *right);
+	//! Get the root of all join
+	const JoinRelationSet &GetRoot();
 
 private:
 	JoinRelationTreeNode root;

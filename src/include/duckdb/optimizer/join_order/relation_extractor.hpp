@@ -19,14 +19,24 @@ class JoinOrderOptimizer;
 class RelationExtractor {
 public:
 	explicit RelationExtractor(ClientContext &context, JoinOrderOptimizer *optimizer)
-	    : context(context), join_optimizer(optimizer) {
+	    : context(context) {
 	}
 
 private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
-	JoinOrderOptimizer *join_optimizer;
 	vector<reference<LogicalOperator>> filter_operators;
+
+	//! A mapping of base table index -> index into relations array (relation_id)
+	//! Used to make edges in the query graph.
+	unordered_map<idx_t, idx_t> relation_mapping;
+
+	//! Set manager
+	JoinRelationSetManager set_manager;
+
+	//! Set of all relations considered in the join optimizer
+	vector<unique_ptr<SingleJoinRelation>> relations;
+	vector<unique_ptr<Expression>> filters;
 
 public:
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
@@ -36,8 +46,14 @@ public:
 	bool ExtractRelationBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	//! Extract the join&SingleColumn filters from the join plan. Join Filters are used to create edges between
 	//! the relations
-	vector<unique_ptr<Expression>> ExtractFilters();
-	void CreateQueryGraph(vector<unique_ptr<Expression>> &filters);
+	void ExtractFilters();
+	const QueryGraph CreateQueryGraph();
+
+	vector<unique_ptr<SingleJoinRelation>> GetRelations();
+	vector<unique_ptr<Expression>> GetFilters();
+	JoinRelationSetManager &GetSetManager();
+	bool FiltersEmpty();
+	bool RelationsEmpty();
 
 private:
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);

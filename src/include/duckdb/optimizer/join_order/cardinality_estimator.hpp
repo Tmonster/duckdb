@@ -61,11 +61,12 @@ struct Subgraph2Denominator {
 
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator(ClientContext &context, JoinOrderOptimizer *optimizer)
-	    : context(context), join_optimizer(optimizer) {
+	explicit CardinalityEstimator(ClientContext &context)
+	    : context(context) {
 	}
 
 private:
+	//! Needed to get table statistics
 	ClientContext &context;
 
 	//! A mapping of relation id -> RelationAttributes
@@ -79,14 +80,17 @@ private:
 	vector<RelationsToTDom> relation_column_to_tdoms;
 	JoinOrderOptimizer *join_optimizer;
 
+	//! cache for keeping track of cardinality per JoinRelationSet.
+	unordered_map<JoinRelationSet*, double> cardinality_cache;
+
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
-
-	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
 
 	void AddRelationId(idx_t relation_id, string original_name);
 
 	RelationAttributes getRelationAttributes(idx_t relation_id);
+
+	double GetCardinality(JoinRelationSet &set);
 
 	vector<NodeOp> InitCardinalityEstimatorProps();
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
@@ -100,7 +104,7 @@ private:
 	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 
-	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
+//	void UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos);
 	vector<NodeOp> InitColumnMappings();
 	void RemoveEmptyDomains();
 	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);

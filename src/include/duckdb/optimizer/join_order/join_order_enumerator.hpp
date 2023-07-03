@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/optimizer/join_order/join_cost_model.hpp"
 
 namespace duckdb {
 
@@ -18,25 +19,33 @@ class JoinOrderOptimizer;
 
 class JoinOrderEnumerator {
 public:
-	explicit JoinOrderEnumerator(JoinOrderOptimizer *optimizer)
-	    : join_optimizer(optimizer), full_plan_found(false), must_update_full_plan(false) {
+	explicit JoinOrderEnumerator(ClientContext &context)
+	    : join_cost_model(context), full_plan_found(false), must_update_full_plan(false) {
 	}
 
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 
 private:
-	//! Set of all relations considered in the join optimizer
-	JoinOrderOptimizer *join_optimizer;
+	//! Cost model
+	JoinCostModel join_cost_model;
 
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
 
 	bool full_plan_found;
 	bool must_update_full_plan;
+
+	QueryGraph *query_graph;
+	//! Set of all relations considered in the join optimizer
+	JoinRelationSetManager *set_manager;
+
 	unordered_set<std::string> join_nodes_in_full_plan;
 
 public:
+	//! Initialize the JoinCostModel using information from the relations extracted by the relation extractor
+	void Init(QueryGraph &query_graph_, vector<unique_ptr<SingleJoinRelation>> &relations_,
+	                JoinRelationSetManager &set_manager_) ;
 	//! Perform the join order solving
 	unique_ptr<JoinNode> SolveJoinOrder(bool force_no_cross_product);
 	//! Generate cross product edges inside the side

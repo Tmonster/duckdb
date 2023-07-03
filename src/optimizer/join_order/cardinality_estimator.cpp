@@ -165,17 +165,6 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 	}
 }
 
-void CardinalityEstimator::VerifySymmetry(JoinNode &result, JoinNode &entry) {
-	if (result.GetCardinality<double>() != entry.GetCardinality<double>()) {
-		// Currently it's possible that some entries are cartesian joins.
-		// When this is the case, you don't always have symmetry, but
-		// if the cost of the result is less, then just assure the cardinality
-		// is also less, then you have the same effect of symmetry.
-		D_ASSERT(ceil(result.GetCardinality<double>()) <= ceil(entry.GetCardinality<double>()) ||
-		         floor(result.GetCardinality<double>()) <= floor(entry.GetCardinality<double>()));
-	}
-}
-
 void CardinalityEstimator::RemoveEmptyDomains() {
 	auto remove_start = std::remove_if(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
@@ -193,6 +182,17 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 		return NumericLimits<double>::Maximum();
 	}
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
+}
+
+double CardinalityEstimator::GetCardinality(JoinRelationSet &set) {
+	auto prev_calculation = cardinality_cache.find(&set);
+	double cardinality_of_join = 0;
+	if (prev_calculation != cardinality_cache.end()) {
+		cardinality_of_join = prev_calculation->second;
+	} else {
+		cardinality_of_join = EstimateCardinalityWithSet(set);
+	}
+	return cardinality_of_join;
 }
 
 ColumnBinding CardinalityEstimator::GetAccurateColumnInformationProj(optional_ptr<LogicalProjection> proj,
@@ -485,24 +485,24 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 }
 
 //! Update the filter bindings so that left and right table bindings bind to the correct relations.
-void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos) {
-	auto relation_mapping = join_optimizer->relation_mapping;
-	for (auto &filter : filter_infos) {
-		if (SingleColumnFilter(*filter)) {
-			continue;
-		}
-		// sometimes filters are a type of subquery that is not related to the join
-		// something like SELECT * from tb1 1 where (select 1 not in (select 2));
-		// in this case, just continue. It's a valid filter, but when we check for an actual
-		// binding to get statistics, nothing is returned, and we default to stats in the related total domain set
-		if (relation_mapping.find(filter->left_binding.table_index) == relation_mapping.end() ||
-		    relation_mapping.find(filter->right_binding.table_index) == relation_mapping.end()) {
-			continue;
-		}
-		filter->left_binding.table_index = relation_mapping[filter->left_binding.table_index];
-		filter->right_binding.table_index = relation_mapping[filter->right_binding.table_index];
-	}
-}
+//void CardinalityEstimator::UpdateFilterInfos(vector<unique_ptr<FilterInfo>> &filter_infos) {
+//	auto relation_mapping = join_optimizer->relation_mapping;
+//	for (auto &filter : filter_infos) {
+//		if (SingleColumnFilter(*filter)) {
+//			continue;
+//		}
+//		// sometimes filters are a type of subquery that is not related to the join
+//		// something like SELECT * from tb1 1 where (select 1 not in (select 2));
+//		// in this case, just continue. It's a valid filter, but when we check for an actual
+//		// binding to get statistics, nothing is returned, and we default to stats in the related total domain set
+//		if (relation_mapping.find(filter->left_binding.table_index) == relation_mapping.end() ||
+//		    relation_mapping.find(filter->right_binding.table_index) == relation_mapping.end()) {
+//			continue;
+//		}
+//		filter->left_binding.table_index = relation_mapping[filter->left_binding.table_index];
+//		filter->right_binding.table_index = relation_mapping[filter->right_binding.table_index];
+//	}
+//}
 
 // For each relation, add a mapping of (relation_id, column_id) -> (Table_ID, column_id)
 // The (table_id, column_id) represent the table, column of the operator where the column statistics can be inferred
@@ -580,7 +580,7 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 		case LogicalOperatorType::LOGICAL_INTERSECT: {
 			auto column_bindings = rel.data_op.GetColumnBindings();
 			for (auto &binding : column_bindings) {
-				// adds columns to relation_mapping[relation_id].columns
+				// adds columns to relation_attributes[relation_id].columns
 				AddColumnToRelationMap(i, binding.column_index);
 			}
 
@@ -605,13 +605,12 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 	return node_ops;
 }
 
+// TODO: pass query graph or othe rhtings to properly initialize this.
 vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
-
 	// Initialize relation_column_to_original_column and relation_attributes
 	// with table name and column naming information
 	auto node_ops = InitColumnMappings();
 
-	auto &filter_infos = join_optimizer->filter_infos;
 	// This updates column bindings in the filter_infos array.
 	// Initially they are set to table_index.column_index to know what bindings to propagate from
 	// non-reorderable joins. When we update the filter bindings, they are updated to relation_id.column_index.
@@ -619,7 +618,7 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 	// Why do we store them as relation_ids and not table_ids?
 	// The join order optimizer iterates of combinations of joins using relation ids. To estimate the cardinality
 	// of the join of relations we need some filter information that tells us what relation.column_ids are being joined.
-	UpdateFilterInfos(filter_infos);
+//	UpdateFilterInfos(filter_infos);
 
 	InitEquivalentRelations(filter_infos);
 
@@ -695,9 +694,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
 		catalog_table = nullptr;
-		bool have_stats = false;
+
 		data_op = GetDataSourceOperator(op, actual_binding);
-//		D_ASSERT(data_op );
 
 		optional_ptr<LogicalOperator> get;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
@@ -711,24 +709,23 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
 		}
 
+		bool have_stats = false;
+		distinct_count = node.GetBaseTableCardinality();
 		if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
 			// Get HLL stats here
 			auto &actual_get = get->Cast<LogicalGet>();
-			auto stats =
-				actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
-			if (stats) {
-				distinct_count = stats->GetDistinctCount();
-				have_stats = true;
-			} else {
-				have_stats = false;
+			if (actual_get.function.statistics) {
+				auto stats =
+					actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+				if (stats) {
+					distinct_count = MinValue(distinct_count, stats->GetDistinctCount());
+					have_stats = true;
+				}
 			}
 			// HLL has estimation error, distinct_count can't be greater than cardinality of the table before filters
 			if (distinct_count > node.GetBaseTableCardinality()) {
 				distinct_count = node.GetBaseTableCardinality();
 			}
-		} else {
-			distinct_count = node.GetBaseTableCardinality();
-			have_stats = false;
 		}
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		for (auto &relation_to_tdom : relation_column_to_tdoms) {

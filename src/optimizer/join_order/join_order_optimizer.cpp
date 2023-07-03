@@ -23,7 +23,7 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	D_ASSERT(filters.empty() && relations.empty()); // assert that the JoinOrderOptimizer has not been used before
+	D_ASSERT(relation_extractor.FiltersEmpty() && relation_extractor.RelationsEmpty()); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
 
 	// now we begin optimizing the current plan
@@ -31,38 +31,31 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// AFTER the group by and this filter cannot be reordered Then we extract a list of all relations that have to be
 	// joined together and a list of all conditions/join filters that are applied to them
 	// Here we need a parent op for some reason. Makes no sense to me.
+
 	if (!relation_extractor.ExtractJoinRelations(*op)) {
 		// do not support reordering this type of plan
 		return plan;
 	}
+	auto relations = relation_extractor.GetRelations();
 	if (relations.size() <= 1) {
 		// at most one relation, nothing to reorder
 		return plan;
 	}
+
+
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	// TODO: This should return the filters to make the code more declarative
-	filters = relation_extractor.ExtractFilters();
+	relation_extractor.ExtractFilters();
+	auto filters = relation_extractor.GetFilters();
+	auto &set_manager = relation_extractor.GetSetManager();
 
 	// create edges between relations from the join comparisons
 	// TODO: this should return a query graph to make the code more declarative
-	relation_extractor.CreateQueryGraph(filters);
+	QueryGraph query_graph = relation_extractor.CreateQueryGraph();
 
-	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
-	// certain table filters.
-	auto node_ops = cardinality_estimator.InitCardinalityEstimatorProps();
+	join_enumerator.Init(query_graph, relations, set_manager);
 
-	// now use dynamic programming to figure out the optimal join order
-	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree
-	// NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
-	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
-	for (auto &node_op : node_ops) {
-		D_ASSERT(node_op.node);
-		join_enumerator.plans[&node_op.node->set] = std::move(node_op.node);
-	}
-
-	// now we perform the actual dynamic programming to compute the final result
 	auto final_plan = join_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
 
 	// now perform the actual reordering

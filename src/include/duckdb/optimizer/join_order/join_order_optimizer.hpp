@@ -28,7 +28,7 @@ namespace duckdb {
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), cardinality_estimator(context, this), relation_extractor(context, this),
+	    : context(context), relation_extractor(context, this),
 	      join_enumerator(this), plan_rewriter(this) {
 	}
 
@@ -38,19 +38,12 @@ public:
 private:
 	ClientContext &context;
 
-	CardinalityEstimator cardinality_estimator;
-
 	RelationExtractor relation_extractor;
 
 	JoinOrderEnumerator join_enumerator;
 
 	PlanRewriter plan_rewriter;
 
-	//! Set of all relations considered in the join optimizer
-	vector<unique_ptr<SingleJoinRelation>> relations;
-
-	//! A mapping of base table index -> index into relations array (relation_id)
-	unordered_map<idx_t, idx_t> relation_mapping;
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 
@@ -60,7 +53,7 @@ private:
 	vector<unique_ptr<FilterInfo>> filter_infos;
 
 	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
+//	QueryGraph query_graph;
 
 	//! Get column bindings from a filter
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);

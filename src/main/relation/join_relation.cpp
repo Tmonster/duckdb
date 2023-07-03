@@ -50,6 +50,13 @@ const vector<ColumnDefinition> &JoinRelation::Columns() {
 	return this->columns;
 }
 
+const JoinRelationSet &JoinRelationSetManager::GetRoot() {
+	if (!root.relation) {
+		throw InternalException("Join Error: asking for root node when one doesn't exist");
+	}
+	return *root.relation;
+}
+
 string JoinRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
 	str += "Join " + EnumUtil::ToString(join_type);
