@@ -343,6 +343,108 @@ void CardinalityEstimator::UpdateRelationColumnIDs(LogicalOperator *rel_op, idx_
 	}
 }
 
+// For each relation, add a mapping of (relation_id, column_id) -> (Table_ID, column_id)
+// The (table_id, column_id) represent the table, column of the operator where the column statistics can be inferred
+// Usually this is a Logical Get or an Aggregate.
+// this is so we can easily initialize total domains for join groups
+vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
+	vector<NodeOp> node_ops;
+	auto &set_manager = set_manager;
+	auto &relations = relations;
+	// This should be in its own function, here we are adding relation->columns information
+	for (idx_t i = 0; i < relations.size(); i++) {
+		auto &rel = *relations[i];
+		auto &node = set_manager.GetJoinRelation(i);
+		switch (rel.data_op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			AddRelationColumnMapping(&rel.data_op, i);
+			auto all_bindings = rel.data_op.GetColumnBindings();
+			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
+				auto binding = all_bindings.at(binding_index);
+				// translate the binding to the the real data source operation
+				GetDataSourceOperator(rel.data_op, binding);
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_GET: {
+			// adds (relation_id, column_binding) -> (table_index, actual_column)a
+			AddRelationColumnMapping(&rel.data_op, i);
+			auto all_bindings = rel.data_op.GetColumnBindings();
+			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
+				auto binding = all_bindings.at(binding_index);
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+			//			throw InternalException("try to break this dummy scan or expression get test");
+			// TODO: is there a table index for dummy scans and expression gets?
+			auto bindings = rel.data_op.GetColumnBindings();
+			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
+				auto key = ColumnBinding(i, binding_index);
+				auto value = ColumnBinding(0, binding_index);
+				AddRelationToColumnMapping(key, value);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			// first we add relation column mapping, so for every column
+			// in the relation add a binding
+			AddRelationColumnMapping(&rel.data_op, i);
+			auto join_bindings = rel.data_op.GetColumnBindings();
+			// now we get the table references and start to update the bindings.
+			for (auto &binding : join_bindings) {
+				auto op = GetDataSourceOperator(rel.data_op, binding);
+				if (!op) {
+					// adding a relation that doesn't map to a datasource function.
+					// This shouldn't happen, but to avoid crashes, we add an empty mapping
+					D_ASSERT(false);
+					auto key = ColumnBinding(i, 0);
+					if (relation_column_to_original_column.find(key) == relation_column_to_original_column.end()) {
+						AddRelationToColumnMapping(key, binding);
+					}
+				}
+				// Add a mapping for (relation, column_index) -> (table index, relation_column_index)
+				UpdateRelationColumnIDs(&rel.data_op, i, binding);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT: {
+			auto column_bindings = rel.data_op.GetColumnBindings();
+			for (auto &binding : column_bindings) {
+				// adds columns to relation_attributes[relation_id].columns
+				AddColumnToRelationMap(i, binding.column_index);
+			}
+
+			for (idx_t it = 0; it < column_bindings.size(); it++) {
+				auto key = ColumnBinding(i, column_bindings.at(it).column_index);
+				auto value = ColumnBinding(column_bindings[it].table_index, it);
+				// add mapping (relation_id, column_id) -> (table_id, column_id)
+				// Given key and values, you can
+				AddRelationToColumnMapping(key, value);
+			}
+
+			break;
+		}
+		default:
+			// rel.data_op types should always match types where relations are added in
+			// JoinOrderOptimizer::ExtractJoinRelations
+			D_ASSERT(false);
+			break;
+		}
+		node_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
+	}
+	return node_ops;
+}
+
+
 void UpdateDenom(Subgraph2Denominator &relation_2_denom, RelationsToTDom &relation_to_tdom) {
 	relation_2_denom.denom *= relation_to_tdom.has_tdom_hll ? relation_to_tdom.tdom_hll : relation_to_tdom.tdom_no_hll;
 }
@@ -504,109 +606,9 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 //	}
 //}
 
-// For each relation, add a mapping of (relation_id, column_id) -> (Table_ID, column_id)
-// The (table_id, column_id) represent the table, column of the operator where the column statistics can be inferred
-// Usually this is a Logical Get or an Aggregate.
-// this is so we can easily initialize total domains for join groups
-vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
-	vector<NodeOp> node_ops;
-	auto &set_manager = set_manager;
-	auto &relations = relations;
-	// This should be in its own function, here we are adding relation->columns information
-	for (idx_t i = 0; i < relations.size(); i++) {
-		auto &rel = *relations[i];
-		auto &node = set_manager.GetJoinRelation(i);
-		switch (rel.data_op.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			AddRelationColumnMapping(&rel.data_op, i);
-			auto all_bindings = rel.data_op.GetColumnBindings();
-			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
-				auto binding = all_bindings.at(binding_index);
-				// translate the binding to the the real data source operation
-				GetDataSourceOperator(rel.data_op, binding);
-				UpdateRelationColumnIDs(&rel.data_op, i, binding);
-			}
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_GET: {
-			// adds (relation_id, column_binding) -> (table_index, actual_column)a
-			AddRelationColumnMapping(&rel.data_op, i);
-			auto all_bindings = rel.data_op.GetColumnBindings();
-			for (idx_t binding_index = 0; binding_index < all_bindings.size(); binding_index++) {
-				auto binding = all_bindings.at(binding_index);
-				UpdateRelationColumnIDs(&rel.data_op, i, binding);
-			}
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-			//			throw InternalException("try to break this dummy scan or expression get test");
-			// TODO: is there a table index for dummy scans and expression gets?
-			auto bindings = rel.data_op.GetColumnBindings();
-			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
-				auto key = ColumnBinding(i, binding_index);
-				auto value = ColumnBinding(0, binding_index);
-				AddRelationToColumnMapping(key, value);
-			}
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			// first we add relation column mapping, so for every column
-			// in the relation add a binding
-			AddRelationColumnMapping(&rel.data_op, i);
-			auto join_bindings = rel.data_op.GetColumnBindings();
-			// now we get the table references and start to update the bindings.
-			for (auto &binding : join_bindings) {
-				auto op = GetDataSourceOperator(rel.data_op, binding);
-				if (!op) {
-					// adding a relation that doesn't map to a datasource function.
-					// This shouldn't happen, but to avoid crashes, we add an empty mapping
-					D_ASSERT(false);
-					auto key = ColumnBinding(i, 0);
-					if (relation_column_to_original_column.find(key) == relation_column_to_original_column.end()) {
-						AddRelationToColumnMapping(key, binding);
-					}
-				}
-				// Add a mapping for (relation, column_index) -> (table index, relation_column_index)
-				UpdateRelationColumnIDs(&rel.data_op, i, binding);
-			}
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_UNION:
-		case LogicalOperatorType::LOGICAL_EXCEPT:
-		case LogicalOperatorType::LOGICAL_INTERSECT: {
-			auto column_bindings = rel.data_op.GetColumnBindings();
-			for (auto &binding : column_bindings) {
-				// adds columns to relation_attributes[relation_id].columns
-				AddColumnToRelationMap(i, binding.column_index);
-			}
-
-			for (idx_t it = 0; it < column_bindings.size(); it++) {
-				auto key = ColumnBinding(i, column_bindings.at(it).column_index);
-				auto value = ColumnBinding(column_bindings[it].table_index, it);
-				// add mapping (relation_id, column_id) -> (table_id, column_id)
-				// Given key and values, you can
-				AddRelationToColumnMapping(key, value);
-			}
-
-			break;
-		}
-		default:
-			// rel.data_op types should always match types where relations are added in
-			// JoinOrderOptimizer::ExtractJoinRelations
-			D_ASSERT(false);
-			break;
-		}
-		node_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
-	}
-	return node_ops;
-}
 
 // TODO: pass query graph or othe rhtings to properly initialize this.
-vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
+void CardinalityEstimator::InitCardinalityEstimatorProps() {
 	// Initialize relation_column_to_original_column and relation_attributes
 	// with table name and column naming information
 	auto node_ops = InitColumnMappings();
@@ -651,7 +653,6 @@ vector<NodeOp> CardinalityEstimator::InitCardinalityEstimatorProps() {
 	//	PrintCardinalityEstimatorInitialState();
 	// sort relations from greatest tdom to 	lowest tdom.
 	std::sort(relation_column_to_tdoms.begin(), relation_column_to_tdoms.end(), SortTdoms);
-	return node_ops;
 }
 
 ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {

@@ -84,12 +84,13 @@ void JoinOrderEnumerator::Init(QueryGraph &query_graph_, vector<unique_ptr<Singl
                                      JoinRelationSetManager &set_manager_) {
 	query_graph = &query_graph_;
 	set_manager = &set_manager_;
-	auto node_ops = join_cost_model.Init(relations_, set_manager_);
+	node_ops = join_cost_model.Init(relations_, set_manager_);
 
 	// TODO: clean this up. This is really disgusting code.
-	for (auto &node_op : node_ops) {
-		D_ASSERT(node_op.node);
-		plans[&node_op.node->set] = std::move(node_op.node);
+	for (idx_t i = 0; i < relations_.size(); i++) {
+		auto &rel = *relations_[i];
+		auto &node = set_manager->GetJoinRelation(i);
+		plans[&node] = make_uniq<JoinNode>(node, 0);
 	}
 }
 

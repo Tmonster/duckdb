@@ -91,7 +91,7 @@ public:
 
 	double GetCardinality(JoinRelationSet &set);
 
-	vector<NodeOp> InitCardinalityEstimatorProps();
+	void InitCardinalityEstimatorProps();
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
 
 	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);
