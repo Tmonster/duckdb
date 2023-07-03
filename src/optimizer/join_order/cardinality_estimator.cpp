@@ -695,10 +695,10 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		// base table relations and therefore the columns may also refer to 2 different
 		// base table relations
 		catalog_table = nullptr;
-		bool have_stats = false;
+		bool have_stats;
 		data_op = GetDataRetOp(op, actual_binding);
 
-		optional_ptr<LogicalOperator> get;
+		optional_ptr<LogicalOperator> get = nullptr;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
 		// The stats are then the distinct count of the column aggregated by AFTER FILTERS (if possible)
 		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
@@ -710,24 +710,23 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
 		}
 
+		have_stats = false;
+		distinct_count = node.GetBaseTableCardinality();
 		if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
-			// Get HLL stats here
+			// Get HLL stats herte
 			auto &actual_get = get->Cast<LogicalGet>();
-			auto stats =
-				actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
-			if (stats) {
-				distinct_count = stats->GetDistinctCount();
-				have_stats = true;
-			} else {
-				have_stats = false;
+			if (actual_get.function.statistics) {
+				auto stats =
+				    actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+				if (stats) {
+					distinct_count = MinValue(stats->GetDistinctCount(), distinct_count);
+					have_stats = true;
+				}
 			}
 			// HLL has estimation error, distinct_count can't be greater than cardinality of the table before filters
 			if (distinct_count > node.GetBaseTableCardinality()) {
 				distinct_count = node.GetBaseTableCardinality();
 			}
-		} else {
-			distinct_count = node.GetBaseTableCardinality();
-			have_stats = false;
 		}
 
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
