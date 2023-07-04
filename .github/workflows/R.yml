@@ -57,6 +57,9 @@ jobs:
         r-version: 'devel'
         update-rtools: true
 
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+
     - uses: r-lib/actions/setup-pandoc@v2
 
     - name: Setup Ccache
