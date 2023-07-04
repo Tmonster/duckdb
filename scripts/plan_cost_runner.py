@@ -102,8 +102,8 @@ def cardinality_is_higher(card_a, card_b):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    # init_db(old, OLD_DB_NAME, benchmark_dir)
-    # init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir)
+    init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -113,8 +113,7 @@ def main():
 
     print("")
     print("RUNNING BENCHMARK QUERIES")
-    status = 0
-    for f in files:
+    for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
 
         with open(f, "r") as file:
@@ -128,9 +127,6 @@ def main():
         elif cardinality_is_higher(new_cost, old_cost):
             print(f"regression on {query_name}")
             regressions.append((query_name, old_cost, new_cost))
-        status += 1
-        if status %5 == 0:
-            print(f"status = {status}")
     exit_code = 0
     if improvements:
         print_banner("IMPROVEMENTS DETECTED")
@@ -142,8 +138,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
     
-    # os.remove(OLD_DB_NAME)
-    # os.remove(NEW_DB_NAME)
+    os.remove(OLD_DB_NAME)
+    os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
