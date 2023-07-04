@@ -669,10 +669,12 @@ ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 
 static bool DassertColumnNameMatchesGet(vector<string> column_names, idx_t column_binding, string column_name) {
 	// make sure the name we stored, matches the name of the column from the actual binding.)
+#ifdef DEBUG
 	bool is_row_id = column_binding == DConstants::INVALID_INDEX && column_name.compare("rowid") == 0;
 	// if is_row_id=True column_names_match should be true and we shouldn't evaluate column_names[column_binding]
 	bool column_names_match = is_row_id || column_names[column_binding].compare(column_name) == 0;
 	D_ASSERT(is_row_id || column_names_match);
+#endif
 	return true;
 }
 
