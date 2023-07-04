@@ -10,7 +10,6 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
-#include "iostream"
 
 #include <cmath>
 
