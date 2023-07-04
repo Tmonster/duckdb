@@ -57,9 +57,6 @@ jobs:
         r-version: 'devel'
         update-rtools: true
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-
     - uses: r-lib/actions/setup-pandoc@v2
 
     - name: Setup Ccache
@@ -80,6 +77,13 @@ jobs:
         ./configure
         R CMD build .
         R CMD INSTALL duckdb_*.tar.gz
+
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+
+    - name: Test
+      shell: bash
+      run: |
         (cd tests && R -f testthat.R)
         _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
