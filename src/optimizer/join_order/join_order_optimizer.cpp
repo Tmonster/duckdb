@@ -249,6 +249,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			// we have an expression at the binding. If the
 			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
 			if (ret) {
+				binding = expression_binding_translation.new_binding;
 				return ret;
 			}
 		}
