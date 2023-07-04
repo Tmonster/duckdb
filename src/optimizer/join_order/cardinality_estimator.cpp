@@ -707,7 +707,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		}
 
 		if (catalog_table) {
-			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index, column.second);
+			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index,
+			                            column.second);
 		}
 
 		have_stats = false;
