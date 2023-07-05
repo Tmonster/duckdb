@@ -172,7 +172,32 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		// In set operations, both children have the same number of result columns
+		// we can grab the binding from either the first child or the second child.
+		// lets just go into the left child. Sometimes the child doesn't have a table index (can be another set operations)
+		// so we recurse until we find a operation that has a table index
+		auto bindings = op.GetColumnBindings();
+		auto set_table_index = op.GetTableIndex();
+		D_ASSERT(table_index != DConstants::INVALID_INDEX);
+		auto left_child = op.children.at(0).get();
+		auto left_child_table_index = left_child->GetTableIndex();
+		while (left_child_table_index.size() == 0) {
+			left_child = left_child->children.at(0).get();
+			left_child_table_index = left_child->GetTableIndex();
+		}
+		// what if it is a join?
+		if (left_child_table_index.size() > 1) {
+			throw InternalException("Deal with case where union operator is on top of set operator.");
+		}
+		binding = ColumnBinding(left_child_table_index.at(0), binding.column_index);
+		get = GetDataRetOp(*left_child, binding);
+		if (get) {
+			return get;
+		}
+		D_ASSERT(false);
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:

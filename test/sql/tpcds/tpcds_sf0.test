@@ -7,8 +7,12 @@ require tpcds
 statement ok
 CALL dsdgen(sf=0)
 
+loop i 1 100
+
 statement ok
-PRAGMA tpcds(75)
+PRAGMA tpcds(${i})
+
+endloop
 
 # out of range
 statement error
