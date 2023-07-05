@@ -164,6 +164,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 			return &proj;
 		}
 		if (expression_binding_translation.expression_is_constant) {
+			binding = ColumnBinding(table_index, binding.column_index);
 			return &proj;
 		}
 		D_ASSERT(false);
@@ -175,8 +176,8 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// In set operations, both children have the same number of result columns
 		// we can grab the binding from either the first child or the second child.
-		// lets just go into the left child. Sometimes the child doesn't have a table index (can be another set operations)
-		// so we recurse until we find a operation that has a table index
+		// lets just go into the left child. Sometimes the child doesn't have a table index (can be another set
+		// operations) so we recurse until we find a operation that has a table index
 		auto bindings = op.GetColumnBindings();
 		auto set_table_index = op.GetTableIndex();
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
@@ -288,7 +289,7 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 		return nullptr;
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op.Cast<LogicalDistinct>();
-		if (binding.column_index > distinct.distinct_targets.size() || distinct.distinct_targets.empty()) {
+		if (binding.column_index >= distinct.distinct_targets.size() || distinct.distinct_targets.empty()) {
 			break;
 		}
 

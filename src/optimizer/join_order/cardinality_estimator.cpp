@@ -208,7 +208,6 @@ ColumnBinding CardinalityEstimator::GetAccurateColumnInformationProj(optional_pt
 	//	string column_name = "Unknown function using constants";
 	// store the name of the column
 	relation_attributes[relation_id].columns[new_binding_column_id] = column_name;
-
 	return value;
 }
 
@@ -222,7 +221,7 @@ ColumnBinding CardinalityEstimator::GetAccurateColumnInformationGet(optional_ptr
 	if (get->column_ids.empty()) {
 		column_name = "__no_column_name_found__";
 	} else {
-		value = ColumnBinding(table_index, get->column_ids.at(binding.column_index));
+		value = ColumnBinding(table_index, binding.column_index);
 		if (get->column_ids.at(binding.column_index) == DConstants::INVALID_INDEX) {
 			column_name = "rowid";
 		} else {
@@ -585,10 +584,12 @@ vector<NodeOp> CardinalityEstimator::InitColumnMappings() {
 
 			for (idx_t it = 0; it < column_bindings.size(); it++) {
 				auto key = ColumnBinding(i, column_bindings.at(it).column_index);
-				auto value = ColumnBinding(column_bindings[it].table_index, it);
+				auto value = ColumnBinding(column_bindings.at(it).table_index, column_bindings.at(it).column_index);
+				GetDataRetOp(rel.data_op, value);
 				// add mapping (relation_id, column_id) -> (table_id, column_id)
 				// Given key and values, you can
 				AddRelationToColumnMapping(key, value);
+				UpdateRelationColumnIDs(&rel.data_op, i, value);
 			}
 
 			break;
@@ -699,27 +700,23 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		bool have_stats;
 		data_op = GetDataRetOp(op, actual_binding);
 
-		optional_ptr<LogicalOperator> get = nullptr;
+		//		optional_ptr<LogicalOperator> get = nullptr;
 		// TODO: if data_op passes a logical aggregate, other functionality should happen.
 		// The stats are then the distinct count of the column aggregated by AFTER FILTERS (if possible)
-		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
-			get = &data_op->Cast<LogicalGet>();
-			catalog_table = GetCatalogTableEntry(*get);
-		}
-
-		if (catalog_table) {
-			DassertColumnNameMatchesGet(catalog_table->GetColumns().GetColumnNames(), actual_binding.column_index,
-			                            column.second);
-		}
+		//		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
+		//			get = &data_op->Cast<LogicalGet>();
+		//			catalog_table = GetCatalogTableEntry(*get);
+		//		}
 
 		have_stats = false;
 		distinct_count = node.GetBaseTableCardinality();
-		if (get && get->type == LogicalOperatorType::LOGICAL_GET) {
+		if (data_op && data_op->type == LogicalOperatorType::LOGICAL_GET) {
 			// Get HLL stats herte
-			auto &actual_get = get->Cast<LogicalGet>();
+			auto &actual_get = data_op->Cast<LogicalGet>();
 			if (actual_get.function.statistics) {
-				auto stats =
-				    actual_get.function.statistics(context, actual_get.bind_data.get(), actual_binding.column_index);
+				D_ASSERT(actual_get.column_ids.size() > actual_binding.column_index);
+				auto actual_column = actual_get.column_ids.at(actual_binding.column_index);
+				auto stats = actual_get.function.statistics(context, actual_get.bind_data.get(), actual_column);
 				if (stats) {
 					distinct_count = MinValue(stats->GetDistinctCount(), distinct_count);
 					have_stats = true;
