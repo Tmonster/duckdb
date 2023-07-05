@@ -15,12 +15,6 @@
 
 namespace duckdb {
 
-static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op) {
-	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_GET);
-	auto &get = op.Cast<LogicalGet>();
-	return get.GetTable();
-}
-
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
@@ -665,17 +659,6 @@ ColumnBinding CardinalityEstimator::GetActualBinding(ColumnBinding key) {
 		throw InternalException("either 0 or 2+ column bindings. Need to fix this");
 	}
 	return potential_bindings->second.at(0);
-}
-
-static bool DassertColumnNameMatchesGet(vector<string> column_names, idx_t column_binding, string column_name) {
-	// make sure the name we stored, matches the name of the column from the actual binding.)
-#ifdef DEBUG
-	bool is_row_id = column_binding == DConstants::INVALID_INDEX && column_name.compare("rowid") == 0;
-	// if is_row_id=True column_names_match should be true and we shouldn't evaluate column_names[column_binding]
-	bool column_names_match = is_row_id || column_names[column_binding].compare(column_name) == 0;
-	D_ASSERT(is_row_id || column_names_match);
-#endif
-	return true;
 }
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &op) {
