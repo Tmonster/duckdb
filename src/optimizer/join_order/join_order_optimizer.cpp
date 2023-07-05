@@ -261,6 +261,29 @@ static optional_ptr<LogicalOperator> GetDataRetOp(LogicalOperator &op, ColumnBin
 	}
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 		return nullptr;
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (binding.column_index > distinct.distinct_targets.size() || distinct.distinct_targets.empty()) {
+			break;
+		}
+
+		auto new_expression = distinct.distinct_targets.at(binding.column_index).get();
+
+		auto expression_binding_translation = RecursiveEnumerateProjectionExpressions(new_expression, binding);
+		if (expression_binding_translation.found_expression && !expression_binding_translation.expression_is_constant) {
+			// we have an expression at the binding. If the
+			auto ret = GetDataRetOp(*op.children.at(0), expression_binding_translation.new_binding);
+			if (ret) {
+				binding = expression_binding_translation.new_binding;
+				return ret;
+			}
+		}
+		if (expression_binding_translation.expression_is_constant) {
+			return &distinct;
+		}
+		D_ASSERT(false);
+		return &distinct;
+	}
 	default:
 		if (op.children.size() == 1) {
 			return GetDataRetOp(*op.children.at(0), binding);
