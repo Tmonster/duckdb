@@ -54,6 +54,9 @@ test_that("structs give the same results via Arrow", {
   skip_if_not_installed("tibble")
   skip_if_not_installed("arrow")
 
+
+  expect_equal(1,2)
+
   con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
