@@ -48,8 +48,8 @@ test_that("structs can be read", {
   ))
 })
 
+if(.Platform$OS.type != "windows") {
 test_that("structs give the same results via Arrow", {
-  skip_if_not_installed("clearlynotinstalled")
   skip_if_not_installed("vctrs")
   skip_if_not_installed("tibble")
   skip_if_not_installed("arrow")
@@ -108,3 +108,4 @@ test_that("structs give the same results via Arrow", {
     )
   ))
 })
+}
