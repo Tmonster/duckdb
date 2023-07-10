@@ -332,7 +332,6 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 	} else if (join == "cross" || ref_type == JoinRefType::POSITIONAL) {
 		if (ref_type != JoinRefType::POSITIONAL) {
 			// users can only supply positional cross join, or cross join.
-			warning("Automatically converting join to cross join");
 			ref_type = JoinRefType::CROSS;
 		}
 		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel, ref_type);
