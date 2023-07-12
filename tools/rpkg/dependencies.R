@@ -1,5 +1,5 @@
 local({
-  pkg <- c("DBI", "callr", "DBItest", "dbplyr", "testthat", "bit64", "cpp11", "arrow", "covr", "pkgbuild", "remotes")
+  pkg <- c("DBI", "callr", "DBItest", "dbplyr", "testthat", "bit64", "cpp11", "covr", "pkgbuild", "remotes")
 
   if (.Platform$OS.type == "unix") {
     options(HTTPUserAgent = sprintf("R/4.3.0 R (4.3.0 %s)", paste(R.version$platform, R.version$arch, R.version$os)))
@@ -9,4 +9,5 @@ local({
   } else {
     install.packages(pkg, repos = "https://cloud.r-project.org", pkgType = "binary")
   }
+  install.packages("arrow", repos = "https://cloud.r-project.org", pkgType = "binary")
 })
