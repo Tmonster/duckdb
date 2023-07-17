@@ -128,6 +128,12 @@ jobs:
         pkgload::load_all("tools/rpkg")
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
 
+    - uses: actions/upload-artifact@v3
+      with:
+        name: R-package-linux
+        path: |
+          tools/rpkg/duckdb_*.jar
+
     - name: Deploy
       shell: bash
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
