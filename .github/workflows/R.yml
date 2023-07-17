@@ -132,7 +132,7 @@ jobs:
       with:
         name: R-package-linux
         path: |
-          tools/rpkg/duckdb_*.jar
+          tools/rpkg/duckdb_*.tar.gz
 
     - name: Deploy
       shell: bash
