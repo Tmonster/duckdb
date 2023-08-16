@@ -55,6 +55,6 @@ private:
 	ColumnRefExpression();
 	//! if the column reference comes from the relational api, we need to know so we
 	//! don't start quoting the column names when it isn't needed
-	bool from_sql;
+	bool from_sql = true;
 };
 } // namespace duckdb

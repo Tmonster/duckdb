@@ -66,6 +66,8 @@ string ColumnRefExpression::ToString() const {
 		}
 		if (from_sql) {
 			result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
+		} else {
+			result += column_names[i];
 		}
 	}
 	return result;
