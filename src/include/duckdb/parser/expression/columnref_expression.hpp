@@ -21,11 +21,11 @@ public:
 
 public:
 	//! Specify both the column and table name
-	ColumnRefExpression(string column_name, string table_name);
+	ColumnRefExpression(string column_name, string table_name, bool from_sql = true);
 	//! Only specify the column name, the table name will be derived later
-	explicit ColumnRefExpression(string column_name);
+	explicit ColumnRefExpression(string column_name, bool from_sql = true);
 	//! Specify a set of names
-	explicit ColumnRefExpression(vector<string> column_names);
+	explicit ColumnRefExpression(vector<string> column_names, bool from_sql = true);
 
 	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
 	vector<string> column_names;
@@ -53,5 +53,8 @@ public:
 
 private:
 	ColumnRefExpression();
+	//! if the column reference comes from the relational api, we need to know so we
+	//! don't start quoting the column names when it isn't needed
+	bool from_sql;
 };
 } // namespace duckdb

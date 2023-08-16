@@ -10,21 +10,23 @@
 
 namespace duckdb {
 
-ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+ColumnRefExpression::ColumnRefExpression()
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), from_sql(true) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
+ColumnRefExpression::ColumnRefExpression(string column_name, string table_name, bool from_sql)
     : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
-                                             : vector<string> {std::move(table_name), std::move(column_name)}) {
+                                             : vector<string> {std::move(table_name), std::move(column_name)},
+                          from_sql) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name)
-    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(string column_name, bool from_sql)
+    : ColumnRefExpression(vector<string> {std::move(column_name)}, from_sql) {
 }
 
-ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
+ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p, bool from_sql)
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
-      column_names(std::move(column_names_p)) {
+      column_names(std::move(column_names_p)), from_sql(from_sql) {
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());
@@ -62,7 +64,9 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
+		if (from_sql) {
+			result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
+		}
 	}
 	return result;
 }
@@ -90,16 +94,20 @@ hash_t ColumnRefExpression::Hash() const {
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_uniq<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
+	copy->from_sql = from_sql;
 	return std::move(copy);
 }
 
 void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(column_names);
+	writer.WriteField(from_sql);
 }
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
+	auto from_sql = reader.ReadRequired<bool>();
 	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
+	expression->from_sql = from_sql;
 	return std::move(expression);
 }
 

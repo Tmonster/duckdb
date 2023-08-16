@@ -51,11 +51,11 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		stop("expr_reference: Zero length name");
 	}
 	if (!table.empty()) {
-		auto res = make_external<ColumnRefExpression>("duckdb_expr", name, table);
+		auto res = make_external<ColumnRefExpression>("duckdb_expr", name, table, false);
 		res->alias = name; // TODO does this really make sense here?
 		return res;
 	} else {
-		return make_external<ColumnRefExpression>("duckdb_expr", name);
+		return make_external<ColumnRefExpression>("duckdb_expr", name, false);
 	}
 }
 
