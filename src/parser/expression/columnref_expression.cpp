@@ -107,7 +107,7 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
-	auto from_sql = reader.ReadRequired<bool>();
+	auto from_sql = reader.ReadField(true);
 	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
 	expression->from_sql = from_sql;
 	return std::move(expression);
