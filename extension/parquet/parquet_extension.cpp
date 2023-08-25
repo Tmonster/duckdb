@@ -115,6 +115,10 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
+	//! If there are unsupported types, we cast them to string
+	vector<LogicalType> adjusted_types;
+	//! The casts from 'sql_type' to 'adjusted_type', if any
+	vector<unique_ptr<Expression>> bound_casts;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
@@ -842,11 +846,30 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	return std::move(global_state);
 }
 
+bool RequiresCasts(vector<unique_ptr<Expression>> &casts, vector<LogicalType> &types, ClientContext &context) {
+
+	for (auto &type : types) {
+		if (TypeToParquetSupported()) {
+			continue;
+		}
+		auto reference_expression = make_uniq<BoundReferenceExpression>(0);
+		casts.push_back(BoundCastExpression::GetCastToType());
+	}
+	return !casts.empty();
+}
+
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
+
+	vector<unique_ptr<Expression>> casts;
+	if (RequiresCasts(casts, bind_data.types)) {
+		// perform the casts before feeding into the column data collection
+		ExpressionExecutor executor;
+
+	}
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
