@@ -40,6 +40,7 @@ public:
 
 	string GetName() const override;
 	string ToString() const override;
+	string ToSQL() const;
 
 	static bool Equal(const ColumnRefExpression &a, const ColumnRefExpression &b);
 	hash_t Hash() const override;

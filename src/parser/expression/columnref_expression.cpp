@@ -62,6 +62,17 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
+	}
+	return result;
+}
+
+string ColumnRefExpression::ToSQL() const {
+	string result;
+	for (idx_t i = 0; i < column_names.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
 		result += column_names[i];
 	}
 	return result;

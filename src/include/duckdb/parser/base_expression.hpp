@@ -64,6 +64,7 @@ public:
 	virtual string GetName() const;
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
+	string ToSQL();
 	//! Print the expression to stdout
 	void Print() const;
 

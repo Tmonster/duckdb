@@ -9,7 +9,7 @@ ParsedStatementVerifier::ParsedStatementVerifier(unique_ptr<SQLStatement> statem
 }
 
 unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement &statement) {
-	auto query_str = statement.ToString();
+	auto query_str = statement.ToSQL();
 	Parser parser;
 	try {
 		parser.ParseQuery(query_str);
