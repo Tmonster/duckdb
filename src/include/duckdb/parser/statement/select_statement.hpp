@@ -38,6 +38,8 @@ protected:
 public:
 	//! Convert the SELECT statement to a string
 	DUCKDB_API string ToString() const override;
+	//! Convert the SELECT statement to a valid SQL statement
+	DUCKDB_API string ToSQL() const override;
 	//! Create a copy of this SelectStatement
 	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 	//! Serializes a SelectStatement to a stand-alone binary blob

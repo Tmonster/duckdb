@@ -18,10 +18,6 @@ string BaseExpression::GetName() const {
 	return !alias.empty() ? alias : ToString();
 }
 
-string BaseExpression::ToSQL() {
-	return ToString();
-}
-
 bool BaseExpression::Equals(const BaseExpression &other) const {
 	if (expression_class != other.expression_class || type != other.type) {
 		return false;

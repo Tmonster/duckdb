@@ -11,7 +11,16 @@ SelectNode::SelectNode()
     : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
 }
 
+
 string SelectNode::ToString() const {
+	return ToStringOrSQL(false);
+}
+
+string SelectNode::ToSQL() const {
+	return ToStringOrSQL(true);
+}
+
+string SelectNode::ToStringOrSQL(bool to_sql) const {
 	string result;
 	result = cte_map.ToString();
 	result += "SELECT ";
@@ -37,7 +46,7 @@ string SelectNode::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += select_list[i]->ToString();
+		result += select_list[i]->ToSQL();
 		if (!select_list[i]->alias.empty()) {
 			result += StringUtil::Format(" AS %s", SQLIdentifier(select_list[i]->alias));
 		}

@@ -35,4 +35,8 @@ string SelectStatement::ToString() const {
 	return node->ToString();
 }
 
+string SelectStatement::ToSQL() const {
+	return node->ToSQL();
+}
+
 } // namespace duckdb

@@ -65,6 +65,10 @@ public:
 public:
 	//! Convert the query node to a string
 	virtual string ToString() const = 0;
+	//! Convert the query node to a valid SQL string
+	virtual string ToSQL() const {
+		throw InternalException("ToSQL not supported for this type of QueryNode: ");
+	}
 
 	virtual bool Equals(const QueryNode *other) const;
 

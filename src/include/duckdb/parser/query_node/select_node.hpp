@@ -48,8 +48,11 @@ public:
 	}
 
 public:
+	string ToStringOrSQL(bool to_sql = false) const;
 	//! Convert the query node to a string
 	string ToString() const override;
+	//! Convert the query node to a SQL statement
+	string ToSQL() const override;
 
 	bool Equals(const QueryNode *other) const override;
 

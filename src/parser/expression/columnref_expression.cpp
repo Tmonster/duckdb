@@ -62,7 +62,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
+		result += column_names[i];
 	}
 	return result;
 }
@@ -73,7 +73,7 @@ string ColumnRefExpression::ToSQL() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += column_names[i];
+		result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
 	}
 	return result;
 }
