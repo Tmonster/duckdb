@@ -12,6 +12,11 @@ string SubqueryRef::ToString() const {
 	return BaseToString(result, column_name_alias);
 }
 
+string SubqueryRef::ToSQL() const {
+	string result = "(" + subquery->ToSQL() + ")";
+	return BaseToString(result, column_name_alias);
+}
+
 SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {
 }
 

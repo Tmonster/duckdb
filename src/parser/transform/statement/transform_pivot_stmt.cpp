@@ -54,7 +54,7 @@ void Transformer::PivotEntryCheck(const string &type) {
 		throw ParserException(
 		    "PIVOT statements with pivot elements extracted from the data cannot be used in %ss.\nIn order to use "
 		    "PIVOT in a %s the PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
-		    type, type, entries[0]->column->ToString());
+		    type, type, entries[0]->column->ToSQL());
 	}
 }
 unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry) {

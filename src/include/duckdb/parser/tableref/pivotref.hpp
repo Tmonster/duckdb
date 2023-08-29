@@ -48,6 +48,9 @@ struct PivotColumn {
 	unique_ptr<QueryNode> subquery;
 
 	string ToString() const;
+	string ToSQL() const {
+		return ToString();
+	}
 	bool Equals(const PivotColumn &other) const;
 	void Serialize(Serializer &serializer) const;
 	PivotColumn Copy() const;
@@ -89,6 +92,7 @@ public:
 
 public:
 	string ToString() const override;
+	string ToSQL() const override;
 	bool Equals(const TableRef &other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;

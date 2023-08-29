@@ -253,6 +253,72 @@ string PivotRef::ToString() const {
 	return result;
 }
 
+string PivotRef::ToSQL() const {
+	string result;
+	result = source->ToSQL();
+	if (!aggregates.empty()) {
+		// pivot
+		result += " PIVOT (";
+		for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+			if (aggr_idx > 0) {
+				result += ", ";
+			}
+			result += aggregates[aggr_idx]->ToSQL();
+			if (!aggregates[aggr_idx]->alias.empty()) {
+				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->alias);
+			}
+		}
+	} else {
+		// unpivot
+		result += " UNPIVOT ";
+		if (include_nulls) {
+			result += "INCLUDE NULLS ";
+		}
+		result += "(";
+		if (unpivot_names.size() == 1) {
+			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+		} else {
+			result += "(";
+			for (idx_t n = 0; n < unpivot_names.size(); n++) {
+				if (n > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+			}
+			result += ")";
+		}
+	}
+	result += " FOR";
+	for (auto &pivot : pivots) {
+		result += " ";
+		result += pivot.ToSQL();
+	}
+	if (!groups.empty()) {
+		result += " GROUP BY ";
+		for (idx_t i = 0; i < groups.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += groups[i];
+		}
+	}
+	result += ")";
+	if (!alias.empty()) {
+		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		if (!column_name_alias.empty()) {
+			result += "(";
+			for (idx_t i = 0; i < column_name_alias.size(); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+			}
+			result += ")";
+		}
+	}
+	return result;
+}
+
 bool PivotRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;

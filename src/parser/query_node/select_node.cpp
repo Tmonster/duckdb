@@ -52,7 +52,11 @@ string SelectNode::ToStringOrSQL(bool to_sql) const {
 		}
 	}
 	if (from_table && from_table->type != TableReferenceType::EMPTY) {
-		result += " FROM " + from_table->ToString();
+		if (to_sql) {
+			result += " FROM " + from_table->ToSQL();
+		} else {
+			result += " FROM " + from_table->ToString();
+		}
 	}
 	if (where_clause) {
 		result += " WHERE " + where_clause->ToString();

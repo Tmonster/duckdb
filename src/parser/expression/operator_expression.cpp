@@ -27,6 +27,11 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
+string OperatorExpression::ToSQL() const {
+	return ToString<OperatorExpression, ParsedExpression>(*this, true);
+}
+
+
 bool OperatorExpression::Equal(const OperatorExpression &a, const OperatorExpression &b) {
 	if (a.children.size() != b.children.size()) {
 		return false;

@@ -37,6 +37,9 @@ public:
 public:
 	//! Convert the object to a string
 	virtual string ToString() const = 0;
+	virtual string ToSQL() const {
+		return ToString();
+	}
 	string BaseToString(string result) const;
 	string BaseToString(string result, const vector<string> &column_name_alias) const;
 	void Print();

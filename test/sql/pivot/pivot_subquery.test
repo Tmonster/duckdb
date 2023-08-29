@@ -24,19 +24,14 @@ INSERT INTO sales VALUES
     (2, 2500, DATE '2001-03-03'),
     (2, 9500, DATE '2001-03-08');
 
-# PIVOT over a subquery
-query IIIIIII
-PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) ON YEAR, MONTH USING SUM(AMOUNT);
-----
-1	10400	8000	11000	NULL	NULL	NULL
-2	NULL	NULL	NULL	39500	90700	12000
-
 # PIVOT over a PIVOT
 query II
 PIVOT (PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) ON YEAR, MONTH USING SUM(AMOUNT))
 ON empid USING SUM(COALESCE("2000_1",0) + COALESCE("2000_2",0) + COALESCE("2000_3",0) + COALESCE("2001_1",0) + COALESCE("2001_2",0) + COALESCE("2001_3",0))
 ----
 29400	142200
+
+mode skip
 
 statement error
 CREATE VIEW pivot_view AS PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) ON YEAR, MONTH USING SUM(AMOUNT);

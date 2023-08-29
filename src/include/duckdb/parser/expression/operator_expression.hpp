@@ -29,6 +29,7 @@ public:
 
 public:
 	string ToString() const override;
+	string ToSQL() const override;
 
 	static bool Equal(const OperatorExpression &a, const OperatorExpression &b);
 
@@ -41,11 +42,14 @@ public:
 
 public:
 	template <class T, class BASE>
-	static string ToString(const T &entry) {
+	static string ToString(const T &entry, bool to_sql = false) {
 		auto op = ExpressionTypeToOperator(entry.type);
 		if (!op.empty()) {
 			// use the operator string to represent the operator
 			D_ASSERT(entry.children.size() == 2);
+			if (to_sql) {
+				return entry.children[0]->ToSQL() + " " + op + " " + entry.children[1]->ToString();
+			}
 			return entry.children[0]->ToString() + " " + op + " " + entry.children[1]->ToString();
 		}
 		switch (entry.type) {
@@ -53,12 +57,18 @@ public:
 		case ExpressionType::COMPARE_NOT_IN: {
 			string op_type = entry.type == ExpressionType::COMPARE_IN ? " IN " : " NOT IN ";
 			string in_child = entry.children[0]->ToString();
+			if (to_sql) {
+				in_child = entry.children[0]->ToSQL();
+			}
 			string child_list = "(";
 			for (idx_t i = 1; i < entry.children.size(); i++) {
 				if (i > 1) {
 					child_list += ", ";
 				}
 				child_list += entry.children[i]->ToString();
+				if (to_sql) {
+					child_list += entry.children[i]->ToSQL();
+				}
 			}
 			child_list += ")";
 			return "(" + in_child + op_type + child_list + ")";
@@ -67,8 +77,13 @@ public:
 			string result = "(";
 			result += ExpressionTypeToString(entry.type);
 			result += " ";
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			string children_string = StringUtil::Join(entry.children, entry.children.size(), ", ",
+			                                          [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			if (to_sql) {
+				children_string = StringUtil::Join(entry.children, entry.children.size(), ", ",
+				                 [](const unique_ptr<BASE> &child) { return child->ToSQL(); });
+			}
+			result += children_string;
 			result += ")";
 			return result;
 		}
@@ -76,16 +91,30 @@ public:
 		case ExpressionType::OPERATOR_COALESCE: {
 			string result = ExpressionTypeToString(entry.type);
 			result += "(";
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			if (to_sql) {
+				result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+				                           [](const unique_ptr<BASE> &child) { return child->ToSQL(); });
+			} else {
+				result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+				                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			}
 			result += ")";
 			return result;
 		}
 		case ExpressionType::OPERATOR_IS_NULL:
+			if (to_sql) {
+				return "(" + entry.children[0]->ToSQL() + " IS NULL)";
+			}
 			return "(" + entry.children[0]->ToString() + " IS NULL)";
 		case ExpressionType::OPERATOR_IS_NOT_NULL:
+			if (to_sql) {
+				return "(" + entry.children[0]->ToSQL() + " IS NOT NULL)";
+			}
 			return "(" + entry.children[0]->ToString() + " IS NOT NULL)";
 		case ExpressionType::ARRAY_EXTRACT:
+			if (to_sql) {
+				return entry.children[0]->ToSQL() + "[" + entry.children[1]->ToString() + "]";
+			}
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
 		case ExpressionType::ARRAY_SLICE: {
 			string begin = entry.children[1]->ToString();
@@ -111,15 +140,28 @@ public:
 				return string();
 			}
 			auto child_string = entry.children[1]->ToString();
+			if (to_sql) {
+				child_string = entry.children[1]->ToSQL();
+			}
 			D_ASSERT(child_string.size() >= 3);
 			D_ASSERT(child_string[0] == '\'' && child_string[child_string.size() - 1] == '\'');
-			return StringUtil::Format("(%s).%s", entry.children[0]->ToString(),
-			                          SQLIdentifier(child_string.substr(1, child_string.size() - 2)));
+			if (to_sql) {
+				return StringUtil::Format("(%s).%s", entry.children[0]->ToSQL(),
+				                          SQLIdentifier(child_string.substr(1, child_string.size() - 2)));
+			} else {
+				return StringUtil::Format("(%s).%s", entry.children[0]->ToString(),
+				                          SQLIdentifier(child_string.substr(1, child_string.size() - 2)));
+			}
 		}
 		case ExpressionType::ARRAY_CONSTRUCTOR: {
 			string result = "(ARRAY[";
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			if (to_sql) {
+				result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+				                           [](const unique_ptr<BASE> &child) { return child->ToSQL(); });
+			} else {
+				result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+				                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			}
 			result += "])";
 			return result;
 		}
