@@ -42,6 +42,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	// first resolve column references
 	profiler.StartPhase("column_binding");
 	ColumnBindingResolver resolver;
+	if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto a = 0;
+	}
 	resolver.VisitOperator(*op);
 	profiler.EndPhase();
 

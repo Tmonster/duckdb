@@ -259,6 +259,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
+	// here we try to bind the expression, but we need to bind the result expression. I'm not sure what happens here.
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;

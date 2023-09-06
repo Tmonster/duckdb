@@ -77,6 +77,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 	}
 	// binding failed
 	// check in the alias map
+	// HERE WE START LOOKING INTO THE ALIAS MAP.
 	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
 	if (!colref.IsQualified()) {
 		auto alias_entry = alias_map.find(colref.column_names[0]);

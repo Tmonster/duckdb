@@ -426,6 +426,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
+		// can also try looking here. This is where we bind the whole select list.
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		bool is_original_column = i < result->column_count;
 		bool can_group_by_all =

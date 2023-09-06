@@ -1,0 +1,10 @@
+# name: test/sql/types/list/unnest_with_alias.test
+# description: Test unnest with aliasing
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
+
