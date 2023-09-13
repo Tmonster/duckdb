@@ -1,24 +1,4 @@
 name: Windows
-on:
-  workflow_dispatch:
-  repository_dispatch:
-  push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
-    tags:
-      - '**'
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/odbc/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
-      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
