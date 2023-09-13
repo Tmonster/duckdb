@@ -22,6 +22,7 @@ static bool HasJoin(LogicalOperator *op) {
 			return true;
 		}
 	}
+	auto skadoos = "doot doot doot";
 	return false;
 }
 
