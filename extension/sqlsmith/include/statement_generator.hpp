@@ -43,7 +43,7 @@ public:
 	~StatementGenerator();
 
 public:
-	unique_ptr<SQLStatement> GenerateStatement();
+	vector<unique_ptr<SQLStatement>> GenerateStatement();
 
 	vector<string> GenerateAllFunctionCalls();
 

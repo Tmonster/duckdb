@@ -64,8 +64,11 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 	return result;
 }
 
-unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
-	return GenerateStatement(StatementType::SELECT_STATEMENT);
+vector<unique_ptr<SQLStatement>> StatementGenerator::GenerateStatement() {
+	// Here you can return a combination of statements
+	vector<unique_ptr<SQLStatement>> statements;
+	statements.push_back(GenerateStatement(StatementType::SELECT_STATEMENT));
+	return statements;
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType type) {

@@ -1,0 +1,9 @@
+# name: test/fuzzer/duckfuzz/test_fuzzer_call.test
+# description: Repeat row with NULL argument
+# group: [duckfuzz]
+
+statement ok
+load sqlsmith;
+
+statement ok
+call fuzzyduck(max_queries=1, seed=2000, verbose_output=1, log='whatever.log', complete_log='watever_complete.log');

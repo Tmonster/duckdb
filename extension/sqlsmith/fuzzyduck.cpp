@@ -19,7 +19,7 @@ void FuzzyDuck::BeginFuzzing() {
 		seed = random_engine.NextRandomInteger();
 	}
 	if (max_queries == 0) {
-		max_queries = NumericLimits<idx_t>::Maximum();
+		throw InvalidInputException("Cannot have max queries = 0");
 	}
 	if (!complete_log.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
@@ -68,8 +68,12 @@ string FuzzyDuck::GenerateQuery() {
 
 	// generate the statement
 	StatementGenerator generator(context);
-	auto statement = generator.GenerateStatement();
-	return statement->ToString();
+	auto statements = generator.GenerateStatement();
+	auto result = string();
+	for (auto &statement : statements) {
+		result += statement->ToString() + ";";
+	}
+	return result;
 }
 
 void sleep_thread(Connection *con, atomic<bool> *is_active, atomic<bool> *timed_out, idx_t timeout_duration) {
