@@ -68,7 +68,7 @@ string FuzzyDuck::GenerateQuery() {
 
 	// generate the statement
 	StatementGenerator generator(context);
-	auto statements = generator.GenerateStatement();
+	auto statements = generator.GenerateStatements();
 	auto result = string();
 	for (auto &statement : statements) {
 		result += statement->ToString() + ";";

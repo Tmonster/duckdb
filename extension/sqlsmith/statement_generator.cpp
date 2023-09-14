@@ -64,9 +64,14 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 	return result;
 }
 
-vector<unique_ptr<SQLStatement>> StatementGenerator::GenerateStatement() {
+vector<unique_ptr<SQLStatement>> StatementGenerator::GenerateStatements() {
 	// Here you can return a combination of statements
 	vector<unique_ptr<SQLStatement>> statements;
+	if (RandomPercentage(70)) {
+		statements.push_back(GenerateStatement(StatementType::CREATE_STATEMENT));
+		statements.push_back(GenerateStatement(StatementType::SELECT_STATEMENT));
+		statements.push_back(GenerateStatement(StatementType::DROP_STATEMENT));
+	}
 	statements.push_back(GenerateStatement(StatementType::SELECT_STATEMENT));
 	return statements;
 }
