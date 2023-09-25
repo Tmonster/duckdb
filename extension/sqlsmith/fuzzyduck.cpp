@@ -19,7 +19,7 @@ void FuzzyDuck::BeginFuzzing() {
 		seed = random_engine.NextRandomInteger();
 	}
 	if (max_queries == 0) {
-		throw BinderException("Provide a max_queries argument greater than 0");
+		max_queries = NumericLimits<idx_t>::Maximum();
 	}
 	if (!complete_log.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
