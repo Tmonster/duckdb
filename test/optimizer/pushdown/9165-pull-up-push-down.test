@@ -1,0 +1,20 @@
+# name: test/optimizer/pushdown/9165-pull-up-push-down.test
+# description: Pull up and push down on same table should work
+# group: [pushdown]
+
+# test some expressions which have side effects can not push down
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table t (f string);
+
+statement ok
+insert into t (f) values ('42'), ('43');
+
+query I
+explain select * from t as t1 left join t as t2 on t1.f = t2.f where right(t1.f, 1) = '2';
+----
+logical_opt	<REGEX>:.*\(right\(f, 1\) = '2'\).*\(right\(f, 1\) = '2'\).*
+

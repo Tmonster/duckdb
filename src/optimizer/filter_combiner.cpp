@@ -14,6 +14,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -110,9 +111,17 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
+			auto expr = entries.at(i);
+			if (expr.get().type == ExpressionType::BOUND_FUNCTION) {
+				std::cout << "this is a bound function" << std::endl;
+			}
+			// compare everything that is equal in the equivalence map.
+			// I don't see the constants because those are in the constants map (maybe space savings)?
+			//
 			for (idx_t k = i + 1; k < entries.size(); k++) {
 				auto comparison = make_uniq<BoundComparisonExpression>(
 				    ExpressionType::COMPARE_EQUAL, entries[i].get().Copy(), entries[k].get().Copy());
+				comparison->Print();
 				callback(std::move(comparison));
 			}
 			// for each entry also create a comparison with each constant
@@ -573,6 +582,12 @@ static bool IsLessThan(ExpressionType type) {
 	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 }
 
+
+//! Here we need to think about what to do when it comes to adding the equivalence sets.
+//! For compare equals and certain BOUND_FUNCTIONS, we can apply the functions to the other side as well
+//! Need to figure out first
+//! - how to the equivalence sets are made
+//! - how to apply them transitively across constants
 FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
 	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
@@ -671,6 +686,10 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	return FilterResult::SUCCESS;
 }
 
+
+//! when adding a filter that has a bound column reference, I need to check the equivalence map for any other
+//! entries that are function expressions that have that bound column reference (and only that bound column reference)
+//!
 FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	if (expr.HasParameter()) {
 		return FilterResult::UNSUPPORTED;

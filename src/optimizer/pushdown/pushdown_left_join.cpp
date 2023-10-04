@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -117,8 +118,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// this happens if, e.g. a join condition is (i=a) and there is a filter (i=500), we can then push the filter
 	// (a=500) into the RHS
 	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		if (JoinSide::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
+		auto join_side = JoinSide::GetJoinSide(*filter, left_bindings, right_bindings);
+		if (join_side == JoinSide::RIGHT) {
 			right_pushdown.AddFilter(std::move(filter));
+		} if (join_side == JoinSide::BOTH) {
+			std::cout << "whoa whoa woa" << std::endl;
 		}
 	});
 	right_pushdown.GenerateFilters();

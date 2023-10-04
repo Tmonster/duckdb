@@ -97,8 +97,12 @@ private:
 	vector<unique_ptr<Expression>> remaining_filters;
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
+	//! reverse lookup? Given an expression, you can find the key(idx_t) needed for the
+	//! equivalence_map. Then you can find all the equivalent expressions.
 	expression_map_t<idx_t> equivalence_set_map;
+	//! a map where every value is a vector where all values need to be equal.
 	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
+	//! map of key -> expression. ?? is an index into the constant values map.
 	unordered_map<idx_t, vector<reference<Expression>>> equivalence_map;
 	idx_t set_index = 0;
 	//
