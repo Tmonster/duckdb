@@ -62,36 +62,36 @@ private:
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 	//
-		//! Functions used to push and generate OR Filters
-		void LookUpConjunctions(Expression *expr);
-		bool BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
-		void VerifyOrsToPush(Expression &expr);
-
-		bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
-		bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
-		void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
-
-		template <typename CONJUNCTION_TYPE>
-		void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
-			auto new_filter = NextConjunctionFilter<CONJUNCTION_TYPE>(conjunction);
-			auto conj_filter_ptr = (ConjunctionFilter *)new_filter.get();
-			last_conj_filter->child_filters.push_back(std::move(new_filter));
-			last_conj_filter = conj_filter_ptr;
-		}
-
-		template <typename CONJUNCTION_TYPE>
-		unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
-			unique_ptr<ConjunctionFilter> conj_filter = make_uniq<CONJUNCTION_TYPE>();
-			for (auto &expr : conjunction->children) {
-				auto comp_expr = (BoundComparisonExpression *)expr.get();
-				auto &const_expr =
-				    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
-				auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
-				auto const_filter = make_uniq<ConstantFilter>(comp_expr->type, const_value);
-				conj_filter->child_filters.push_back(std::move(const_filter));
-			}
-			return std::move(conj_filter);
-		}
+	//	//! Functions used to push and generate OR Filters
+	//	void LookUpConjunctions(Expression *expr);
+	//	bool BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
+	//	void VerifyOrsToPush(Expression &expr);
+	//
+	//	bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
+	//	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
+	//	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
+	//
+	//	template <typename CONJUNCTION_TYPE>
+	//	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
+	//		auto new_filter = NextConjunctionFilter<CONJUNCTION_TYPE>(conjunction);
+	//		auto conj_filter_ptr = (ConjunctionFilter *)new_filter.get();
+	//		last_conj_filter->child_filters.push_back(std::move(new_filter));
+	//		last_conj_filter = conj_filter_ptr;
+	//	}
+	//
+	//	template <typename CONJUNCTION_TYPE>
+	//	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
+	//		unique_ptr<ConjunctionFilter> conj_filter = make_uniq<CONJUNCTION_TYPE>();
+	//		for (auto &expr : conjunction->children) {
+	//			auto comp_expr = (BoundComparisonExpression *)expr.get();
+	//			auto &const_expr =
+	//			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
+	//			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
+	//			auto const_filter = make_uniq<ConstantFilter>(comp_expr->type, const_value);
+	//			conj_filter->child_filters.push_back(std::move(const_filter));
+	//		}
+	//		return std::move(conj_filter);
+	//	}
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
