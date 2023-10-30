@@ -7,15 +7,16 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-# FIXME: re-enable when or pushdown is fixed
-mode skip
+statement ok
+copy (select range as a, (range % 3 == 0)::BOOL as b from range(100)) to '__TEST_DIR__/parquet_or_filter.parquet' (FORMAT PARQUET);  
 
 # Multiple column in the root OR node, don't push down
 query II
-EXPLAIN  SELECT tbl.a, tbl.b FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a, b) WHERE a=1 OR b=false
+EXPLAIN  SELECT tbl.a, tbl.b FROM 'delete_me.parquet' tbl(a, b) WHERE a in (1, 3, 5);
 ----
 physical_plan	<!REGEX>:.*PARQUET_SCAN.*Filters:.*
 
+mode skip
 
 # Single column in the root OR node
 query II

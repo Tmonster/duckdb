@@ -24,4 +24,5 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	}
 }
 
+
 } // namespace duckdb
