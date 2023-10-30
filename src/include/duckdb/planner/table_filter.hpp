@@ -69,7 +69,8 @@ public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
-	void PushFilter(idx_t table_index, unique_ptr<TableFilter> filter);
+	void PushFilter(idx_t table_index, unique_ptr<TableFilter> filter,
+	                TableFilterType conjunction_type = TableFilterType::CONJUNCTION_AND);
 
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {

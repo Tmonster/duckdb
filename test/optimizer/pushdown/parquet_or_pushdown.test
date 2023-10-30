@@ -18,17 +18,18 @@ SELECT tbl.a, tbl.b FROM 'delete_me.parquet' tbl(a, b) WHERE a = 2 or a = 5 or a
 5	false
 9	true
 
-mode skip
 
 # Single column in the root OR node
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a=2
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a=2;
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a=2.*
 
+mode skip
+
 # Single column + root OR node with AND
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR (a>3 AND a<5)
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR (a>3 AND a<5);
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 AND a<5|.*
 
@@ -38,6 +39,13 @@ query II
 EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a>3 OR a<5
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 OR a<5|.*
+
+
+# No Filter on top of the parquet scan, filters can be applied in the read
+query II
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a>3 OR a<5
+----
+physical_plan	<!REGEX>:.*FILTER.*PARQUET_SCAN.*
 
 
 

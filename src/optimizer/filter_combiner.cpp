@@ -561,6 +561,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 		else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
 			auto a = 0;
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
+			// TODO: keep track of what children in the OR filter are pushed down,
+			//  and what children are not. The pushed down children can be removed from
+			//  the remaining OR filter children. If all filters can be pushed down, then remove the
+			//  remaining child all together.
 			for (auto &expr : conj.children) {
 				if (expr->expression_class != ExpressionClass::BOUND_COMPARISON) {
 					continue;
@@ -570,10 +574,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					auto col_ref = &comp.left->Cast<BoundColumnRefExpression>();
 					auto column_index = col_ref->binding.column_index;
 					auto const_val = &comp.right->Cast<BoundConstantExpression>();
-					auto equality_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val->value);
-					table_filters.PushFilter(column_index, std::move(equality_filter));
+					auto equality_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
+					table_filters.PushFilter(column_index, std::move(equality_filter), TableFilterType::CONJUNCTION_OR);
 				}
 			}
+			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
 	}
 
