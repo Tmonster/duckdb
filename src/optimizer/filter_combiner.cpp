@@ -558,6 +558,23 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
+		else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
+			auto a = 0;
+			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
+			for (auto &expr : conj.children) {
+				if (expr->expression_class != ExpressionClass::BOUND_COMPARISON) {
+					continue;
+				}
+				auto &comp = expr->Cast<BoundComparisonExpression>();
+				if (comp.left->type == ExpressionType::BOUND_COLUMN_REF && comp.right->type == ExpressionType::VALUE_CONSTANT ) {
+					auto col_ref = &comp.left->Cast<BoundColumnRefExpression>();
+					auto column_index = col_ref->binding.column_index;
+					auto const_val = &comp.right->Cast<BoundConstantExpression>();
+					auto equality_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val->value);
+					table_filters.PushFilter(column_index, std::move(equality_filter));
+				}
+			}
+		}
 	}
 
 	//	GenerateORFilters(table_filters, column_ids);
@@ -1203,7 +1220,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	return true;
 //}
 //
-// void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
+//void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
 //	for (const auto colref : vec_colref_insertion_order) {
 //		auto column_index = column_ids[colref->binding.column_index];
 //		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {

@@ -16,13 +16,12 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 			auto &and_filter = entry->second->Cast<ConjunctionAndFilter>();
 			and_filter.child_filters.push_back(std::move(filter));
 		} else {
-			auto and_filter = make_uniq<ConjunctionAndFilter>();
+			auto and_filter = make_uniq<ConjunctionOrFilter>();
 			and_filter->child_filters.push_back(std::move(entry->second));
 			and_filter->child_filters.push_back(std::move(filter));
 			filters[column_index] = std::move(and_filter);
 		}
 	}
 }
-
 
 } // namespace duckdb
