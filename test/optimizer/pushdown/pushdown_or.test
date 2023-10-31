@@ -8,7 +8,11 @@ require parquet
 #PRAGMA enable_verification
 
 statement ok
-create table t0 as select range as a, range/2 as b, range/3 as c, range/4 as d from range(100);  
+create table t0 as select range as a, range/2 as b, range/3 as c, range/4 as d from range(100);
+
+statement ok
+copy table t1 to 't0-whatever.parquet' (FORMAT PARQUET);
+  
 
 # cannot push down or filters that involve separate columns
 query II
@@ -18,7 +22,7 @@ physical_plan	<REGEX>:.*FILTER.*SEQ_SCAN.*
 
 # can push down or filters if that are all on the same column
 query II
-explain select * from t0 where a = 5 or a = 10 or a = 15 or a = 12;
+explain select * from 't0-whatever.parquet' where a = 5 or a = 10 or a = 15 or a = 12;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
 
