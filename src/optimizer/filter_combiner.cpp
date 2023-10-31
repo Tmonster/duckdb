@@ -14,6 +14,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -442,6 +443,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 		}
 	}
 	//! Here we look for LIKE or IN filters
+	vector<idx_t> remaining_filters_to_remove;
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
@@ -555,6 +557,12 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				}
 			}
 			if (!can_simplify_in_clause) {
+				// make one big conjunction OR
+				for (auto &in_val : in_values) {
+					auto filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value::Numeric(LogicalType::BIGINT, in_val));
+					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
+				}
+				remaining_filters_to_remove.push_back(rem_fil_idx);
 				continue;
 			}
 			auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
@@ -565,12 +573,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			table_filters.PushFilter(column_index, std::move(upper_bound));
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			remaining_filters_to_remove.push_back(rem_fil_idx);
 		} else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
 			unordered_set<idx_t> columns_that_need_and_null;
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
 			vector<PotentialTableFilter> potential_table_filters;
 			bool all_can_pushdown = true;
+			idx_t column_id = DConstants::INVALID_INDEX;
 			for (auto &expr : conj.children) {
 				if (expr->expression_class != ExpressionClass::BOUND_COMPARISON) {
 					continue;
@@ -595,6 +604,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					break;
 				}
 				auto column_index = colref->binding.column_index;
+				if (column_id == DConstants::INVALID_INDEX) {
+					column_id = column_index;
+				}
+				if (column_id != column_index) {
+					all_can_pushdown = false;
+					break;
+				}
 				auto equality_filter = make_uniq<ConstantFilter>(comp.type, value->value);
 				potential_table_filters.push_back(
 				    PotentialTableFilter(column_index, std::move(equality_filter), TableFilterType::CONJUNCTION_OR));
@@ -610,9 +626,14 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>(),
 					                         TableFilterType::CONJUNCTION_AND);
 				}
-				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+				remaining_filters_to_remove.push_back(rem_fil_idx);
 			}
 		}
+	}
+
+	for (int i = remaining_filters_to_remove.size() - 1; i >= 0; i--) {
+		auto remaining_filter_index = remaining_filters_to_remove.at(i);
+		remaining_filters.erase(remaining_filters.begin() + remaining_filter_index);
 	}
 
 	//	GenerateORFilters(table_filters, column_ids);
