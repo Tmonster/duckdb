@@ -1,0 +1,31 @@
+# name: test/optimizer/pushdown/pushdown_or.test
+# description: Test Parquet With Pushing Down of OR Filters
+# group: [pushdown]
+
+require parquet
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+create table t0 as select range as a, range/2 as b, range/3 as c, range/4 as d from range(100);  
+
+# or connecting ands not pushed down
+#query II
+#explain SELECT * FROM t0 WHERE ((a % 2 = 0) and (b % 2 = 0)) or ((a > 10) and (d < 30));
+#----
+#physical_plan	<REGEX>:.*FILTER.*SEQ_SCAN.*
+
+# many ors involving constant comparisons are pushed down
+query II
+select * from t0 where a = 5 or b = 8 or c = 20 or d = 10;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
+
+
+## if one of the or conjunctions cannot be pushed down, the filter is applied after the scan
+#query II
+#explain select * from t0 where a = 5 or b = 8 or c = 20 or c = d;
+#----
+#physical_plan	<REGEX>:.*Filters.*SEQ_SCAN.*
+#

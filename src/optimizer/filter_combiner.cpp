@@ -391,20 +391,29 @@ bool FilterCombiner::HasFilters() {
 // 	return zonemap_checks;
 // }
 
+bool TableFilterSet::ExpressionSupportsPushdown(ExpressionType comparison) {
+	return (comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_GREATERTHAN ||
+	        comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+	        comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+}
+
+static bool ValueTypeSupportsPushown(Value value) {
+	return TypeIsNumeric(value.type().InternalType()) || value.type().InternalType() == PhysicalType::VARCHAR ||
+	       value.type().InternalType() == PhysicalType::BOOL;
+}
+
+static bool LeftConstValRightBoundColref(Expression &left, Expression &right) {
+	return (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF);
+}
+
 TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (!constant_value.second.empty()) {
 			auto filter_exp = equivalence_map.end();
-			if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
+			if (TableFilterSet::ExpressionSupportsPushdown(constant_value.second[0].comparison_type) &&
+			    ValueTypeSupportsPushown(constant_value.second[0].constant)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 &&
@@ -557,28 +566,52 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
-		}
-		else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
-			auto a = 0;
+		} else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
+			unordered_set<idx_t> columns_that_need_and_null;
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
-			// TODO: keep track of what children in the OR filter are pushed down,
-			//  and what children are not. The pushed down children can be removed from
-			//  the remaining OR filter children. If all filters can be pushed down, then remove the
-			//  remaining child all together.
+			vector<PotentialTableFilter> potential_table_filters;
+			bool all_can_pushdown = true;
 			for (auto &expr : conj.children) {
 				if (expr->expression_class != ExpressionClass::BOUND_COMPARISON) {
 					continue;
 				}
 				auto &comp = expr->Cast<BoundComparisonExpression>();
-				if (comp.left->type == ExpressionType::BOUND_COLUMN_REF && comp.right->type == ExpressionType::VALUE_CONSTANT ) {
-					auto col_ref = &comp.left->Cast<BoundColumnRefExpression>();
-					auto column_index = col_ref->binding.column_index;
-					auto const_val = &comp.right->Cast<BoundConstantExpression>();
-					auto equality_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
-					table_filters.PushFilter(column_index, std::move(equality_filter), TableFilterType::CONJUNCTION_OR);
+				BoundColumnRefExpression *colref = nullptr;
+				BoundConstantExpression *value = nullptr;
+				bool can_pushdown = false;
+				if (TableFilterSet::ExpressionSupportsPushdown(comp.type)) {
+					if (LeftConstValRightBoundColref(*comp.left, *comp.right)) {
+						value = &comp.left->Cast<BoundConstantExpression>();
+						colref = &comp.right->Cast<BoundColumnRefExpression>();
+						can_pushdown = true;
+					} else if (LeftConstValRightBoundColref(*comp.right, *comp.left)) {
+						value = &comp.right->Cast<BoundConstantExpression>();
+						colref = &comp.left->Cast<BoundColumnRefExpression>();
+						can_pushdown = true;
+					}
 				}
+				if (!can_pushdown) {
+					all_can_pushdown = false;
+					break;
+				}
+				auto column_index = colref->binding.column_index;
+				auto equality_filter = make_uniq<ConstantFilter>(comp.type, value->value);
+				potential_table_filters.push_back(
+				    PotentialTableFilter(column_index, std::move(equality_filter), TableFilterType::CONJUNCTION_OR));
+				columns_that_need_and_null.insert(column_index);
 			}
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			if (all_can_pushdown) {
+				for (auto &potential_table_filter : potential_table_filters) {
+					table_filters.PushFilter(potential_table_filter.column_index,
+					                         std::move(potential_table_filter.filter),
+					                         potential_table_filter.conjunction_type);
+				}
+				for (auto &column_index : columns_that_need_and_null) {
+					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>(),
+					                         TableFilterType::CONJUNCTION_AND);
+				}
+				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			}
 		}
 	}
 
@@ -1225,7 +1258,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	return true;
 //}
 //
-//void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
+// void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
 //	for (const auto colref : vec_colref_insertion_order) {
 //		auto column_index = column_ids[colref->binding.column_index];
 //		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {

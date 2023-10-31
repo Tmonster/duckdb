@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -69,7 +70,7 @@ public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
-	void PushFilter(idx_t table_index, unique_ptr<TableFilter> filter,
+	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter,
 	                TableFilterType conjunction_type = TableFilterType::CONJUNCTION_AND);
 
 	bool Equals(TableFilterSet &other) {
@@ -99,6 +100,17 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
+	static bool ExpressionSupportsPushdown(ExpressionType comparison);
+};
+
+struct PotentialTableFilter {
+	idx_t column_index;
+	unique_ptr<TableFilter> filter;
+	TableFilterType conjunction_type;
+
+	PotentialTableFilter(idx_t column_index, unique_ptr<TableFilter> filter, TableFilterType conjunction_type)
+	    : column_index(column_index), filter(std::move(filter)), conjunction_type(conjunction_type) {
+	}
 };
 
 } // namespace duckdb
