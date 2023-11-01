@@ -611,6 +611,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 						can_pushdown = true;
 					}
 				}
+				if (!can_pushdown) {
+					all_can_pushdown = false;
+					break;
+				}
 				auto column_index = column_ids[colref->binding.column_index];
 				if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 					break;
