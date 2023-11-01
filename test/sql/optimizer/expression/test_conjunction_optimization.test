@@ -12,11 +12,11 @@ statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL)
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
 
 # test conjunctions in FILTER clause
 query I
-SELECT i FROM integers WHERE (i=1 AND i>0) OR (i=1 AND i<3) ORDER BY i
+SELECT i FROM integers WHERE (i=1 AND i>0) OR (i=1 AND i<3) ORDER BY i;
 ----
 1
 

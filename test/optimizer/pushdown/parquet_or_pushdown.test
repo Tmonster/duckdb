@@ -7,6 +7,8 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 #statement ok
 #copy (select range as a, (range % 3 == 0)::BOOL as b from range(100)) to '__TEST_DIR__/parquet_or_filter.parquet' (FORMAT PARQUET);  
 

@@ -4,15 +4,11 @@
 
 require parquet
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 create table t0 as select range as a, range/2 as b, range/3 as c, range/4 as d from range(100);
-
-statement ok
-copy table t1 to 't0-whatever.parquet' (FORMAT PARQUET);
-  
 
 # cannot push down or filters that involve separate columns
 query II
@@ -20,26 +16,41 @@ explain select * from t0 where a = 5 or b = 8 or c = 20 or d = 10;
 ----
 physical_plan	<REGEX>:.*FILTER.*SEQ_SCAN.*
 
-# can push down or filters if that are all on the same column
+# can push down or filters if it is a conjunction or on the same column
 query II
-explain select * from 't0-whatever.parquet' where a = 5 or a = 10 or a = 15 or a = 12;
+explain select * from t0 where a = 5 or a = 10 or a = 15 or a = 12;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
 
 # can push down two or filters combined by an and, given the or filters are both on the same column
 query II
 explain select * from t0 where (a = 5 or a = 10) and (b = 15 or b = 12);
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
 
 query II
 explain select * from t0 where (a = 5 or a = 10) and (b = 15 or b = 12);
 ----
 physical_plan	<!REGEX>:.*FILTER.*SEQ_SCAN.*
 
+# two or conjunction filters on separate column ids are not pushed down
+query II
+explain select * from t0 where (a = 5 or b = 10) and (c = 15 or d = 12);
+----
+physical_plan	<REGEX>:.*FILTER.*SEQ_SCAN.*
+
 # in filter can be pushed down
 query II
 explain select * from t0 where a in (1, 2, 3, 4, 10, 19, 25);
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
 
+# test strings
+
+statement ok
+create table t1 as select unnest(['happy', 'sad', 'angry', 'ok', 'medium']) as mood;
+
+query II
+explain select * from t1 where mood in ('happy', 'ok');
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*

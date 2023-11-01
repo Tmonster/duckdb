@@ -103,14 +103,4 @@ public:
 	static bool ExpressionSupportsPushdown(ExpressionType comparison);
 };
 
-struct PotentialTableFilter {
-	idx_t column_index;
-	unique_ptr<TableFilter> filter;
-	TableFilterType conjunction_type;
-
-	PotentialTableFilter(idx_t column_index, unique_ptr<TableFilter> filter, TableFilterType conjunction_type)
-	    : column_index(column_index), filter(std::move(filter)), conjunction_type(conjunction_type) {
-	}
-};
-
 } // namespace duckdb
