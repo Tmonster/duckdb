@@ -45,12 +45,18 @@ explain select * from t0 where a in (1, 2, 3, 4, 10, 19, 25);
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
 
-# test strings
+# test strings and bool
 
 statement ok
-create table t1 as select unnest(['happy', 'sad', 'angry', 'ok', 'medium']) as mood;
+create table t1 as select unnest(['happy', 'sad', 'angry', 'ok', 'medium']) as mood, unnest([true, false, true, false, true]) as col1;
 
 query II
 explain select * from t1 where mood in ('happy', 'ok');
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
+
+query II
+explain select * from t1 where col1 = true or col1 = false;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*OR.*
+

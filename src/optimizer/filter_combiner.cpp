@@ -566,7 +566,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!can_simplify_in_clause) {
 				// make one big conjunction OR
 				for (auto &in_val : in_values) {
-					auto filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value::Numeric(type, in_val));
+					auto filter =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value::Numeric(type, in_val));
 					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
 				}
 				remaining_filters_to_remove.push_back(rem_fil_idx);
@@ -610,13 +611,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 						can_pushdown = true;
 					}
 				}
-				if (!can_pushdown) {
-					all_can_pushdown = false;
-					break;
-				}
 				auto column_index = column_ids[colref->binding.column_index];
-				if (column_index == DConstants::INVALID_INDEX) {
-					all_can_pushdown = false;
+				if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 					break;
 				}
 				// if conjunction has two separate column_ids, skip
