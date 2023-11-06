@@ -617,6 +617,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				}
 				auto column_index = column_ids[colref->binding.column_index];
 				if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+					all_can_pushdown = false;
 					break;
 				}
 				// if conjunction has two separate column_ids, skip

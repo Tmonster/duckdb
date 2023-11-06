@@ -2,8 +2,6 @@
 # description: Parquet reader schema parameter tests
 # group: [parquet]
 
-mode skip
-
 require parquet
 
 statement ok

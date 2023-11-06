@@ -69,7 +69,7 @@ private:
 	//
 	//	bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
 	//	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
-	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
+	//	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
 	//
 	//	template <typename CONJUNCTION_TYPE>
 	//	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
