@@ -398,7 +398,7 @@ bool TableFilterSet::ExpressionSupportsPushdown(ExpressionType comparison) {
 	        comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 }
 
-static bool ValueTypeSupportsPushown(Value value) {
+static bool ValueTypeSupportsPushown(const Value &value) {
 	return TypeIsNumeric(value.type().InternalType()) || value.type().InternalType() == PhysicalType::VARCHAR ||
 	       value.type().InternalType() == PhysicalType::BOOL;
 }
