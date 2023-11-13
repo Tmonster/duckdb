@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <cmath>
+#include "iostream"
 
 namespace duckdb {
 
@@ -52,6 +53,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
+	if (op.type == LogicalOperatorType::LOGICAL_EXECUTE) {
+		std::cout << "okay cool" << std::endl;
+	}
 	if (table_indexes.empty()) {
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
