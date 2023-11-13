@@ -1,0 +1,27 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf1]
+
+name Q${QUERY_NUMBER_PADDED}
+group tpch
+subgroup sf1
+
+require tpch
+
+require parquet
+
+cache tpch_sf1_parquet.duckdb
+
+load
+create view lineitem as select * from ' ~/coiled-benchmarks/tpch-data/scale-100-strict/lineitem/*.parquet';
+create view customer as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/customer/*.parquet';
+create view nation as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/nation/*.parquet';
+create view orders as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/orders/*.parquet';
+create view part as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/part/*.parquet';
+create view partsupp as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/partsupp/*.parquet';
+create view region as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/region/*.parquet';
+create view supplier as select * from' ~/coiled-benchmarks/tpch-data/scale-100-strict/supplier/*.parquet';
+
+run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv
