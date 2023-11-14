@@ -19,3 +19,4 @@ CREATE TABLE name AS SELECT * FROM read_parquet('https://github.com/duckdb/duckd
 CREATE TABLE person_info AS SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_person_info.parquet');
 CREATE TABLE role_type AS SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet');
 CREATE TABLE title AS SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_title.parquet');
+

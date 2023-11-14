@@ -532,14 +532,15 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
-				for (idx_t i = 1; i < func.children.size(); i++) {
-					auto &child = func.children[i];
-					auto &const_value_expr = child->Cast<BoundConstantExpression>();
-					auto filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value_expr.value);
-					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
-				}
-				remaining_filters_to_remove.push_back(rem_fil_idx);
 				continue;
+//				for (idx_t i = 1; i < func.children.size(); i++) {
+//					auto &child = func.children[i];
+//					auto &const_value_expr = child->Cast<BoundConstantExpression>();
+//					auto filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value_expr.value);
+//					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
+//				}
+//				remaining_filters_to_remove.push_back(rem_fil_idx);
+//				continue;
 			}
 
 			bool can_simplify_in_clause = true;
@@ -583,6 +584,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 
 			remaining_filters_to_remove.push_back(rem_fil_idx);
 		} else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
+//			continue;
 			unordered_set<idx_t> columns_that_need_and_null;
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
 			auto or_filter = make_uniq<ConjunctionOrFilter>();
@@ -636,8 +638,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			// if all of the expressions in the conjunction or can be pushed down, then add add them to the
 			// table filters. Otherwise leave it as a filter on the read.
 			if (all_can_pushdown) {
-				table_filters.PushFilter(column_id, std::move(or_filter), TableFilterType::CONJUNCTION_AND);
-				table_filters.PushFilter(column_id, make_uniq<IsNotNullFilter>(), TableFilterType::CONJUNCTION_AND);
+				table_filters.PushFilter(column_id, std::move(or_filter), TableFilterType::CONJUNCTION_OR);
+//				table_filters.PushFilter(column_id, make_uniq<IsNotNullFilter>(), TableFilterType::CONJUNCTION_AND);
 				remaining_filters_to_remove.push_back(rem_fil_idx);
 			}
 		}

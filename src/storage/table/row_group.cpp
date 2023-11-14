@@ -20,6 +20,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -267,7 +268,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
+                                          ExpressionExecutor &executor, Expression &default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -462,8 +463,24 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			if (table_filters) {
 				D_ASSERT(adaptive_filter);
 				D_ASSERT(ALLOW_UPDATES);
+				// are we apply the whole OR conjunction filter at once. and then slice it.
+				// What we should do instead is, if the filter is a conjunction OR filter, apply every individual child
+				// update the selection vector with tuples that pass, then apply the next conjunction to the indexes that did not pass.
+//				if (table_filters->filters.size() > 1) {
+//					std::cout << table_filters->filters.size() << std::endl;
+//					auto stop_here = "true";
+//					for (idx_t d = 0; d < table_filters->filters.size(); d++) {
+//					}
+//				}
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+
 					auto tf_idx = adaptive_filter->permutation[i];
+
+					if (table_filters->filters[tf_idx]->filter_type == TableFilterType::CONJUNCTION_OR) {
+						auto &whatevs = table_filters->filters[tf_idx]->Cast<ConjunctionOrFilter>();
+						std::cout << "apply " << whatevs.child_filters.size() << " child filters all at once " << std::endl;
+					}
+
 					auto col_idx = column_ids[tf_idx];
 					auto &col_data = GetColumn(col_idx);
 					col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx],
