@@ -340,6 +340,18 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
+
+//		SelectionVector current_sel = result_sel;
+//		idx_t current_count = approved_tuple_count;
+//		idx_t result_count = 0;
+//
+//		unique_ptr<SelectionVector> temp_true, temp_false;
+//		unique_ptr<SelectionVector> false_sel;
+//
+//		temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+//
+//		temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		for (auto &child_filter : conjunction_or.child_filters) {
 			SelectionVector temp_sel;
@@ -347,6 +359,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 			idx_t temp_tuple_count = approved_tuple_count;
 			idx_t temp_count = FilterSelection(temp_sel, result, *child_filter, temp_tuple_count, mask);
 			// tuples passed, move them into the actual result vector
+//			if (temp_count > 0) {
+//				for (idx_t i = 0; i < temp_count; i++) {
+//					result_sel.set_index(result_count++, temp_true->get_index(i));
+//				}
+//				current_count -= temp_count;
+//
+//			}
 			for (idx_t i = 0; i < temp_count; i++) {
 				auto new_idx = temp_sel.get_index(i);
 				bool is_new_idx = true;
