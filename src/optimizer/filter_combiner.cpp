@@ -14,6 +14,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -391,20 +392,29 @@ bool FilterCombiner::HasFilters() {
 // 	return zonemap_checks;
 // }
 
+bool TableFilterSet::ExpressionSupportsPushdown(ExpressionType comparison) {
+	return (comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_GREATERTHAN ||
+	        comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+	        comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+}
+
+static bool ValueTypeSupportsPushown(const Value &value) {
+	return TypeIsNumeric(value.type().InternalType()) || value.type().InternalType() == PhysicalType::VARCHAR ||
+	       value.type().InternalType() == PhysicalType::BOOL;
+}
+
+static bool LeftConstValRightBoundColref(Expression &left, Expression &right) {
+	return (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF);
+}
+
 TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (!constant_value.second.empty()) {
 			auto filter_exp = equivalence_map.end();
-			if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
+			if (TableFilterSet::ExpressionSupportsPushdown(constant_value.second[0].comparison_type) &&
+			    ValueTypeSupportsPushown(constant_value.second[0].constant)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 &&
@@ -433,6 +443,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 		}
 	}
 	//! Here we look for LIKE or IN filters
+	vector<idx_t> remaining_filters_to_remove;
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
@@ -522,6 +533,14 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
 				continue;
+//				for (idx_t i = 1; i < func.children.size(); i++) {
+//					auto &child = func.children[i];
+//					auto &const_value_expr = child->Cast<BoundConstantExpression>();
+//					auto filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value_expr.value);
+//					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
+//				}
+//				remaining_filters_to_remove.push_back(rem_fil_idx);
+//				continue;
 			}
 
 			bool can_simplify_in_clause = true;
@@ -546,6 +565,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				}
 			}
 			if (!can_simplify_in_clause) {
+				// make one big conjunction OR
+				for (auto &in_val : in_values) {
+					auto filter =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value::Numeric(type, in_val));
+					table_filters.PushFilter(column_index, std::move(filter), TableFilterType::CONJUNCTION_OR);
+				}
+				remaining_filters_to_remove.push_back(rem_fil_idx);
 				continue;
 			}
 			auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
@@ -556,8 +582,72 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			table_filters.PushFilter(column_index, std::move(upper_bound));
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			remaining_filters_to_remove.push_back(rem_fil_idx);
+		} else if (remaining_filter->type == ExpressionType::CONJUNCTION_OR) {
+//			continue;
+			unordered_set<idx_t> columns_that_need_and_null;
+			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
+			auto or_filter = make_uniq<ConjunctionOrFilter>();
+			bool all_can_pushdown = true;
+			idx_t column_id = DConstants::INVALID_INDEX;
+			for (auto &expr : conj.children) {
+				// go through every child of the conjunction and check that it can be pushed down
+				// if not a direct comparison skip
+				if (expr->expression_class != ExpressionClass::BOUND_COMPARISON) {
+					all_can_pushdown = false;
+					continue;
+				}
+				auto &comp = expr->Cast<BoundComparisonExpression>();
+				BoundColumnRefExpression *colref = nullptr;
+				BoundConstantExpression *value = nullptr;
+				bool can_pushdown = false;
+				// if not a simple comparison between bound column index and constant value, skip
+				if (TableFilterSet::ExpressionSupportsPushdown(comp.type)) {
+					if (LeftConstValRightBoundColref(*comp.left, *comp.right)) {
+						value = &comp.left->Cast<BoundConstantExpression>();
+						colref = &comp.right->Cast<BoundColumnRefExpression>();
+						can_pushdown = true;
+					} else if (LeftConstValRightBoundColref(*comp.right, *comp.left)) {
+						value = &comp.right->Cast<BoundConstantExpression>();
+						colref = &comp.left->Cast<BoundColumnRefExpression>();
+						can_pushdown = true;
+					}
+				}
+				if (!can_pushdown) {
+					all_can_pushdown = false;
+					break;
+				}
+				auto column_index = column_ids[colref->binding.column_index];
+				if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+					all_can_pushdown = false;
+					break;
+				}
+				// if conjunction has two separate column_ids, skip
+				// (i.e a = 5 or b = 7)
+				if (column_id == DConstants::INVALID_INDEX) {
+					column_id = column_index;
+				}
+				if (column_id != column_index) {
+					all_can_pushdown = false;
+					break;
+				}
+				auto column_filter = make_uniq<ConstantFilter>(comp.type, value->value);
+				or_filter->child_filters.push_back(std::move(column_filter));
+				columns_that_need_and_null.insert(column_index);
+			}
+			// if all of the expressions in the conjunction or can be pushed down, then add add them to the
+			// table filters. Otherwise leave it as a filter on the read.
+			if (all_can_pushdown) {
+				table_filters.PushFilter(column_id, std::move(or_filter), TableFilterType::CONJUNCTION_OR);
+//				table_filters.PushFilter(column_id, make_uniq<IsNotNullFilter>(), TableFilterType::CONJUNCTION_AND);
+				remaining_filters_to_remove.push_back(rem_fil_idx);
+			}
 		}
+	}
+
+	for (int i = remaining_filters_to_remove.size() - 1; i >= 0; i--) {
+		auto remaining_filter_index = remaining_filters_to_remove.at(i);
+		remaining_filters.erase(remaining_filters.begin() + remaining_filter_index);
 	}
 
 	//	GenerateORFilters(table_filters, column_ids);

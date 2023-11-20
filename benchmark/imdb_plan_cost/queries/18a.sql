@@ -1,3 +1,4 @@
+pragma threads=1;
 SELECT MIN(mi.info) AS movie_budget,
        MIN(mi_idx.info) AS movie_votes,
        MIN(t.title) AS movie_title

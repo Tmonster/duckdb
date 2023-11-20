@@ -20,6 +20,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -267,7 +268,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
+                                          ExpressionExecutor &executor, Expression &default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -462,12 +463,46 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			if (table_filters) {
 				D_ASSERT(adaptive_filter);
 				D_ASSERT(ALLOW_UPDATES);
+
+				// are we apply the whole OR conjunction filter at once. and then slice it.
+				// What we should do instead is, if the filter is a conjunction OR filter, apply every individual child
+				// update the selection vector with tuples that pass, then apply the next conjunction to the indexes that did not pass.
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+
 					auto tf_idx = adaptive_filter->permutation[i];
 					auto col_idx = column_ids[tf_idx];
 					auto &col_data = GetColumn(col_idx);
-					col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx],
-					                sel, approved_tuple_count, *table_filters->filters[tf_idx]);
+					auto &filter = table_filters->filters[tf_idx];
+
+					switch (filter->filter_type) {
+					case TableFilterType::CONJUNCTION_OR: {
+
+						auto &or_filter = filter->Cast<ConjunctionOrFilter>();
+						SelectionVector current_sel = sel;
+						SelectionVector *true_sel = nullptr;
+						SelectionVector *false_sel = nullptr;
+
+						// scan and flatten the vector.
+						// apply children one by one unti
+						for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
+							idx_t tcount = 0;
+							auto &child_filter_expression = or_filter.child_filters.at(i);
+							if (child_filter_expression->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+								auto &filter_expression = BoundComparisonExpression()
+								auto expression_executor = ExpressionExecutor(transaction.transaction->context, child_filter_expression);
+								ColumnSegment::FilterSelection(sel, result.data.at(tf_idx), *child_filter_expression,
+								                               tcount, FlatVector::Validity(result.data.at(tf_idx)));
+							}
+						}
+
+
+						}
+					}
+					case TableFilterType::CONJUNCTION_AND:
+					default: {
+						col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx],
+						                sel, approved_tuple_count, *table_filters->filters[tf_idx]);
+					}
 				}
 				for (auto &table_filter : table_filters->filters) {
 					result.data[table_filter.first].Slice(sel, approved_tuple_count);
