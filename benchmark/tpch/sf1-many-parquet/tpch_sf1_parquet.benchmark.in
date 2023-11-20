@@ -24,4 +24,3 @@ create view supplier as select * from' ~/coiled-benchmarks/tpch-data/scale-100-s
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
-result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv

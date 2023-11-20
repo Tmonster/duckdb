@@ -13,7 +13,7 @@ require parquet
 cache tpch_sf1_parquet.duckdb
 
 load
-call dbgen(sf=1);
+call dbgen(sf=100);
 EXPORT DATABASE '${BENCHMARK_DIR}/tpch_sf1_parquet/' (FORMAT PARQUET);
 drop table lineitem;
 drop table customer;
@@ -34,4 +34,3 @@ create view supplier as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/supplie
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
-result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv

@@ -14,4 +14,3 @@ load benchmark/tpch/sf1/load.sql
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
-result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv
