@@ -395,11 +395,12 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto table_filters = state.GetFilters();
+
 	const auto &column_ids = state.GetColumnIds();
 	auto adaptive_filter = state.GetAdaptiveFilter();
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
-			// exceeded the amount of rows to scan
+			// exceeded the amount of rows to scan 
 			return;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
@@ -488,8 +489,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							idx_t tcount = 0;
 							auto &child_filter_expression = or_filter.child_filters.at(i);
 							if (child_filter_expression->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-								auto &filter_expression = BoundComparisonExpression()
-								auto expression_executor = ExpressionExecutor(transaction.transaction->context, child_filter_expression);
+								auto context = transaction.transaction.get()->context;
+								auto expression_executor = ExpressionExecutor(&context);
 								ColumnSegment::FilterSelection(sel, result.data.at(tf_idx), *child_filter_expression,
 								                               tcount, FlatVector::Validity(result.data.at(tf_idx)));
 							}
