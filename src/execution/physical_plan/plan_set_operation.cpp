@@ -108,7 +108,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		auto &types = result->GetTypes();
 		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
 		for (idx_t i = 0; i < types.size(); i++) {
+			if (types[i].id() == LogicalTypeId::VARCHAR) {
+				auto str_collation = StringType::GetCollation(types[i]);
+				string collation;
+				if (str_collation.empty()) {
+					collation = DBConfig::GetConfig(context).options.collation;
+				} else {
+					collation = str_collation;
+				}
+				collation = StringUtil::Lower(collation);
+				if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
+					// no collation or binary collation: skip
+					groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+					continue;
+				}
+
+			}
 			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+
 		}
 		auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
 		                                                result->estimated_cardinality);

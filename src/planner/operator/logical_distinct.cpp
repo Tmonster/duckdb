@@ -5,10 +5,12 @@ namespace duckdb {
 
 LogicalDistinct::LogicalDistinct(DistinctType distinct_type)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type) {
+	auto boop = 5;
 }
 LogicalDistinct::LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type),
       distinct_targets(std::move(targets)) {
+	auto stop_here = 0;
 }
 
 string LogicalDistinct::ParamsToString() const {
