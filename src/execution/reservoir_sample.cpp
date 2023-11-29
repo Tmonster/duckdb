@@ -91,7 +91,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	if (reservoir_chunk->size() > STANDARD_VECTOR_SIZE) {
 		// get from the back
-		auto ret = make_unique<DataChunk>();
+		auto ret = make_uniq<DataChunk>();
 		auto samples_remaining = num_added_samples - STANDARD_VECTOR_SIZE;
 		auto reservoir_types = reservoir_chunk->GetTypes();
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -107,7 +107,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		return ret;
 	}
 	num_added_samples = 0;
-	return move(reservoir_chunk);
+	return std::move(reservoir_chunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
@@ -128,7 +128,7 @@ void ReservoirSample::Finalize() {
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
-	reservoir_chunk = make_unique<DataChunk>();
+	reservoir_chunk = make_uniq<DataChunk>();
 	reservoir_chunk->Initialize(allocator, input.GetTypes(), sample_count);
 	for (idx_t col_idx = 0; col_idx < reservoir_chunk->ColumnCount(); col_idx++) {
 		FlatVector::Validity(reservoir_chunk->data[col_idx]).Initialize(sample_count);
@@ -289,9 +289,9 @@ void ReservoirSamplePercentage::Finalize() {
 			}
 			new_sample->AddToReservoir(*chunk);
 		}
-		finished_samples.push_back(move(new_sample));
+		finished_samples.push_back(std::move(new_sample));
 	} else {
-		finished_samples.push_back(move(current_sample));
+		finished_samples.push_back(std::move(current_sample));
 	}
 	is_finalized = true;
 }

@@ -101,23 +101,25 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalReservoirSample::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &global_state = (SampleGlobalSinkState &)gstate;
-	auto &local_state = (SampleLocalSinkState &)lstate;
+SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
+	auto &local_state = input.local_state.Cast<SampleLocalSinkState>();
 	lock_guard<mutex> glock(global_state.lock);
-	global_state.intermediate_samples.push_back(move(local_state.sample));
+	global_state.intermediate_samples.push_back(std::move(local_state.sample));
+	return SinkCombineResultType::BLOCKED;
 }
 
-SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
-	auto &global_state = (SampleGlobalSinkState &)gstate;
+SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                   OperatorSinkFinalizeInput &input) const {
+	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 	D_ASSERT(global_state.intermediate_samples.size() >= 1);
-	auto last_sample = move(global_state.intermediate_samples.back());
+	auto last_sample = std::move(global_state.intermediate_samples.back());
 	global_state.intermediate_samples.pop_back();
 	for (auto &sample : global_state.intermediate_samples) {
 		last_sample->Merge(sample);
 	}
 	last_sample->Finalize();
-	global_state.sample = move(last_sample);
+	global_state.sample = std::move(last_sample);
 	global_state.intermediate_samples.clear();
 	return SinkFinalizeType::READY;
 }
