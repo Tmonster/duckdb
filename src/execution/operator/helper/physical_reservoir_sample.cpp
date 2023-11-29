@@ -105,8 +105,12 @@ SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 	auto &local_state = input.local_state.Cast<SampleLocalSinkState>();
 	lock_guard<mutex> glock(global_state.lock);
-	global_state.intermediate_samples.push_back(std::move(local_state.sample));
-	return SinkCombineResultType::BLOCKED;
+	// for some reason here local_state.sample doesn't have the info anymore.
+	if (local_state.sample) {
+		// check if the local state sample even did sampling.
+	}
+	global_state.intermediate_samples.push_back(std::move(global_state.sample));
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

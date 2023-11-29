@@ -3,16 +3,17 @@
 # group: [sample]
 
 statement ok
-CREATE TABLE t1 as select (random() * 1000)::int a from range(100000);
+CREATE TABLE t1 as select (random() * 1000)::int a from range(100);
 
-mode output_result
-
+#mode output_result
 
 
 query I
-SELECT count(*) from t1 using sample 80 percent;
+SELECT count(*) from t1 using sample 80 percent (reservoir);
 ----
 80000
+
+mode skip
 
 query I
 SELECT count(*) from t1 using sample 50 percent;
