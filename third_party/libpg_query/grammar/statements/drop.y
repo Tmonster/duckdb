@@ -66,26 +66,6 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *) n;
 				}
-			| DROP TYPE_P type_name_list opt_drop_behavior
-				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_TYPE;
-					n->missing_ok = false;
-					n->objects = $3;
-					n->behavior = $4;
-					n->concurrent = false;
-					$$ = (PGNode *) n;
-				}
-			| DROP TYPE_P IF_P EXISTS type_name_list opt_drop_behavior
-				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_TYPE;
-					n->missing_ok = true;
-					n->objects = $5;
-					n->behavior = $6;
-					n->concurrent = false;
-					$$ = (PGNode *) n;
-				}
 		;
 
 
@@ -94,18 +74,20 @@ drop_type_any_name:
 			| SEQUENCE								{ $$ = PG_OBJECT_SEQUENCE; }
 			| FUNCTION								{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO									{ $$ = PG_OBJECT_FUNCTION; }
-                        | MACRO TABLE                                                           { $$ = PG_OBJECT_TABLE_MACRO; }
+			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }
 			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }
 			| FOREIGN TABLE							{ $$ = PG_OBJECT_FOREIGN_TABLE; }
 			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }
 			| CONVERSION_P							{ $$ = PG_OBJECT_CONVERSION; }
+			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| STATISTICS							{ $$ = PG_OBJECT_STATISTIC_EXT; }
 			| TEXT_P SEARCH PARSER					{ $$ = PG_OBJECT_TSPARSER; }
 			| TEXT_P SEARCH DICTIONARY				{ $$ = PG_OBJECT_TSDICTIONARY; }
 			| TEXT_P SEARCH TEMPLATE				{ $$ = PG_OBJECT_TSTEMPLATE; }
 			| TEXT_P SEARCH CONFIGURATION			{ $$ = PG_OBJECT_TSCONFIGURATION; }
+			| TYPE_P								{ $$ = PG_OBJECT_TYPE; }
 		;
 
 
@@ -115,7 +97,6 @@ drop_type_name:
 			| EXTENSION								{ $$ = PG_OBJECT_EXTENSION; }
 			| FOREIGN DATA_P WRAPPER				{ $$ = PG_OBJECT_FDW; }
 			| PUBLICATION							{ $$ = PG_OBJECT_PUBLICATION; }
-			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| SERVER								{ $$ = PG_OBJECT_FOREIGN_SERVER; }
 		;
 

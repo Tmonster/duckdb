@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,16 +13,17 @@
 
 namespace duckdb {
 
-struct UUIDCacheItem : public PythonImportCacheItem {
-public:
-	~UUIDCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UUID.LoadAttribute("UUID", cache, *this);
-	}
+struct UuidCacheItem : public PythonImportCacheItem {
 
 public:
-	//! uuid.UUID
+	static constexpr const char *Name = "uuid";
+
+public:
+	UuidCacheItem() : PythonImportCacheItem("uuid"), UUID("UUID", this) {
+	}
+	~UuidCacheItem() override {
+	}
+
 	PythonImportCacheItem UUID;
 };
 

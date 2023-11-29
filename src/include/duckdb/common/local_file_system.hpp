@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,8 @@ public:
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory) override;
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;

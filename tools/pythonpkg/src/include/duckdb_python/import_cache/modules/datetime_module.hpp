@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,22 +13,49 @@
 
 namespace duckdb {
 
-struct DatetimeCacheItem : public PythonImportCacheItem {
-public:
-	~DatetimeCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		datetime.LoadAttribute("datetime", cache, *this);
-		date.LoadAttribute("date", cache, *this);
-		time.LoadAttribute("time", cache, *this);
-		timedelta.LoadAttribute("timedelta", cache, *this);
-	}
+struct DatetimeDatetimeCacheItem : public PythonImportCacheItem {
 
 public:
-	PythonImportCacheItem datetime;
-	PythonImportCacheItem date;
+	DatetimeDatetimeCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("datetime", parent), min("min", this), max("max", this) {
+	}
+	~DatetimeDatetimeCacheItem() override {
+	}
+
+	PythonImportCacheItem min;
+	PythonImportCacheItem max;
+};
+
+struct DatetimeDateCacheItem : public PythonImportCacheItem {
+
+public:
+	DatetimeDateCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("date", parent), max("max", this), min("min", this) {
+	}
+	~DatetimeDateCacheItem() override {
+	}
+
+	PythonImportCacheItem max;
+	PythonImportCacheItem min;
+};
+
+struct DatetimeCacheItem : public PythonImportCacheItem {
+
+public:
+	static constexpr const char *Name = "datetime";
+
+public:
+	DatetimeCacheItem()
+	    : PythonImportCacheItem("datetime"), date(this), time("time", this), timedelta("timedelta", this),
+	      datetime(this) {
+	}
+	~DatetimeCacheItem() override {
+	}
+
+	DatetimeDateCacheItem date;
 	PythonImportCacheItem time;
 	PythonImportCacheItem timedelta;
+	DatetimeDatetimeCacheItem datetime;
 };
 
 } // namespace duckdb

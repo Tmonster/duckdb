@@ -23,6 +23,8 @@ string StatementTypeToString(StatementType type) {
 		return "TRANSACTION";
 	case StatementType::COPY_STATEMENT:
 		return "COPY";
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return "COPY_DATABASE";
 	case StatementType::ANALYZE_STATEMENT:
 		return "ANALYZE";
 	case StatementType::VARIABLE_SET_STATEMENT:
@@ -55,6 +57,12 @@ string StatementTypeToString(StatementType type) {
 		return "EXTENSION";
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 		return "LOGICAL_PLAN";
+	case StatementType::ATTACH_STATEMENT:
+		return "ATTACH";
+	case StatementType::DETACH_STATEMENT:
+		return "DETACH";
+	case StatementType::MULTI_STATEMENT:
+		return "MULTI";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

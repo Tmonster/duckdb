@@ -29,13 +29,13 @@ public:
 			if (percentage == 0) {
 				return;
 			}
-			sample = make_unique<ReservoirSamplePercentage>(allocator, percentage, options.seed);
+			sample = make_uniq<ReservoirSamplePercentage>(allocator, percentage, options.seed);
 		} else {
 			auto size = options.sample_size.GetValue<int64_t>();
 			if (size == 0) {
 				return;
 			}
-			sample = make_unique<ReservoirSample>(allocator, size, options.seed);
+			sample = make_uniq<ReservoirSample>(allocator, size, options.seed);
 		}
 	}
 
@@ -59,17 +59,17 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SampleGlobalSinkState>(Allocator::Get(context), *options);
+	return make_uniq<SampleGlobalSinkState>(Allocator::Get(context), *options);
 }
 
 unique_ptr<LocalSinkState> PhysicalReservoirSample::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<SampleLocalSinkState>(context.client, *this, *options);
+	return make_uniq<SampleLocalSinkState>(context.client, *this, *options);
 }
 
-SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                             DataChunk &input) const {
-	auto &global_state = (SampleGlobalSinkState &)gstate;
-	auto &local_state = (SampleLocalSinkState &)lstate;
+SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSinkInput &input) const {
+	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
+	auto &local_state = input.local_state.Cast<SampleLocalSinkState>();
 
 	// if there is no local state sample, create one and increase the thread count
 	// the size of a threads sample is dependent on how many threads are already collecting samples
@@ -83,20 +83,21 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 			if (thread_percentage == 0) {
 				return SinkResultType::FINISHED;
 			}
-			local_state.sample = make_unique<ReservoirSamplePercentage>(allocator, thread_percentage, options->seed);
+			local_state.sample = make_uniq<ReservoirSamplePercentage>(allocator, thread_percentage, options->seed);
 		} else {
 			idx_t thread_size = global_state.GetSampleCountAndIncreaseThreads(options->sample_size.GetValue<idx_t>());
 			if (thread_size == 0) {
 				return SinkResultType::FINISHED;
 			}
-			local_state.sample = make_unique<ReservoirSample>(allocator, thread_size, options->seed);
+			local_state.sample = make_uniq<ReservoirSample>(allocator, thread_size, options->seed);
 		}
 	}
 	D_ASSERT(local_state.sample);
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
 	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
-	local_state.sample->AddToReservoir(input);
+	lock_guard<mutex> glock(global_state.lock);
+	global_state.sample->AddToReservoir(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -124,17 +125,19 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate) const {
-	auto &sink = (SampleGlobalSinkState &)*this->sink_state;
+SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSourceInput &input) const {
+	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
 	if (!sink.sample) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto sample_chunk = sink.sample->GetChunk();
 	if (!sample_chunk) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	chunk.Move(*sample_chunk);
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalReservoirSample::ParamsToString() const {

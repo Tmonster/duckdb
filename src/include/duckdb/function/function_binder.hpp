@@ -43,7 +43,8 @@ public:
 	DUCKDB_API idx_t BindFunction(const string &name, TableFunctionSet &functions,
 	                              vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info, string &error);
+	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
+	                              string &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, string &error,
@@ -59,13 +60,10 @@ public:
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
 	BindAggregateFunction(AggregateFunction bound_function, vector<unique_ptr<Expression>> children,
 	                      unique_ptr<Expression> filter = nullptr,
-	                      AggregateType aggr_type = AggregateType::NON_DISTINCT,
-	                      unique_ptr<BoundOrderModifier> order_bys = nullptr);
+	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
-	DUCKDB_API unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
-	                                                        vector<unique_ptr<Expression>> &children,
-	                                                        unique_ptr<FunctionData> bind_info,
-	                                                        unique_ptr<BoundOrderModifier> order_bys);
+	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
+	                                           const vector<unique_ptr<Expression>> &groups);
 
 private:
 	//! Cast a set of expressions to the arguments of this function

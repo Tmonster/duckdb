@@ -307,7 +307,7 @@ typedef struct PGFuncCall {
 typedef struct PGAStar {
 	PGNodeTag type;
 	char *relation;       /* relation name (optional) */
-	char *regex;          /* optional: REGEX to select columns */
+	PGNode *expr;         /* optional: the expression (regex or list) to select columns */
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
@@ -325,6 +325,7 @@ typedef struct PGAIndices {
 	bool is_slice; /* true if slice (i.e., colon present) */
 	PGNode *lidx;  /* slice lower bound, if any */
 	PGNode *uidx;  /* subscript, or slice upper bound if any */
+	PGNode *step;  /* slice step, if any */
 } PGAIndices;
 
 /*
@@ -437,27 +438,37 @@ typedef struct PGWindowDef {
  * which were defaulted; the correct behavioral bits must be set either way.
  * The START_foo and END_foo options must come in pairs of adjacent bits for
  * the convenience of gram.y, even though some of them are useless/invalid.
- * We will need more bits (and fields) to cover the full SQL:2008 option set.
  */
-#define FRAMEOPTION_NONDEFAULT 0x00001 /* any specified? */
-#define FRAMEOPTION_RANGE 0x00002 /* RANGE behavior */
-#define FRAMEOPTION_ROWS 0x00004 /* ROWS behavior */
-#define FRAMEOPTION_BETWEEN 0x00008 /* BETWEEN given? */
-#define FRAMEOPTION_START_UNBOUNDED_PRECEDING 0x00010 /* start is U. P. */
-#define FRAMEOPTION_END_UNBOUNDED_PRECEDING 0x00020 /* (disallowed) */
-#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING 0x00040 /* (disallowed) */
-#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING 0x00080 /* end is U. F. */
-#define FRAMEOPTION_START_CURRENT_ROW 0x00100 /* start is C. R. */
-#define FRAMEOPTION_END_CURRENT_ROW 0x00200 /* end is C. R. */
-#define FRAMEOPTION_START_VALUE_PRECEDING 0x00400 /* start is V. P. */
-#define FRAMEOPTION_END_VALUE_PRECEDING 0x00800 /* end is V. P. */
-#define FRAMEOPTION_START_VALUE_FOLLOWING 0x01000 /* start is V. F. */
-#define FRAMEOPTION_END_VALUE_FOLLOWING 0x02000 /* end is V. F. */
+#define FRAMEOPTION_NONDEFAULT					0x00001 /* any specified? */
+#define FRAMEOPTION_RANGE						0x00002 /* RANGE behavior */
+#define FRAMEOPTION_ROWS						0x00004 /* ROWS behavior */
+#define FRAMEOPTION_GROUPS						0x00008 /* GROUPS behavior */
+#define FRAMEOPTION_BETWEEN						0x00010 /* BETWEEN given? */
+#define FRAMEOPTION_START_UNBOUNDED_PRECEDING	0x00020 /* start is U. P. */
+#define FRAMEOPTION_END_UNBOUNDED_PRECEDING		0x00040 /* (disallowed) */
+#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING	0x00080 /* (disallowed) */
+#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING		0x00100 /* end is U. F. */
+#define FRAMEOPTION_START_CURRENT_ROW			0x00200 /* start is C. R. */
+#define FRAMEOPTION_END_CURRENT_ROW				0x00400 /* end is C. R. */
+#define FRAMEOPTION_START_OFFSET_PRECEDING		0x00800 /* start is O. P. */
+#define FRAMEOPTION_END_OFFSET_PRECEDING		0x01000 /* end is O. P. */
+#define FRAMEOPTION_START_OFFSET_FOLLOWING		0x02000 /* start is O. F. */
+#define FRAMEOPTION_END_OFFSET_FOLLOWING		0x04000 /* end is O. F. */
+#define FRAMEOPTION_EXCLUDE_CURRENT_ROW			0x08000 /* omit C.R. */
+#define FRAMEOPTION_EXCLUDE_GROUP				0x10000 /* omit C.R. & peers */
+#define FRAMEOPTION_EXCLUDE_TIES				0x20000 /* omit C.R.'s peers */
 
-#define FRAMEOPTION_START_VALUE (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)
-#define FRAMEOPTION_END_VALUE (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)
+#define FRAMEOPTION_START_OFFSET \
+	(FRAMEOPTION_START_OFFSET_PRECEDING | FRAMEOPTION_START_OFFSET_FOLLOWING)
+#define FRAMEOPTION_END_OFFSET \
+	(FRAMEOPTION_END_OFFSET_PRECEDING | FRAMEOPTION_END_OFFSET_FOLLOWING)
+#define FRAMEOPTION_EXCLUSION \
+	(FRAMEOPTION_EXCLUDE_CURRENT_ROW | FRAMEOPTION_EXCLUDE_GROUP | \
+	 FRAMEOPTION_EXCLUDE_TIES)
 
-#define FRAMEOPTION_DEFAULTS (FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | FRAMEOPTION_END_CURRENT_ROW)
+#define FRAMEOPTION_DEFAULTS \
+	(FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | \
+	 FRAMEOPTION_END_CURRENT_ROW)
 
 /*
  * PGRangeSubselect - subquery appearing in a FROM clause
@@ -1045,11 +1056,11 @@ typedef struct PGInferClause {
  */
 typedef struct PGOnConflictClause {
 	PGNodeTag type;
-	PGOnConflictAction action; /* DO NOTHING or UPDATE? */
-	PGInferClause *infer;      /* Optional index inference clause */
-	PGList *targetList;        /* the target list (of PGResTarget) */
-	PGNode *whereClause;       /* qualifications */
-	int location;              /* token location, or -1 if unknown */
+	PGOnConflictAction action;               /* DO NOTHING or UPDATE? */
+	PGInferClause *infer;                    /* Optional index inference clause */
+	PGList *targetList;                      /* the target list (of PGResTarget) */
+	PGNode *whereClause;                     /* qualifications */
+	int location;                            /* token location, or -1 if unknown */
 } PGOnConflictClause;
 
 /*
@@ -1058,10 +1069,19 @@ typedef struct PGOnConflictClause {
  *
  * We don't currently support the SEARCH or CYCLE clause.
  */
+
+typedef enum PGCTEMaterialize
+{
+	PGCTEMaterializeDefault,		/* no option specified */
+	PGCTEMaterializeAlways,		/* MATERIALIZED */
+	PGCTEMaterializeNever			/* NOT MATERIALIZED */
+} PGCTEMaterialize;
+
 typedef struct PGCommonTableExpr {
 	PGNodeTag type;
 	char *ctename;         /* query name (never qualified) */
 	PGList *aliascolnames; /* optional list of column names */
+	PGCTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, PGQuery afterwards: */
 	PGNode *ctequery; /* the CTE's subquery */
 	int location;     /* token location, or -1 if unknown */
@@ -1125,13 +1145,15 @@ typedef struct PGRawStmt {
  */
 typedef struct PGInsertStmt {
 	PGNodeTag type;
-	PGRangeVar *relation;                 /* relation to insert into */
-	PGList *cols;                         /* optional: names of the target columns */
-	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
-	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
-	PGList *returningList;                /* list of expressions to return */
-	PGWithClause *withClause;             /* WITH clause */
-	PGOverridingKind override;            /* OVERRIDING clause */
+	PGRangeVar *relation;                    /* relation to insert into */
+	PGList *cols;                            /* optional: names of the target columns */
+	PGNode *selectStmt;                      /* the source SELECT/VALUES, or NULL */
+	PGOnConflictActionAlias onConflictAlias; /* the (optional) shorthand provided for the onConflictClause */
+	PGOnConflictClause *onConflictClause;    /* ON CONFLICT clause */
+	PGList *returningList;                   /* list of expressions to return */
+	PGWithClause *withClause;                /* WITH clause */
+	PGOverridingKind override;               /* OVERRIDING clause */
+	PGInsertColumnOrder insert_column_order; /* INSERT BY NAME or INSERT BY POSITION */
 } PGInsertStmt;
 
 /* ----------------------
@@ -1160,6 +1182,39 @@ typedef struct PGUpdateStmt {
 	PGList *returningList;    /* list of expressions to return */
 	PGWithClause *withClause; /* WITH clause */
 } PGUpdateStmt;
+
+/* ----------------------
+ *		Pivot Expression
+ * ----------------------
+ */
+typedef struct PGPivot {
+	PGNodeTag type;
+	PGList *pivot_columns;  /* The column names to pivot on */
+	PGList *unpivot_columns;/* The column names to unpivot */
+	PGList *pivot_value;    /* The set of pivot values */
+	PGNode *subquery;       /* Subquery to fetch valid pivot values (if any) */
+	char *pivot_enum;       /* The enum to fetch the unique values from */
+} PGPivot;
+
+typedef struct PGPivotExpr {
+	PGNodeTag type;
+	PGNode *source;      /* the source subtree */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
+	PGList *pivots;      /* The set of pivot values */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
+	PGAlias *alias;      /* table alias & optional column aliases */
+	bool include_nulls;  /* Whether or not to include NULL values (UNPIVOT only */
+} PGPivotExpr;
+
+typedef struct PGPivotStmt {
+	PGNodeTag type;
+	PGNode *source;      /* The source to pivot */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
+	PGList *columns;     /* The set of columns to pivot over */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
+} PGPivotStmt;
 
 /* ----------------------
  *		Select Statement
@@ -1202,6 +1257,9 @@ typedef struct PGSelectStmt {
 	 * analysis to reject that where not valid.
 	 */
 	PGList *valuesLists; /* untransformed list of expression lists */
+
+	/* When representing a pivot statement, all values are NULL besides the pivot field */
+	PGPivotStmt *pivot;       /* PIVOT statement */
 
 	/*
 	 * These fields are used in both "leaf" SelectStmts and upper-level
@@ -1326,6 +1384,7 @@ typedef enum PGObjectType {
  */
 typedef struct PGCreateSchemaStmt {
 	PGNodeTag type;
+	char *catalogname;                    /* the name of the catalog in which to create the schema */
 	char *schemaname;                     /* the name of the schema to create */
 	PGList *schemaElts;                   /* schema components (list of parsenodes) */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
@@ -1823,6 +1882,7 @@ typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LO
 typedef struct PGLoadStmt {
 	PGNodeTag type;
 	const char *filename; /* file to load */
+	const char *repository; /* optionally, the repository to load from */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
 
@@ -1895,6 +1955,7 @@ typedef struct PGCreateTableAsStmt {
 typedef struct PGCheckPointStmt {
 	PGNodeTag type;
 	bool force;
+	char *name;
 } PGCheckPointStmt;
 
 /* ----------------------
@@ -1963,6 +2024,7 @@ typedef struct PGCallStmt {
 
 typedef struct PGExportStmt {
 	PGNodeTag type;
+	char *database;       /* database name */
 	char *filename;       /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGExportStmt;
@@ -1971,6 +2033,17 @@ typedef struct PGImportStmt {
 	PGNodeTag type;
 	char *filename;       /* filename */
 } PGImportStmt;
+
+/* ----------------------
+ *		Copy Database Statement
+ * ----------------------
+ */
+typedef struct PGCopyDatabaseStmt {
+	PGNodeTag type;
+	const char *from_database;
+	const char *to_database;
+	const char *copy_database_flag;
+} PGCopyDatabaseStmt;
 
 /* ----------------------
  *		Interval Constant
@@ -2046,14 +2119,48 @@ typedef struct PGCreateTypeStmt
 {
 	PGNodeTag		type;
 	PGNewTypeKind	kind;
-	PGList	   *typeName;		/* qualified name (list of Value strings) */
+	PGRangeVar	   *typeName;	/* qualified name (list of Value strings) */
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
 } PGCreateTypeStmt;
 
+/* ----------------------
+ *		Attach Statement
+ * ----------------------
+ */
 
+typedef struct PGAttachStmt
+{
+	PGNodeTag		type;
+	char *path;			/* The file path of the to-be-attached database */
+	char *name;			/* The name of the attached database */
+	PGList *options;      /* PGList of PGDefElem nodes */
+    PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on attach conflict */
+} PGAttachStmt;
 
+/* ----------------------
+ *		Dettach Statement
+ * ----------------------
+ */
+
+typedef struct PGDetachStmt
+{
+	PGNodeTag		type;
+	char *db_name;         /* list of names of attached databases */
+	bool missing_ok;
+} PGDetachStmt;
+
+/* ----------------------
+ *		Use Statement
+ * ----------------------
+ */
+
+typedef struct PGUseStmt {
+	PGNodeTag type;
+	PGRangeVar *name;    /* variable to be set */
+} PGUseStmt;
 
 
 }

@@ -1,7 +1,11 @@
+add_subdirectory(union)
+
 add_library_unity(
   duckdb_func_cast
   OBJECT
+  array_casts.cpp
   blob_cast.cpp
+  bit_cast.cpp
   cast_function_set.cpp
   decimal_cast.cpp
   default_casts.cpp

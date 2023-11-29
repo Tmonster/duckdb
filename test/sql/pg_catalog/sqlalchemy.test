@@ -29,7 +29,7 @@ CREATE TABLE integral_values (
 
 # has_schema
 query I
-select nspname from pg_namespace " "where lower(nspname)='main'
+select distinct nspname from pg_namespace " "where lower(nspname)='main'
 ----
 main
 
@@ -158,7 +158,7 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'myschema' AND c.relname = 'v1'
 AND c.relkind IN ('v', 'm')
 ----
-CREATE VIEW myschema.v1 AS SELECT 42;
+CREATE VIEW myschema.v1 ("42") AS SELECT 42;
 
 # get_columns
 query IIII
@@ -354,6 +354,7 @@ FROM pg_catalog.pg_type t
 		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
 		LEFT JOIN pg_catalog.pg_enum e ON t.oid = e.enumtypid
 WHERE t.typtype = 'e'
+ORDER BY e.enumsortorder
 ----
 greeting	true	main	hi
 greeting	true	main	bonjour

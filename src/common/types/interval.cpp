@@ -11,6 +11,9 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {
@@ -36,6 +39,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result, strin
 	bool negative;
 	bool found_any = false;
 	int64_t number;
+	int64_t fraction;
 	DatePartSpecifier specifier;
 	string specifier_str;
 
@@ -100,8 +104,19 @@ interval_parse_number:
 			// finished the number, parse it from the string
 			string_t nr_string(str + start_pos, pos - start_pos);
 			number = Cast::Operation<string_t, int64_t>(nr_string);
+			fraction = 0;
+			if (c == '.') {
+				// we expect some microseconds
+				int32_t mult = 100000;
+				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
+					if (mult > 0) {
+						fraction += (str[pos] - '0') * mult;
+					}
+				}
+			}
 			if (negative) {
 				number = -number;
+				fraction = -fraction;
 			}
 			goto interval_parse_identifier;
 		}
@@ -116,6 +131,9 @@ interval_parse_time : {
 	}
 	result.micros += time.micros;
 	found_any = true;
+	if (negative) {
+		result.micros = -result.micros;
+	}
 	goto end_of_string;
 }
 interval_parse_identifier:
@@ -140,6 +158,24 @@ interval_parse_identifier:
 		}
 	}
 	specifier_str = string(str + start_pos, pos - start_pos);
+
+	// Special case SS[.FFFFFF] - implied SECONDS/MICROSECONDS
+	if (specifier_str.empty() && !found_any) {
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
+		IntervalTryAddition<int64_t>(result.micros, fraction, 1);
+		found_any = true;
+		// parse any trailing whitespace
+		for (; pos < len; pos++) {
+			char c = str[pos];
+			if (c == ' ' || c == '\t' || c == '\n') {
+				continue;
+			} else {
+				return false;
+			}
+		}
+		goto end_of_string;
+	}
+
 	if (!TryGetDatePartSpecifier(specifier_str, specifier)) {
 		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str),
 		                             error_message);
@@ -395,47 +431,6 @@ interval_t Interval::FromMicro(int64_t delta_us) {
 	result.micros = delta_us % Interval::MICROS_PER_DAY;
 
 	return result;
-}
-
-static void NormalizeIntervalEntries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
-	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
-	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
-	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
-	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
-
-	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
-	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
-
-	months = input.months + extra_months_d + extra_months_micros;
-	days = input.days + extra_days_micros;
-	micros = input.micros;
-}
-
-bool Interval::Equals(interval_t left, interval_t right) {
-	return left.months == right.months && left.days == right.days && left.micros == right.micros;
-}
-
-bool Interval::GreaterThan(interval_t left, interval_t right) {
-	int64_t lmonths, ldays, lmicros;
-	int64_t rmonths, rdays, rmicros;
-	NormalizeIntervalEntries(left, lmonths, ldays, lmicros);
-	NormalizeIntervalEntries(right, rmonths, rdays, rmicros);
-
-	if (lmonths > rmonths) {
-		return true;
-	} else if (lmonths < rmonths) {
-		return false;
-	}
-	if (ldays > rdays) {
-		return true;
-	} else if (ldays < rdays) {
-		return false;
-	}
-	return lmicros > rmicros;
-}
-
-bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
-	return GreaterThan(left, right) || Equals(left, right);
 }
 
 interval_t Interval::Invert(interval_t interval) {

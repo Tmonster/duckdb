@@ -11,6 +11,8 @@
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
+class DuckTableEntry;
+class TableStatistics;
 
 //! The table data writer is responsible for writing the data of a table to
 //! storage.
@@ -25,36 +27,34 @@ public:
 	virtual ~TableDataWriter();
 
 public:
-	void WriteTableData();
+	void WriteTableData(Serializer &metadata_serializer);
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) = 0;
+	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer);
 
 protected:
-	TableCatalogEntry &table;
-	// Pointers to the start of each row group.
+	DuckTableEntry &table;
+	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
 public:
 	SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
-	                          MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
+	                          MetadataWriter &table_data_writer);
 
 public:
-	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) override;
-	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
+	void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) override;
+	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;
-	// Writes the actual table data
-	MetaBlockWriter &table_data_writer;
-	// Writes the metadata of the table
-	MetaBlockWriter &meta_data_writer;
+	//! Writes the actual table data
+	MetadataWriter &table_data_writer;
 };
 
 } // namespace duckdb

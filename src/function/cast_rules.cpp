@@ -23,6 +23,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
 		return 160;
 	default:
 		return 110;
@@ -207,6 +208,42 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// if aliases are different, an implicit cast is not possible
 		return -1;
 	}
+	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
+		// Lists can be cast if their child types can be cast
+		auto child_cost = ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
+		if (child_cost >= 100) {
+			// subtract one from the cost because we prefer LIST[X] -> LIST[VARCHAR] over LIST[X] -> VARCHAR
+			child_cost--;
+		}
+		return child_cost;
+	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::ARRAY) {
+		// Arrays can be cast if their child types can be cast and the source and target has the same size
+		// or the target type has a unknown (any) size.
+		auto from_size = ArrayType::GetSize(from);
+		auto to_size = ArrayType::GetSize(to);
+		auto to_is_any_size = ArrayType::IsAnySize(to);
+		if (from_size == to_size || to_is_any_size) {
+			auto child_cost = ImplicitCast(ArrayType::GetChildType(from), ArrayType::GetChildType(to));
+			if (child_cost >= 100) {
+				// subtract one from the cost because we prefer ARRAY[X] -> ARRAY[VARCHAR] over ARRAY[X] -> VARCHAR
+				child_cost--;
+			}
+			return child_cost;
+		}
+		return -1; // Not possible if the sizes are different
+	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::LIST) {
+		// Arrays can be cast to lists for the cost of casting the child type
+		// add 1 because we prefer ARRAY->ARRAY casts over ARRAY->LIST casts
+		return ImplicitCast(ArrayType::GetChildType(from), ListType::GetChildType(to)) + 1;
+	}
+	if (from.id() == LogicalTypeId::LIST && (to.id() == LogicalTypeId::ARRAY && !ArrayType::IsAnySize(to))) {
+		// Lists can be cast to arrays for the cost of casting the child type, if the target size is known
+		// there is no way for us to resolve the size at bind-time without inspecting the list values.
+		// TODO: if we can access the expression we could resolve the size if the list is constant.
+		return ImplicitCast(ListType::GetChildType(from), ArrayType::GetChildType(to));
+	}
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
 		return 0;
@@ -215,18 +252,9 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// Implicit cast not allowed from BLOB to VARCHAR
 		return -1;
 	}
-	if ((from.id() == LogicalTypeId::VARCHAR && to.id() == LogicalTypeId::JSON) ||
-	    (from.id() == LogicalTypeId::JSON && to.id() == LogicalTypeId::VARCHAR)) {
-		// Virtually no cost, just a different tag
-		return 1;
-	}
-	if (to.id() == LogicalTypeId::VARCHAR || to.id() == LogicalTypeId::JSON) {
-		// everything can be cast to VARCHAR/JSON, but this cast has a high cost
+	if (to.id() == LogicalTypeId::VARCHAR) {
+		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
-	}
-	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
-		// Lists can be cast if their child types can be cast
-		return ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
 	}
 
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {

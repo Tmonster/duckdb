@@ -2,10 +2,13 @@ add_library_unity(
   duckdb_transformer_statement
   OBJECT
   transform_alter_table.cpp
+  transform_attach.cpp
+  transform_detach.cpp
   transform_call.cpp
   transform_checkpoint.cpp
   transform_create_function.cpp
   transform_copy.cpp
+  transform_copy_database.cpp
   transform_create_table_as.cpp
   transform_create_index.cpp
   transform_create_schema.cpp
@@ -24,11 +27,14 @@ add_library_unity(
   transform_select.cpp
   transform_select_node.cpp
   transform_set.cpp
+  transform_pivot_stmt.cpp
   transform_prepare.cpp
   transform_show.cpp
   transform_show_select.cpp
   transform_transaction.cpp
   transform_update.cpp
+  transform_upsert.cpp
+  transform_use.cpp
   transform_create_sequence.cpp
   transform_vacuum.cpp
   transform_alter_sequence.cpp)

@@ -133,6 +133,7 @@ enum class ExpressionType : uint8_t {
 	COLUMN_REF = 203,
 	FUNCTION_REF = 204,
 	TABLE_REF = 205,
+	LAMBDA_REF = 206,
 
 	// -----------------------------
 	// Miscellaneous
@@ -143,7 +144,8 @@ enum class ExpressionType : uint8_t {
 	BOUND_UNNEST = 229,
 	COLLATE = 230,
 	LAMBDA = 231,
-	POSITIONAL_REFERENCE = 232
+	POSITIONAL_REFERENCE = 232,
+	BOUND_LAMBDA_REF = 233
 };
 
 //===--------------------------------------------------------------------===//
@@ -172,6 +174,7 @@ enum class ExpressionClass : uint8_t {
 	LAMBDA = 17,
 	POSITIONAL_REFERENCE = 18,
 	BETWEEN = 19,
+	LAMBDA_REF = 20,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//
@@ -192,6 +195,7 @@ enum class ExpressionClass : uint8_t {
 	BOUND_BETWEEN = 39,
 	BOUND_UNNEST = 40,
 	BOUND_LAMBDA = 41,
+	BOUND_LAMBDA_REF = 42,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
@@ -203,11 +207,10 @@ string ExpressionTypeToOperator(ExpressionType type);
 
 // Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 ExpressionType OperatorToExpressionType(const string &op);
-
 //! Negate a comparison expression, turning e.g. = into !=, or < into >=
-ExpressionType NegateComparisionExpression(ExpressionType type);
+ExpressionType NegateComparisonExpression(ExpressionType type);
 //! Flip a comparison expression, turning e.g. < into >, or = into =
-ExpressionType FlipComparisionExpression(ExpressionType type);
+ExpressionType FlipComparisonExpression(ExpressionType type);
 
 DUCKDB_API string ExpressionClassToString(ExpressionClass type);
 

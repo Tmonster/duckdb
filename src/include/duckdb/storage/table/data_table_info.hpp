@@ -17,27 +17,25 @@ class DatabaseInstance;
 class TableIOManager;
 
 struct DataTableInfo {
-	DataTableInfo(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table)
-	    : db(db), table_io_manager(move(table_io_manager_p)), cardinality(0), schema(move(schema)), table(move(table)) {
-	}
+	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table);
 
 	//! The database instance of the table
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
 	atomic<idx_t> cardinality;
-	// schema of the table
+	//! The schema of the table
 	string schema;
-	// name of the table
+	//! The name of the table
 	string table;
-
+	//! The physical list of indexes of this table
 	TableIndexList indexes;
+	//! Index storage information of the indexes created by this table
+	vector<IndexStorageInfo> index_storage_infos;
 
-	bool IsTemporary() {
-		return schema == TEMP_SCHEMA;
-	}
+	bool IsTemporary() const;
 };
 
 } // namespace duckdb

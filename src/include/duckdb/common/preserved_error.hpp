@@ -18,8 +18,7 @@ public:
 	//! Not initialized, default constructor
 	DUCKDB_API PreservedError();
 	//! From std::exception
-	PreservedError(const std::exception &ex)
-	    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(ex.what())) {
+	PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
 	}
 	//! From a raw string
 	DUCKDB_API explicit PreservedError(const string &raw_message);
@@ -38,6 +37,9 @@ public:
 	//! Let's us do things like 'if (error)'
 	DUCKDB_API operator bool() const;
 	DUCKDB_API bool operator==(const PreservedError &other) const;
+	const shared_ptr<Exception> &GetError() {
+		return exception_instance;
+	}
 
 private:
 	//! Whether this PreservedError contains an exception or not
@@ -48,6 +50,7 @@ private:
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
+	std::shared_ptr<Exception> exception_instance;
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);

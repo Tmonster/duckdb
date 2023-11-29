@@ -22,9 +22,9 @@ class SelectNode;
 class OrderBinder {
 public:
 	OrderBinder(vector<Binder *> binders, idx_t projection_index, case_insensitive_map_t<idx_t> &alias_map,
-	            expression_map_t<idx_t> &projection_map, idx_t max_count);
+	            parsed_expression_map_t<idx_t> &projection_map, idx_t max_count);
 	OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
-	            case_insensitive_map_t<idx_t> &alias_map, expression_map_t<idx_t> &projection_map);
+	            case_insensitive_map_t<idx_t> &alias_map, parsed_expression_map_t<idx_t> &projection_map);
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
@@ -32,14 +32,18 @@ public:
 	idx_t MaxCount() const {
 		return max_count;
 	}
-
 	bool HasExtraList() const {
 		return extra_list;
 	}
+	const vector<Binder *> &GetBinders() const {
+		return binders;
+	}
+
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
 private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index,
+	                                                 const LogicalType &logical_type);
 	unique_ptr<Expression> BindConstant(ParsedExpression &expr, const Value &val);
 
 private:
@@ -48,7 +52,7 @@ private:
 	idx_t max_count;
 	vector<unique_ptr<ParsedExpression>> *extra_list;
 	case_insensitive_map_t<idx_t> &alias_map;
-	expression_map_t<idx_t> &projection_map;
+	parsed_expression_map_t<idx_t> &projection_map;
 };
 
 } // namespace duckdb
