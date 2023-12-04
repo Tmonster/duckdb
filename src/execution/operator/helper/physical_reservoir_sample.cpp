@@ -108,17 +108,38 @@ SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context
 	return SinkCombineResultType::FINISHED;
 }
 
+
+static void PrintSampleCount(vector<unique_ptr<BlockingSample>> &samples) {
+	idx_t total_count = 0;
+	for (auto &sample : samples) {
+		total_count += sample->get_sample_count();
+	}
+	std::cout << "samples in reservoir is " << total_count << std::endl;
+}
+
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    OperatorSinkFinalizeInput &input) const {
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 	D_ASSERT(global_state.intermediate_samples.size() >= 1);
-	auto last_sample = std::move(global_state.intermediate_samples.back());
+//	PrintSampleCount(global_state.intermediate_samples);
+
+	auto ls = std::move(global_state.intermediate_samples.back());
+	auto &percentage_last_sample = ls->Cast<ReservoirSamplePercentage>();
 	global_state.intermediate_samples.pop_back();
+
+	// merge to the rest .
 	for (auto &sample : global_state.intermediate_samples) {
-		last_sample->Merge(sample);
+		// combine the unfinished samples
+		auto &intermediate_percentage_sample = sample->Cast<ReservoirSamplePercentage>();
+
+		while (!intermediate_percentage_sample.finished_samples.empty()) {
+			percentage_last_sample.finished_samples.push_back(std::move(intermediate_percentage_sample.finished_samples.get(0)));
+			intermediate_percentage_sample.finished_samples.erase(intermediate_percentage_sample.finished_samples.begin());
+		}
+		percentage_last_sample.MergeUnfinishedSamples(sample);
 	}
-	last_sample->Finalize();
-	global_state.sample = std::move(last_sample);
+	percentage_last_sample.Finalize();
+	global_state.sample = std::move(ls);
 	global_state.intermediate_samples.clear();
 	return SinkFinalizeType::READY;
 }

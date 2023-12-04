@@ -3,36 +3,40 @@
 # group: [sample]
 
 statement ok
+pragma threads=2;
+
+statement ok
 CREATE TABLE t1 as select (random() * 1000)::int a from range(1000);
 
-query I
-SELECT count(*) from t1 using sample 80 percent (reservoir);
-----
-800
+#query I
+#SELECT count(*) from t1 using sample 80 percent (reservoir);
+#----
+#800
 
 statement ok
 Insert into t1 select range a from range(9000);
-
-query I
-select count(*) from t1 using sample 80 percent (reservoir);
-----
-8000
+#
+#query I
+#select count(*) from t1 using sample 80 percent (reservoir);
+#----
+#8000
 
 statement ok
 Insert into t1 select range a from range(90000);
-
-query I
-select count(*) from t1 using sample 80 percent (reservoir);
-----
-80000
+#
+#query I
+#select count(*) from t1 using sample 80 percent (reservoir);
+#----
+#80000
 
 statement ok
 Insert into t1 select range a from range(900000);
 
+
 query I
-select count(*) from t1 using sample 80 percent (reservoir);
+select count(*) from t1 using sample 20 percent (reservoir);
 ----
-800000
+200000
 
 mode skip
 

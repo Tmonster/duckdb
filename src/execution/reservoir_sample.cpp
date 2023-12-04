@@ -7,10 +7,12 @@ namespace duckdb {
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count),
       reservoir_initialized(false) {
+	type = ReservoirSamplingType::RESERVOIR_SAMPLE;
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
+		// sample count is 0, means no samples were requested
 		return;
 	}
 	base_reservoir_sample.num_entries_seen_total += input.size();
@@ -42,6 +44,11 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		remaining -= offset;
 		base_offset += offset;
 	}
+}
+
+void ReservoirSample::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
+	auto &reservoir_sample = other->Cast<ReservoirSample>();
+	reservoir_sample.Finalize();
 }
 
 void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
@@ -120,8 +127,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	reservoir_chunk->SetCardinality(samples_remaining);
 	num_added_samples = 0;
 	return ret;
-//	num_added_samples = 0;
-//	return std::move(reservoir_chunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
@@ -200,8 +205,22 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
       is_finalized(false) {
+	type = ReservoirSamplingType::RESERVOIR_SAMPLE_PERCENTAGE;
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+}
+
+void ReservoirSamplePercentage::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
+	auto &percentage_sample = other->Cast<ReservoirSamplePercentage>();
+	auto actual_seen = percentage_sample.current_count;
+	auto in_sample = percentage_sample.current_sample->num_added_samples;
+	auto difference = actual_seen - in_sample;
+	auto chunk = other->GetChunk();
+	while (chunk) {
+		AddToReservoir(*chunk);
+		chunk = other->GetChunk();
+	}
+	current_count += difference;
 }
 
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
@@ -241,11 +260,12 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		if (append_to_next_sample > 0) {
 			// slice the input for the remainder
 			SelectionVector sel(append_to_next_sample);
-			for (idx_t i = 0; i < append_to_next_sample; i++) {
-				sel.set_index(i, append_to_current_sample_count + i);
+			for (idx_t i = append_to_current_sample_count; i < append_to_next_sample + append_to_current_sample_count; i++) {
+				sel.set_index(i - append_to_current_sample_count, i);
 			}
 			input.Slice(sel, append_to_next_sample);
 		}
+		std::cout << "pushing back a new finished sample" << std::endl;
 		// now our first sample is filled: append it to the set of finished samples
 		finished_samples.push_back(std::move(current_sample));
 
@@ -261,6 +281,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		current_sample->AddToReservoir(input);
 	}
 }
+
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	if (!is_finalized) {
