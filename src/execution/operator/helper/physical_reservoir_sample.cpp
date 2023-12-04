@@ -95,9 +95,8 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChun
 	D_ASSERT(local_state.sample);
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
-	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
-	lock_guard<mutex> glock(global_state.lock);
-	global_state.sample->AddToReservoir(chunk);
+	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling;
+	local_state.sample->AddToReservoir(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -105,11 +104,7 @@ SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 	auto &local_state = input.local_state.Cast<SampleLocalSinkState>();
 	lock_guard<mutex> glock(global_state.lock);
-	// for some reason here local_state.sample doesn't have the info anymore.
-	if (local_state.sample) {
-		// check if the local state sample even did sampling.
-	}
-	global_state.intermediate_samples.push_back(std::move(global_state.sample));
+	global_state.intermediate_samples.push_back(std::move(local_state.sample));
 	return SinkCombineResultType::FINISHED;
 }
 

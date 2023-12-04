@@ -105,8 +105,23 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		num_added_samples = samples_remaining;
 		return ret;
 	}
+	// TODO: Why do I need to put another selection vector over this one?
+	auto ret = make_uniq<DataChunk>();
+	auto samples_remaining = 0;
+	auto reservoir_types = reservoir_chunk->GetTypes();
+	SelectionVector sel(num_added_samples);
+	for (idx_t i = 0; i < num_added_samples; i++) {
+		sel.set_index(i, i);
+	}
+	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), num_added_samples);
+	reservoir_chunk->Slice(*ret, sel, num_added_samples);
+	ret->SetCardinality(num_added_samples);
+	// reduce capacity and cardinality of the sample data chunk
+	reservoir_chunk->SetCardinality(samples_remaining);
 	num_added_samples = 0;
-	return std::move(reservoir_chunk);
+	return ret;
+//	num_added_samples = 0;
+//	return std::move(reservoir_chunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
@@ -193,9 +208,6 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
 	//! We are now merging all the samples. 80% of every sample should equal 80%
 	//! of all rows so we set sample percentage to 1, which will means every tuple
 	//! in the added chunks will be added
-	if (!is_finalized) {
-		Finalize();
-	}
 	sample_percentage = 1;
 	auto chunk = other->GetChunk();
 	while (chunk) {
@@ -292,6 +304,8 @@ void ReservoirSamplePercentage::Finalize() {
 	} else {
 		finished_samples.push_back(std::move(current_sample));
 	}
+	// when finalizing, current_sample is null. All samples are now in finished samples.
+	current_sample = nullptr;
 	is_finalized = true;
 }
 
