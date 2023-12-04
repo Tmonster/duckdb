@@ -81,7 +81,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
 		replaced_element_count++;
 	}
-//	std::cout << "replaced_element_count = " << replaced_element_count << ", percetage = " << double(replaced_element_count) / (double) base_reservoir_sample.num_entries_seen_total << std::endl;
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
@@ -111,7 +110,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
-	std::cout << "replacting element" << std::endl;
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
@@ -125,7 +123,6 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 }
 
 void ReservoirSample::Finalize() {
-	std::cout << "Finalizing reservoir sample" << std::endl;
 	return;
 }
 
@@ -196,7 +193,6 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
 	//! We are now merging all the samples. 80% of every sample should equal 80%
 	//! of all rows so we set sample percentage to 1, which will means every tuple
 	//! in the added chunks will be added
-	std::cout << "merging percentage" << std::endl;
 	if (!is_finalized) {
 		Finalize();
 	}
@@ -209,7 +205,6 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
-	std::cout << "adding to percentage" << std::endl;
 	base_reservoir_sample.num_entries_seen_total += input.size();
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
 		// we don't have enough space in our current reservoir
@@ -263,13 +258,11 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 		auto &front = finished_samples.front();
 		auto chunk = front->GetChunk();
 		if (chunk && chunk->size() > 0) {
-			std::cout << "ReservoirSamplePercentage::GetChunk out" << std::endl;
 			return chunk;
 		}
 		// move to the next sample
 		finished_samples.erase(finished_samples.begin());
 	}
-	std::cout << "ReservoirSamplePercentage::GetChunk out 2" << std::endl;
 	return nullptr;
 }
 
