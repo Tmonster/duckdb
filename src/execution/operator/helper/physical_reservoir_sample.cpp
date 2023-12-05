@@ -120,6 +120,18 @@ static void PrintSampleCount(vector<unique_ptr<BlockingSample>> &samples) {
 	std::cout << "samples in reservoir is " << total_count << std::endl;
 }
 
+static void PrintAllSeenSamples(ReservoirSamplePercentage &sample_percentage) {
+	idx_t finished_samples_seen = 0;
+	for (auto &sample : sample_percentage.finished_samples) {
+//		auto &tmp = sample->Cast<ReservoirSamplePercentage>();
+		finished_samples_seen += sample->base_reservoir_sample.num_entries_seen_total;
+		D_ASSERT(sample->base_reservoir_sample.num_entries_seen_total == 100000);
+	}
+	finished_samples_seen += sample_percentage.current_count;
+	std::cout << "this sample has seen " << finished_samples_seen << " tuples" << std::endl;
+}
+
+
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    OperatorSinkFinalizeInput &input) const {
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
@@ -143,11 +155,12 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 		auto ls = std::move(global_state.intermediate_samples.back());
 		auto &percentage_last_sample = ls->Cast<ReservoirSamplePercentage>();
 		global_state.intermediate_samples.pop_back();
-
+		PrintAllSeenSamples(percentage_last_sample);
 		// merge to the rest .
 		for (auto &sample : global_state.intermediate_samples) {
 			// combine the unfinished samples
 			auto &intermediate_percentage_sample = sample->Cast<ReservoirSamplePercentage>();
+			PrintAllSeenSamples(intermediate_percentage_sample);
 
 			while (!intermediate_percentage_sample.finished_samples.empty()) {
 				percentage_last_sample.finished_samples.push_back(std::move(intermediate_percentage_sample.finished_samples.get(0)));
@@ -158,7 +171,7 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 		percentage_last_sample.Finalize();
 		global_state.sample = std::move(ls);
 		global_state.intermediate_samples.clear();
-	} else if (sampling_type == ReservoirSamplingType::RESERVOIR_SAMPLE){
+	} else if (sampling_type == ReservoirSamplingType::RESERVOIR_SAMPLE) {
 		auto largest_sample_index = 0;
 		auto cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
 		for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {

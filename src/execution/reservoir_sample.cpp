@@ -49,6 +49,12 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 void ReservoirSample::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
 	auto &reservoir_sample = other->Cast<ReservoirSample>();
 	reservoir_sample.Finalize();
+	throw InternalException("a normal reservoir sample should not merge unfisihed samples");
+//	auto chunk = reservoir_sample.GetChunk();
+//	while (chunk) {
+//		AddToReservoir(*chunk);
+//		chunk = other->GetChunk();
+//	}
 }
 
 
@@ -254,9 +260,9 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
 
 void ReservoirSamplePercentage::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
 	auto &percentage_sample = other->Cast<ReservoirSamplePercentage>();
-	auto actual_seen = percentage_sample.current_count;
-	auto in_sample = percentage_sample.current_sample->num_added_samples;
-	auto difference = actual_seen - in_sample;
+	auto other_seen = percentage_sample.current_count;
+	auto other_added = percentage_sample.current_sample->num_added_samples;
+	auto difference = other_seen - other_added;
 	auto chunk = other->GetChunk();
 	while (chunk) {
 		AddToReservoir(*chunk);
