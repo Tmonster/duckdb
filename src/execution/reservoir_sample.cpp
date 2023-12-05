@@ -31,7 +31,8 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset = base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_entries_to_skip_b4_next_sample;
+		idx_t offset =
+		    base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
@@ -50,13 +51,12 @@ void ReservoirSample::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) 
 	auto &reservoir_sample = other->Cast<ReservoirSample>();
 	reservoir_sample.Finalize();
 	throw InternalException("a normal reservoir sample should not merge unfisihed samples");
-//	auto chunk = reservoir_sample.GetChunk();
-//	while (chunk) {
-//		AddToReservoir(*chunk);
-//		chunk = other->GetChunk();
-//	}
+	//	auto chunk = reservoir_sample.GetChunk();
+	//	while (chunk) {
+	//		AddToReservoir(*chunk);
+	//		chunk = other->GetChunk();
+	//	}
 }
-
 
 void ReservoirSample::InitializeReservoirWeights() {
 	base_reservoir_sample.InitializeReservoir(num_added_samples, num_added_samples);
@@ -84,7 +84,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 
 	// If others reservoir was not completely filled, the weights
 	// have not yet been initialized.
-	auto &other_as_rs = (ReservoirSample&)*other;
+	auto &other_as_rs = (ReservoirSample &)*other;
 	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
 		// set weights for all pairs added to the sample so far
 		other->InitializeReservoirWeights();
@@ -114,7 +114,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		other->base_reservoir_sample.reservoir_weights.pop();
 		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
 	}
-
 
 	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
 	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
@@ -153,7 +152,8 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 			sel.set_index(i - samples_remaining, i);
 		}
 		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
-		reservoir_chunk->Slice(*ret, sel, STANDARD_VECTOR_SIZE);
+		ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
+		//		reservoir_chunk->Slice(*ret, sel, STANDARD_VECTOR_SIZE);
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		reservoir_chunk->SetCardinality(samples_remaining);
@@ -169,7 +169,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		sel.set_index(i, i);
 	}
 	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), num_added_samples);
-	reservoir_chunk->Slice(*ret, sel, num_added_samples);
+	ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
 	ret->SetCardinality(num_added_samples);
 	// reduce capacity and cardinality of the sample data chunk
 	reservoir_chunk->SetCardinality(samples_remaining);
@@ -308,7 +308,8 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		if (append_to_next_sample > 0) {
 			// slice the input for the remainder
 			SelectionVector sel(append_to_next_sample);
-			for (idx_t i = append_to_current_sample_count; i < append_to_next_sample + append_to_current_sample_count; i++) {
+			for (idx_t i = append_to_current_sample_count; i < append_to_next_sample + append_to_current_sample_count;
+			     i++) {
 				sel.set_index(i - append_to_current_sample_count, i);
 			}
 			input.Slice(sel, append_to_next_sample);
@@ -328,7 +329,6 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		current_sample->AddToReservoir(input);
 	}
 }
-
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	if (!is_finalized) {
@@ -356,7 +356,7 @@ void ReservoirSamplePercentage::Finalize() {
 	// Imagine sampling 70% of 100 rows (so 70 rows). We allocate sample_percentage * RESERVOIR_THRESHOLD
 	// -----------------------------------------
 	auto sampled_more_than_required =
-	    current_count < sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
+	    current_count > sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
 	if (current_count > 0 && sampled_more_than_required) {
 		// create a new sample
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));

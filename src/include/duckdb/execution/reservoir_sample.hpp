@@ -6,6 +6,20 @@
 //
 //===----------------------------------------------------------------------===//
 
+// whats the issue with sotring percentage samples in local state?
+// mostly with merging
+// if you have multiple unfinished samples during merging, then each unfinished sample needs to be merged
+// The problem is if you have two samples that have seen below the reservoir threashold, but they have
+// weights etc.
+// I.e
+// Sample 1 has 40,000 tuples after seeing 68640 rows.
+// Sample 2 has 40,000 tuples after seeing 85600 rows.
+//
+// Desired result after merging is
+// Sample (1+2) has 40,000 tuples after seeing 100,000 rows
+// Sample 3 has 8640 tuples after seeing 54,240 rows
+//           - all samples in sample 3 have the weights from when they were in sample 2.
+
 #pragma once
 
 #include "duckdb/common/common.hpp"
@@ -15,11 +29,7 @@
 
 namespace duckdb {
 
-enum class ReservoirSamplingType : uint8_t {
-	SAMPLE_INVALID,
-	RESERVOIR_SAMPLE,
-	RESERVOIR_SAMPLE_PERCENTAGE
-};
+enum class ReservoirSamplingType : uint8_t { SAMPLE_INVALID, RESERVOIR_SAMPLE, RESERVOIR_SAMPLE_PERCENTAGE };
 
 class BaseReservoirSampling {
 public:
@@ -125,9 +135,7 @@ private:
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
-
 public:
-
 	Allocator &allocator;
 	//! cardinality of the current resevoir sample
 	idx_t num_added_samples;
@@ -143,11 +151,11 @@ public:
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
+
 public:
 	static constexpr const ReservoirSamplingType TYPE = ReservoirSamplingType::RESERVOIR_SAMPLE_PERCENTAGE;
 
-	ReservoirSamplePercentage(Allocator
-	                              &allocator, double percentage, int64_t seed);
+	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
