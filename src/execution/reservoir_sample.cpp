@@ -120,7 +120,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		return;
 	}
 
-	idx_t replaced_element_count = 0;
 	// 3. All entries in other can now go into this.reservoir sample
 	for (auto &weight_pair : temporary_queue) {
 		if (other->base_reservoir_sample.reservoir_weights.empty()) {
@@ -133,7 +132,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		base_reservoir_sample.min_weighted_entry_index = weight_pair.second;
 		// replace element in reservoir chunk with the weight from the other reservoir chunk
 		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-		replaced_element_count++;
 	}
 }
 
