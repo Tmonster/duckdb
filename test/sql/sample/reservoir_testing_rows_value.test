@@ -1,0 +1,87 @@
+# name: test/sql/sample/reservoir_testing_rows_value.test
+# description: Test SAMPLE keyword
+# group: [sample]
+
+loop i 4 5
+
+statement ok
+pragma threads=${i};
+
+statement ok
+CREATE or replace TABLE t1 as select range a from range(1000);
+
+#query I
+#SELECT count(*) from t1 using sample 00;
+#----
+#0
+#
+#query I
+#SELECT count(*) from t1 using sample 100;
+#----
+#100
+#
+#query I
+#SELECT count(*) from t1 using sample 200;
+#----
+#200
+#
+#query I
+#SELECT count(*) from t1 using sample 800;
+#----
+#800
+#
+#
+#query I
+#SELECT count(*) from t1 using sample 1000;
+#----
+#1000
+
+
+statement ok
+Insert into t1 select range a from range(9000);
+
+#
+#query I
+#select count(*) from t1 using sample 8000;
+#----
+#8000
+
+statement ok
+Insert into t1 select range a from range(90000);
+
+
+statement ok
+Insert into t1 select range a from range(900000);
+
+
+query I
+select count(*) from t1 using sample 200000;
+----
+200000
+
+query I
+select count(*) from t1 using sample 300000;
+----
+300000
+
+query I
+select count(*) from t1 using sample 400000;
+----
+400000
+
+query I
+select count(*) from t1 using sample 500000;
+----
+500000
+
+query I
+select count(*) from t1 using sample 600000;
+----
+600000
+
+query I
+select count(*) from t1 using sample 700000;
+----
+700000
+
+endloop

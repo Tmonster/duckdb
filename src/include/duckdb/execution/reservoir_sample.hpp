@@ -67,6 +67,8 @@ public:
 
 	virtual void MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) = 0;
 
+	virtual void InitializeReservoirWeights() = 0;
+
 	virtual idx_t get_sample_count() = 0;
 
 	virtual void Finalize() = 0;
@@ -114,13 +116,14 @@ public:
 		return num_added_samples;
 	};
 
+	void InitializeReservoirWeights() override;
+
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
 	void InitializeReservoir(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
-
 
 
 public:
@@ -170,6 +173,8 @@ public:
 		}
 		return total_count;
 	};
+
+	void InitializeReservoirWeights() override {};
 
 private:
 	Allocator &allocator;

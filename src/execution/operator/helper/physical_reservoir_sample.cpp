@@ -42,12 +42,12 @@ public:
 	template<typename T>
 	T GetSampleCountAndIncreaseThreads(T size_or_percentage) {
 		lock_guard<mutex> glock(lock);
-		auto thread_size = size_or_percentage;
-		for (idx_t i = 1; i < threads; i++) {
-			thread_size = thread_size / 2;
-		}
-		threads += 1;
-		return thread_size;
+//		auto thread_size = size_or_percentage;
+//		for (idx_t i = 1; i < threads; i++) {
+//			thread_size = thread_size / 2;
+//		}
+//		threads += 1;
+		return size_or_percentage;
 	}
 
 	//! The lock for updating the global aggoregate state
@@ -103,6 +103,9 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChun
 SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 	auto &local_state = input.local_state.Cast<SampleLocalSinkState>();
+	if (!local_state.sample) {
+		return SinkCombineResultType::FINISHED;
+	}
 	lock_guard<mutex> glock(global_state.lock);
 	global_state.intermediate_samples.push_back(std::move(local_state.sample));
 	return SinkCombineResultType::FINISHED;
@@ -120,27 +123,71 @@ static void PrintSampleCount(vector<unique_ptr<BlockingSample>> &samples) {
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    OperatorSinkFinalizeInput &input) const {
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
-	D_ASSERT(global_state.intermediate_samples.size() >= 1);
-//	PrintSampleCount(global_state.intermediate_samples);
 
-	auto ls = std::move(global_state.intermediate_samples.back());
-	auto &percentage_last_sample = ls->Cast<ReservoirSamplePercentage>();
-	global_state.intermediate_samples.pop_back();
-
-	// merge to the rest .
-	for (auto &sample : global_state.intermediate_samples) {
-		// combine the unfinished samples
-		auto &intermediate_percentage_sample = sample->Cast<ReservoirSamplePercentage>();
-
-		while (!intermediate_percentage_sample.finished_samples.empty()) {
-			percentage_last_sample.finished_samples.push_back(std::move(intermediate_percentage_sample.finished_samples.get(0)));
-			intermediate_percentage_sample.finished_samples.erase(intermediate_percentage_sample.finished_samples.begin());
+	if (options->is_percentage) {
+		// always gather full thread percentage
+		double thread_percentage = options->sample_size.GetValue<double>();
+		// This is a magic number.
+		if (thread_percentage == 0) {
+			return SinkFinalizeType::READY;
 		}
-		percentage_last_sample.MergeUnfinishedSamples(sample);
+	} else {
+		if (options->sample_size.GetValue<idx_t>() == 0) {
+			return SinkFinalizeType::READY;
+		}
 	}
-	percentage_last_sample.Finalize();
-	global_state.sample = std::move(ls);
-	global_state.intermediate_samples.clear();
+
+	D_ASSERT(global_state.intermediate_samples.size() >= 1);
+	auto sampling_type = global_state.intermediate_samples.at(0)->type;
+	if (sampling_type == ReservoirSamplingType::RESERVOIR_SAMPLE_PERCENTAGE) {
+		auto ls = std::move(global_state.intermediate_samples.back());
+		auto &percentage_last_sample = ls->Cast<ReservoirSamplePercentage>();
+		global_state.intermediate_samples.pop_back();
+
+		// merge to the rest .
+		for (auto &sample : global_state.intermediate_samples) {
+			// combine the unfinished samples
+			auto &intermediate_percentage_sample = sample->Cast<ReservoirSamplePercentage>();
+
+			while (!intermediate_percentage_sample.finished_samples.empty()) {
+				percentage_last_sample.finished_samples.push_back(std::move(intermediate_percentage_sample.finished_samples.get(0)));
+				intermediate_percentage_sample.finished_samples.erase(intermediate_percentage_sample.finished_samples.begin());
+			}
+			percentage_last_sample.MergeUnfinishedSamples(sample);
+		}
+		percentage_last_sample.Finalize();
+		global_state.sample = std::move(ls);
+		global_state.intermediate_samples.clear();
+	} else if (sampling_type == ReservoirSamplingType::RESERVOIR_SAMPLE){
+		auto largest_sample_index = 0;
+		auto cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
+		for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {
+			if (global_state.intermediate_samples.at(i)->get_sample_count() > cur_largest_sample) {
+				largest_sample_index = i;
+				cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
+			}
+		}
+
+
+		auto last_sample = std::move(global_state.intermediate_samples.at(largest_sample_index));
+//		if (last_sample->base_reservoir_sample.reservoir_weights.empty()) {
+//			last_sample->InitializeReservoirWeights();
+//		}
+		global_state.intermediate_samples.erase(global_state.intermediate_samples.begin() + largest_sample_index);
+
+		// merge to the rest .
+		while(!global_state.intermediate_samples.empty()) {
+			// combine the unfinished samples
+			auto sample = std::move(global_state.intermediate_samples.get(0));
+			last_sample->Merge(sample);
+			global_state.intermediate_samples.erase(global_state.intermediate_samples.begin());
+		}
+		last_sample->Finalize();
+		global_state.sample = std::move(last_sample);
+		global_state.intermediate_samples.clear();
+	}
+
+
 	return SinkFinalizeType::READY;
 }
 
