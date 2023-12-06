@@ -6,7 +6,6 @@ namespace duckdb {
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count),
       reservoir_initialized(false) {
-	type = ReservoirSamplingType::RESERVOIR_SAMPLE;
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -239,7 +238,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
       is_finalized(false) {
-	type = ReservoirSamplingType::RESERVOIR_SAMPLE_PERCENTAGE;
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 }

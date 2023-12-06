@@ -29,8 +29,6 @@
 
 namespace duckdb {
 
-enum class ReservoirSamplingType : uint8_t { SAMPLE_INVALID, RESERVOIR_SAMPLE, RESERVOIR_SAMPLE_PERCENTAGE };
-
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -63,12 +61,9 @@ public:
 class BlockingSample {
 public:
 	explicit BlockingSample(int64_t seed) : base_reservoir_sample(seed), random(base_reservoir_sample.random) {
-		type = ReservoirSamplingType::SAMPLE_INVALID;
 	}
 	virtual ~BlockingSample() {
 	}
-	static constexpr const ReservoirSamplingType TYPE = ReservoirSamplingType::SAMPLE_INVALID;
-	ReservoirSamplingType type;
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
@@ -88,22 +83,11 @@ public:
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (TARGET::TYPE != ReservoirSamplingType::SAMPLE_INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast ReservoirSampler to type - Sampler type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
-	}
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
-	static constexpr const ReservoirSamplingType TYPE = ReservoirSamplingType::RESERVOIR_SAMPLE;
-
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
 
 	//! Add a chunk of data to the sample
@@ -148,8 +132,6 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
-	static constexpr const ReservoirSamplingType TYPE = ReservoirSamplingType::RESERVOIR_SAMPLE_PERCENTAGE;
-
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
 
 	//! Add a chunk of data to the sample

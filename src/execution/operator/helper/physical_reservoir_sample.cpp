@@ -123,32 +123,29 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 	}
 
 	D_ASSERT(global_state.intermediate_samples.size() >= 1);
-	auto sampling_type = global_state.intermediate_samples.at(0)->type;
 
-	if (sampling_type == ReservoirSamplingType::RESERVOIR_SAMPLE) {
-		auto largest_sample_index = 0;
-		auto cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
-		for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {
-			if (global_state.intermediate_samples.at(i)->get_sample_count() > cur_largest_sample) {
-				largest_sample_index = i;
-				cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
-			}
+	auto largest_sample_index = 0;
+	auto cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
+	for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {
+		if (global_state.intermediate_samples.at(i)->get_sample_count() > cur_largest_sample) {
+			largest_sample_index = i;
+			cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
 		}
-
-		auto last_sample = std::move(global_state.intermediate_samples.at(largest_sample_index));
-		global_state.intermediate_samples.erase(global_state.intermediate_samples.begin() + largest_sample_index);
-
-		// merge to the rest .
-		while (!global_state.intermediate_samples.empty()) {
-			// combine the unfinished samples
-			auto sample = std::move(global_state.intermediate_samples.get(0));
-			last_sample->Merge(sample);
-			global_state.intermediate_samples.erase(global_state.intermediate_samples.begin());
-		}
-		last_sample->Finalize();
-		global_state.sample = std::move(last_sample);
-		global_state.intermediate_samples.clear();
 	}
+
+	auto last_sample = std::move(global_state.intermediate_samples.at(largest_sample_index));
+	global_state.intermediate_samples.erase(global_state.intermediate_samples.begin() + largest_sample_index);
+
+	// merge to the rest .
+	while (!global_state.intermediate_samples.empty()) {
+		// combine the unfinished samples
+		auto sample = std::move(global_state.intermediate_samples.get(0));
+		last_sample->Merge(sample);
+		global_state.intermediate_samples.erase(global_state.intermediate_samples.begin());
+	}
+	last_sample->Finalize();
+	global_state.sample = std::move(last_sample);
+	global_state.intermediate_samples.clear();
 
 	return SinkFinalizeType::READY;
 }
