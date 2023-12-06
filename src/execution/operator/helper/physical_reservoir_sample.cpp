@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -111,25 +109,6 @@ SinkCombineResultType PhysicalReservoirSample::Combine(ExecutionContext &context
 	global_state.intermediate_samples.push_back(std::move(local_state.sample));
 	return SinkCombineResultType::FINISHED;
 }
-
-//static void PrintSampleCount(vector<unique_ptr<BlockingSample>> &samples) {
-//	idx_t total_count = 0;
-//	for (auto &sample : samples) {
-//		total_count += sample->get_sample_count();
-//	}
-//	std::cout << "samples in reservoir is " << total_count << std::endl;
-//}
-
-//static void PrintAllSeenSamples(ReservoirSamplePercentage &sample_percentage) {
-//	idx_t finished_samples_seen = 0;
-//	for (auto &sample : sample_percentage.finished_samples) {
-//		//		auto &tmp = sample->Cast<ReservoirSamplePercentage>();
-//		finished_samples_seen += sample->base_reservoir_sample.num_entries_seen_total;
-//		D_ASSERT(sample->base_reservoir_sample.num_entries_seen_total == 100000);
-//	}
-//	finished_samples_seen += sample_percentage.current_count;
-//	std::cout << "this sample has seen " << finished_samples_seen << " tuples" << std::endl;
-//}
 
 SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    OperatorSinkFinalizeInput &input) const {

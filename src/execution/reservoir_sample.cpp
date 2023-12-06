@@ -1,6 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/pair.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -45,17 +44,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		remaining -= offset;
 		base_offset += offset;
 	}
-}
-
-void ReservoirSample::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
-	auto &reservoir_sample = other->Cast<ReservoirSample>();
-	reservoir_sample.Finalize();
-	throw InternalException("a normal reservoir sample should not merge unfisihed samples");
-	//	auto chunk = reservoir_sample.GetChunk();
-	//	while (chunk) {
-	//		AddToReservoir(*chunk);
-	//		chunk = other->GetChunk();
-	//	}
 }
 
 void ReservoirSample::InitializeReservoirWeights() {
@@ -256,31 +244,6 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 }
 
-void ReservoirSamplePercentage::MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) {
-	auto &percentage_sample = other->Cast<ReservoirSamplePercentage>();
-	auto other_seen = percentage_sample.current_count;
-	auto other_added = percentage_sample.current_sample->num_added_samples;
-	auto difference = other_seen - other_added;
-	auto chunk = other->GetChunk();
-	while (chunk) {
-		AddToReservoir(*chunk);
-		chunk = other->GetChunk();
-	}
-	current_count += difference;
-}
-
-void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> &other) {
-	//! We are now merging all the samples. 80% of every sample should equal 80%
-	//! of all rows so we set sample percentage to 1, which will means every tuple
-	//! in the added chunks will be added
-	sample_percentage = 1;
-	auto chunk = other->GetChunk();
-	while (chunk) {
-		AddToReservoir(*chunk);
-		chunk = other->GetChunk();
-	}
-}
-
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	base_reservoir_sample.num_entries_seen_total += input.size();
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
@@ -398,9 +361,6 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
-	}
-	if (cur_size > sample_size) {
-		throw InternalException("cur_size should eventually be equal to sample size right?");
 	}
 }
 

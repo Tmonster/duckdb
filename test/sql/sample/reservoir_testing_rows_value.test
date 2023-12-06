@@ -11,7 +11,7 @@ statement ok
 CREATE or replace TABLE t1 as select range a from range(1000);
 
 query I
-SELECT count(*) from t1 using sample 00;
+SELECT count(*) from t1 using sample 0;
 ----
 0
 

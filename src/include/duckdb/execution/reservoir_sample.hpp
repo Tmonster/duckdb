@@ -75,8 +75,6 @@ public:
 
 	virtual void Merge(unique_ptr<BlockingSample> &other) = 0;
 
-	virtual void MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) = 0;
-
 	virtual void InitializeReservoirWeights() = 0;
 
 	virtual idx_t get_sample_count() = 0;
@@ -113,9 +111,6 @@ public:
 
 	//! When collecting samples in parallel, merge samples to create a final sample for the column
 	void Merge(unique_ptr<BlockingSample> &other) override;
-
-	//! When merging sample, unfinished sample merging requires special merging logic
-	virtual void MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -161,10 +156,8 @@ public:
 	void AddToReservoir(DataChunk &input) override;
 
 	//! When collecting samples in parallel, merge samples to create a final sample for the column
-	void Merge(unique_ptr<BlockingSample> &other) override;
-
-	//! When merging sample, unfinished sample merging requires special merging logic
-	virtual void MergeUnfinishedSamples(unique_ptr<BlockingSample> &other) override;
+	//! Merge should not be called on reservoir sample percentages. One sample is kept in global state.
+	void Merge(unique_ptr<BlockingSample> &other) override {};
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -191,7 +184,6 @@ private:
 	//! The fixed sample size of the sub-reservoirs
 	idx_t reservoir_sample_size;
 
-public:
 	//! The current sample
 	unique_ptr<ReservoirSample> current_sample;
 
@@ -202,7 +194,6 @@ public:
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
 	bool is_finalized;
 
-	void PrintSampleCount();
 };
 
 } // namespace duckdb
