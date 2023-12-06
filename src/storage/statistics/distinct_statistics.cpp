@@ -18,6 +18,7 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
 }
 
 void DistinctStatistics::Merge(const DistinctStatistics &other) {
+	//! TODO: Here you need to merge the samples together similar to how hyper log log does.
 	log = log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;
@@ -43,6 +44,7 @@ void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &t
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
+	//! You can add sampling here similar to how hyperloglog process entries.
 	HyperLogLog::ProcessEntries(vdata, type, indices, counts, count);
 	log->AddToLog(vdata, count, indices, counts);
 }
