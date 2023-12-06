@@ -193,7 +193,6 @@ private:
 	idx_t current_count = 0;
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
 	bool is_finalized;
-
 };
 
 } // namespace duckdb

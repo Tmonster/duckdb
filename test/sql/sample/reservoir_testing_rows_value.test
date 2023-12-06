@@ -38,8 +38,22 @@ SELECT count(*) from t1 using sample 1000;
 
 
 statement ok
-Insert into t1 select range a from range(9000);
+create or replace table t1 as select * from range(10000);
 
+query I
+select count(*) from t1 using sample 1000;
+----
+1000
+
+query I
+select count(*) from t1 using sample 3000;
+----
+3000
+
+query I
+select count(*) from t1 using sample 6000;
+----
+6000
 
 query I
 select count(*) from t1 using sample 8000;
@@ -47,11 +61,7 @@ select count(*) from t1 using sample 8000;
 8000
 
 statement ok
-Insert into t1 select range a from range(90000);
-
-
-statement ok
-Insert into t1 select range a from range(900000);
+Create or replace table t1  as select range a from range(1000000);
 
 query I
 select count(*) from t1 using sample 200000;
