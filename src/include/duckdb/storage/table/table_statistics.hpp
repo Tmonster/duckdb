@@ -57,6 +57,7 @@ private:
 	mutex stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
+	// ReservoirSample sample
 };
 
 } // namespace duckdb

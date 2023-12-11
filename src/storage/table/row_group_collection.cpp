@@ -384,6 +384,15 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += append_count;
 	auto stats_lock = stats.GetLock();
+	// add a chunk to reservoir sample in "stats"
+	// should add a reservoir sample to TableStatistics
+	// ReservoirSample needs a serialize/deserialize
+	// and (de)serialize needs to be called in TableStatistics (de)serialize
+	// Deserialize should be ReadWithDefault or something to not break storage version
+
+	// Don't make scope too big, but would be nice at some point:
+	// Maybe at some point add functionality to recompute the reservoir sample in PhysicalVacuum
+	// What if people drop/add a column? For now just reset sample
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}

@@ -103,6 +103,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
+	// Serialize reservoir sample
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
@@ -120,6 +121,8 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
+
+	// Deserialize reservoir sample (with default so we don't break storage version)
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

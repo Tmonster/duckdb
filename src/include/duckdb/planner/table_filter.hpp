@@ -31,6 +31,7 @@ public:
 	}
 	virtual ~TableFilter() {
 	}
+	// Keep original expression here
 
 	TableFilterType filter_type;
 
@@ -68,7 +69,7 @@ public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
-	void PushFilter(idx_t table_index, unique_ptr<TableFilter> filter);
+	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
 
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {
