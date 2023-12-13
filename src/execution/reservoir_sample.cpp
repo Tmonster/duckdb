@@ -106,7 +106,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		return;
 	}
 
-	auto &other_as_rs = dynamic_cast<ReservoirSample&>(*other);
+	auto &other_as_rs = dynamic_cast<ReservoirSample &>(*other);
 	// 3. All entries in other can now go into this.reservoir sample
 	for (auto &weight_pair : temporary_queue) {
 		if (other->base_reservoir_sample.reservoir_weights.empty()) {

@@ -133,7 +133,6 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 		}
 	}
 
-
 	auto last_sample = std::move(global_state.intermediate_samples.at(largest_sample_index));
 	global_state.intermediate_samples.erase(global_state.intermediate_samples.begin() + largest_sample_index);
 
