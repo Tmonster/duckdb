@@ -380,7 +380,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += append_count;
 	auto stats_lock = stats.GetLock();
-	stats.sample.AddToReservoir(chunk);
+	if (!stats.Empty() && stats.sample != nullptr) {
+//		auto sample_chunk = make_uniq<DataChunk>();
+//		sample_chunk->Initialize(Allocator::DefaultAllocator(), types);
+//		chunk.Copy(*sample_chunk);
+		stats.sample->AddToReservoir(chunk);
+	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}

@@ -96,6 +96,7 @@ public:
 	//! When collecting samples in parallel, merge samples to create a final sample for the column
 	void Merge(unique_ptr<BlockingSample> &other) override;
 
+
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;

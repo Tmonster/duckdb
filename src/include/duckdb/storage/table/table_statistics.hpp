@@ -54,7 +54,7 @@ public:
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
 	//! Sample for table
-	ReservoirSample sample;
+	unique_ptr<BlockingSample> sample;
 
 private:
 	//! The statistics lock
