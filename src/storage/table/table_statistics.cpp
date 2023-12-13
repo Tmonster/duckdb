@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 
 namespace duckdb {
 
@@ -9,6 +10,9 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	D_ASSERT(Empty());
 
 	column_stats = std::move(data.table_stats.column_stats);
+	auto &allocator = Allocator::Get();
+	idx_t sample_size = STANDARD_VECTOR_SIZE;
+	sample = make_uniq<ReservoirSamplePercentage>(allocator, sample_size, -1);
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP

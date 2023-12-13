@@ -116,7 +116,7 @@ private:
 
 public:
 	Allocator &allocator;
-	//! cardinality of the current resevoir sample
+	//! cardinality of the current resevior sample
 	idx_t num_added_samples;
 	//! The size of the reservoir sample.
 	//! when calculating percentages, it is set to reservoir_threshold * percentage
