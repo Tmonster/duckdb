@@ -71,8 +71,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 
 	// If others reservoir was not completely filled, the weights
 	// have not yet been initialized.
-	auto &other_as_rs = (ReservoirSample &)*other;
-	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
+	if (other->base_reservoir_sample.reservoir_weights.empty()) {
 		// set weights for all pairs added to the sample so far
 		other->InitializeReservoirWeights();
 	}
@@ -107,10 +106,11 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
 		return;
 	}
 
+	auto &other_as_rs = dynamic_cast<ReservoirSample&>(*other);
 	// 3. All entries in other can now go into this.reservoir sample
 	for (auto &weight_pair : temporary_queue) {
 		if (other->base_reservoir_sample.reservoir_weights.empty()) {
-			// all of the other samples highest weighted samples have been merged
+			// all of the other samples highest weighted tuples have been merged
 			// we can early out.
 			break;
 		}

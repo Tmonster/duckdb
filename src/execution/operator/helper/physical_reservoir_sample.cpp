@@ -71,7 +71,6 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChun
 		if (options->is_percentage) {
 			// always gather full thread percentage
 			double percentage = options->sample_size.GetValue<double>();
-			// This is a magic number.
 			if (percentage == 0) {
 				return SinkResultType::FINISHED;
 			}
@@ -114,7 +113,7 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
                                                    OperatorSinkFinalizeInput &input) const {
 	auto &global_state = input.global_state.Cast<SampleGlobalSinkState>();
 
-	if (options->is_percentage || global_state.intermediate_samples.size() == 0) {
+	if (options->is_percentage || global_state.intermediate_samples.empty()) {
 		// always gather full thread percentage
 		return SinkFinalizeType::READY;
 	}
@@ -125,6 +124,7 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 	D_ASSERT(global_state.intermediate_samples.size() >= 1);
 
 	auto largest_sample_index = 0;
+	lock_guard<mutex> glock(global_state.lock);
 	auto cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
 	for (idx_t i = 0; i < global_state.intermediate_samples.size(); i++) {
 		if (global_state.intermediate_samples.at(i)->get_sample_count() > cur_largest_sample) {
@@ -132,6 +132,7 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 			cur_largest_sample = global_state.intermediate_samples.at(largest_sample_index)->get_sample_count();
 		}
 	}
+
 
 	auto last_sample = std::move(global_state.intermediate_samples.at(largest_sample_index));
 	global_state.intermediate_samples.erase(global_state.intermediate_samples.begin() + largest_sample_index);
