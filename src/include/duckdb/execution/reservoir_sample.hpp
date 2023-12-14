@@ -39,7 +39,8 @@ public:
 	void SetNextEntry();
 
 	void ReplaceElement(double with_weight = -1);
-
+	//! have the samples all been assigned weights
+	bool weights_initialized;
 	//! The random generator
 	RandomEngine random;
 	//! Priority queue of [random element, index] for each of the elements in the sample
