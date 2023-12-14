@@ -6,17 +6,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class SampleLocalSinkState : public LocalSinkState {
-public:
-	explicit SampleLocalSinkState(ClientContext &context, const PhysicalReservoirSample &sampler,
-	                              SampleOptions &options) {
-		// Here I need to initialize the reservoir sample again from the local state.
-		// samples get initialized during first sink of the thread.
-		sample = nullptr;
-	}
-	//! The reservoir sample
-	unique_ptr<BlockingSample> sample;
-};
 
 class SampleGlobalSinkState : public GlobalSinkState {
 public:
@@ -36,26 +25,15 @@ public:
 		}
 	}
 
-	template <typename T>
-	T GetSampleCountAndIncreaseThreads(T size_or_percentage) {
-		lock_guard<mutex> glock(lock);
-		return size_or_percentage;
-	}
-
 	//! The lock for updating the global aggoregate state
 	//! Also used to update the global sample when percentages are used
 	mutex lock;
 	//! The reservoir sample
 	unique_ptr<BlockingSample> sample;
-	vector<unique_ptr<BlockingSample>> intermediate_samples;
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<SampleGlobalSinkState>(Allocator::Get(context), *options);
-}
-
-unique_ptr<LocalSinkState> PhysicalReservoirSample::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<SampleLocalSinkState>(context.client, *this, *options);
 }
 
 SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChunk &chunk,

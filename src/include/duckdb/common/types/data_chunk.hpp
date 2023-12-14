@@ -69,9 +69,6 @@ public:
 	inline void SetCapacity(const DataChunk &other) {
 		SetCapacity(other.capacity);
 	}
-	inline idx_t GetCapacity() {
-		return capacity;
-	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
@@ -115,7 +112,7 @@ public:
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;
 
-	//! Splits the DataChunk in two column wise
+	//! Splits the DataChunk in two
 	DUCKDB_API void Split(DataChunk &other, idx_t split_idx);
 
 	//! Fuses a DataChunk onto the right of this one, and destroys the other. Inverse of Split.

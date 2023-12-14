@@ -24,7 +24,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 			return;
 		}
 	}
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
+	D_ASSERT(num_added_samples == sample_count);
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
@@ -36,7 +36,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 			base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
-		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 		// in this chunk! replace the element
 		ReplaceElement(input, base_offset + offset);
 		// shift the chunk forward
@@ -49,7 +48,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (num_added_samples == 0) {
 		return nullptr;
 	}
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	if (reservoir_chunk->size() > STANDARD_VECTOR_SIZE) {
 		// get from the back
 		auto ret = make_uniq<DataChunk>();
@@ -89,9 +87,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
@@ -131,8 +127,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
 
 	num_added_samples += required_count;
-
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	reservoir_chunk->SetCardinality(num_added_samples);
 
 	// check if there are still elements remaining in the Input data chunk that should be
@@ -150,7 +144,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	}
 	// slice the input vector and continue
 	input.Slice(sel, chunk_count - required_count);
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	return input.size();
 }
 
