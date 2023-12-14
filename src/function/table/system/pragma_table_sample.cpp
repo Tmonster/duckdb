@@ -34,19 +34,19 @@ static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, Ta
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 
-
-	return_types.emplace_back(LogicalType::VARCHAR);
 	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
 	if (entry.type != CatalogType::TABLE_ENTRY) {
 		throw NotImplementedException("Invalid Catalog type passed to table_sample()");
 	}
 	auto &table_entry = entry.Cast<TableCatalogEntry>();
-	auto columns = table_entry.GetColumns();
-	for (auto &name : columns.GetColumnNames()) {
-		names.push_back(name);
-	}
-	for (auto &type : columns.GetColumnTypes()) {
+	auto types = table_entry.GetTypes();
+	for (auto &type : types) {
 		return_types.push_back(type);
+	}
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto log_index = LogicalIndex(i);
+		auto &col = table_entry.GetColumn(log_index);
+		names.push_back(col.GetName());
 	}
 
 	return make_uniq<PragmaTableSampleFunctionData>(entry);
@@ -59,9 +59,9 @@ unique_ptr<GlobalTableFunctionState> PragmaTableSampleInit(ClientContext &contex
 static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
 	// if table has statistics.
 	// copy the sample of statistics into the output chunk
-//	auto sample = table.GetSample();
-//	auto sample_chunk = sample->GetChunk();
-//	output.Copy(*sample->GetChunk(), 0);
+	auto sample = table.GetSample();
+	auto sample_chunk = sample->GetChunk();
+	output.Copy(*sample->GetChunk(), 0);
 }
 
 static void PragmaTableSampleFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
