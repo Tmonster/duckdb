@@ -78,7 +78,11 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	// if the sample has been nullified, no need to merge.
 	if (sample) {
-		sample->Merge(other.sample);
+		auto chunk = other.sample->GetChunk();
+		while (chunk) {
+			sample->AddToReservoir(*chunk);
+			chunk = other.sample->GetChunk();
+		}
 	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		column_stats[i]->Merge(*other.column_stats[i]);
