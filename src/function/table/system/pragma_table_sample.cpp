@@ -19,44 +19,64 @@ namespace duckdb {
 struct PragmaTableSampleFunctionData : public TableFunctionData {
 	explicit PragmaTableSampleFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
 	}
-
 	CatalogEntry &entry;
 };
 
-struct PragmaTableOperatorData : public GlobalTableFunctionState {
-	PragmaTableOperatorData() : offset(0) {
-	}
-	idx_t offset;
+struct PragmaTableSampleOperatorData : public GlobalTableFunctionState {
+	PragmaTableSampleOperatorData() {}
 };
 
 static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	// get the 
 
+
+	// look up the table name in the catalog
+	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+
+
+	return_types.emplace_back(LogicalType::VARCHAR);
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		throw NotImplementedException("Invalid Catalog type passed to table_sample()");
+	}
+	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto columns = table_entry.GetColumns();
+	for (auto &name : columns.GetColumnNames()) {
+		names.push_back(name);
+	}
+	for (auto &type : columns.GetColumnTypes()) {
+		return_types.push_back(type);
+	}
+
+	return make_uniq<PragmaTableSampleFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableSampleInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<PragmaTableOperatorData>();
+	return make_uniq<PragmaTableSampleOperatorData>();
 }
 
-static void PragmaTableSampleTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
+static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
 	// if table has statistics.
-	// copy the statistics into the output chunk.
+	// copy the sample of statistics into the output chunk
+//	auto sample = table.GetSample();
+//	auto sample_chunk = sample->GetChunk();
+//	output.Copy(*sample->GetChunk(), 0);
 }
 
 static void PragmaTableSampleFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<PragmaTableSampleFunctionData>();
-	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
+	auto &state = data_p.global_state->Cast<PragmaTableSampleOperatorData>();
 	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		PragmaTableSampleTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output);
+		PragmaTableSampleTable(context, state, bind_data.entry.Cast<TableCatalogEntry>(), output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_sample");
 	}
 }
 
-void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
+void PragmaTableSample::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(TableFunction("pragma_table_sample", {LogicalType::VARCHAR}, PragmaTableSampleFunction,
 	                              PragmaTableSampleBind, PragmaTableSampleInit));
 }

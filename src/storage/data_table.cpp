@@ -53,6 +53,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
 	}
+	this->sample = std::move(data->table_stats.sample);
 	row_groups->Verify();
 }
 
