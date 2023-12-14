@@ -39,7 +39,6 @@ public:
 	void SetNextEntry();
 
 	void ReplaceElement(double with_weight = -1);
-
 	//! The random generator
 	RandomEngine random;
 	//! Priority queue of [random element, index] for each of the elements in the sample
@@ -68,12 +67,6 @@ public:
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
-	virtual void Merge(unique_ptr<BlockingSample> &other) = 0;
-
-	virtual void InitializeReservoirWeights() = 0;
-
-	virtual idx_t get_sample_count() = 0;
-
 	virtual void Finalize() = 0;
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -93,20 +86,10 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
-	//! When collecting samples in parallel, merge samples to create a final sample for the column
-	void Merge(unique_ptr<BlockingSample> &other) override;
-
-
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
-
-	idx_t get_sample_count() override {
-		return num_added_samples;
-	};
-
-	void InitializeReservoirWeights() override;
 
 private:
 	//! Replace a single element of the input
@@ -138,27 +121,10 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
-	//! When collecting samples in parallel, merge samples to create a final sample for the column
-	//! Merge should not be called on reservoir sample percentages. One sample is kept in global state.
-	void Merge(unique_ptr<BlockingSample> &other) override {};
-
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
-
-	idx_t get_sample_count() override {
-		idx_t total_count = 0;
-		for (auto &s : finished_samples) {
-			total_count += s->get_sample_count();
-		}
-		if (current_sample) {
-			total_count += current_sample->get_sample_count();
-		}
-		return total_count;
-	};
-
-	void InitializeReservoirWeights() override {};
 
 private:
 	Allocator &allocator;

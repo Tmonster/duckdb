@@ -24,7 +24,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 			return;
 		}
 	}
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
+	D_ASSERT(num_added_samples == sample_count);
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
@@ -36,7 +36,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 			base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
-		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 		// in this chunk! replace the element
 		ReplaceElement(input, base_offset + offset);
 		// shift the chunk forward
@@ -45,88 +44,10 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void ReservoirSample::InitializeReservoirWeights() {
-	base_reservoir_sample.InitializeReservoir(num_added_samples, num_added_samples);
-}
-
-void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
-	// 1. First check if this reservoir has the sample_count. If not, continue filling
-	// it using the other samples. (happens when large amounts are sampled).
-	if (num_added_samples != sample_count) {
-		auto chunk = other->GetChunk();
-		while (num_added_samples != sample_count && chunk) {
-			AddToReservoir(*chunk);
-			chunk = other->GetChunk();
-		}
-	}
-
-	// If we still haven't filled our reservoir, return.
-	if (num_added_samples < sample_count) {
-		// we have merged all tuples from the other sample,
-		// but have not yet reached the desired sample count
-		// return and merge the rest of the samples.
-		return;
-	}
-	D_ASSERT(num_added_samples == sample_count);
-
-	// If others reservoir was not completely filled, the weights
-	// have not yet been initialized.
-	if (other->base_reservoir_sample.reservoir_weights.empty()) {
-		// set weights for all pairs added to the sample so far
-		other->InitializeReservoirWeights();
-	}
-	//  Pop pairs from other.base_reservoir_sample.reservoir_weights until
-	//  you have an element with a weight above the minimum weight
-	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-	// To remember indexes of samples you want to replace
-	vector<std::pair<double, idx_t>> temporary_queue;
-	idx_t samples_to_replace = 0;
-	while (samples_to_replace < other->base_reservoir_sample.reservoir_weights.size()) {
-		// pop weights/indexes from other reservoir until the weights are higher than
-		// what is in the current reservoir.
-		while ((-1 * min_weight_other.first) < base_reservoir_sample.min_weight_threshold) {
-			other->base_reservoir_sample.reservoir_weights.pop();
-			if (other->base_reservoir_sample.reservoir_weights.empty()) {
-				// there are no samples in the other reservoir that have a weight above the
-				// min_weight_threshold of this reservoir. Early out and don't add them to the reservoir
-				return;
-			}
-			min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-		}
-		samples_to_replace += 1;
-		temporary_queue.push_back(base_reservoir_sample.reservoir_weights.top());
-		base_reservoir_sample.reservoir_weights.pop();
-		base_reservoir_sample.min_weight_threshold = base_reservoir_sample.reservoir_weights.top().first * -1;
-		other->base_reservoir_sample.reservoir_weights.pop();
-		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-	}
-
-	// 2. If all weights are less than this.min_weight_threshold, no merge needs to take place
-	if (other->base_reservoir_sample.reservoir_weights.size() == 0) {
-		return;
-	}
-
-	auto &other_as_rs = dynamic_cast<ReservoirSample &>(*other);
-	// 3. All entries in other can now go into this.reservoir sample
-	for (auto &weight_pair : temporary_queue) {
-		if (other->base_reservoir_sample.reservoir_weights.empty()) {
-			// all of the other samples highest weighted tuples have been merged
-			// we can early out.
-			break;
-		}
-		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-		other->base_reservoir_sample.reservoir_weights.pop();
-		base_reservoir_sample.min_weighted_entry_index = weight_pair.second;
-		// replace element in reservoir chunk with the weight from the other reservoir chunk
-		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-	}
-}
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (num_added_samples == 0) {
 		return nullptr;
 	}
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	if (reservoir_chunk->size() > STANDARD_VECTOR_SIZE) {
 		// get from the back
 		auto ret = make_uniq<DataChunk>();
@@ -166,17 +87,11 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement(with_weight);
-}
-
-void ReservoirSample::Finalize() {
-	return;
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -212,8 +127,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
 
 	num_added_samples += required_count;
-
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	reservoir_chunk->SetCardinality(num_added_samples);
 
 	// check if there are still elements remaining in the Input data chunk that should be
@@ -231,8 +144,11 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	}
 	// slice the input vector and continue
 	input.Slice(sel, chunk_count - required_count);
-	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	return input.size();
+}
+
+void ReservoirSample::Finalize() {
+	return;
 }
 
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
