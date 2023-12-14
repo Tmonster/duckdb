@@ -45,85 +45,6 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void ReservoirSample::InitializeReservoirWeights() {
-	base_reservoir_sample.InitializeReservoir(num_added_samples, num_added_samples);
-}
-
-void ReservoirSample::Merge(unique_ptr<BlockingSample> &other) {
-	// 1. First check if this reservoir has the sample_count. If not, continue filling
-	// it using the chunks of samples from other. (happens when large amounts are sampled).
-	if (num_added_samples != sample_count) {
-		auto chunk = other->GetChunk();
-		while (num_added_samples != sample_count && chunk) {
-			AddToReservoir(*chunk);
-			chunk = other->GetChunk();
-		}
-	}
-
-	// If we still haven't filled our reservoir, return.
-	if (num_added_samples < sample_count) {
-		// we have merged all tuples from the other sample,
-		// but have not yet reached the desired sample count
-		// return and merge the rest of the samples.
-		return;
-	}
-	D_ASSERT(num_added_samples == sample_count);
-
-	// If others reservoir was not completely filled, the weights
-	// have not yet been initialized.
-	if (!other->base_reservoir_sample.weights_initialized) {
-		// set weights for all pairs added to the sample so far
-		other->InitializeReservoirWeights();
-	}
-
-	//  Pop pairs from other.base_reservoir_sample.reservoir_weights until
-	//  you have an element with a weight above the minimum weight in the current sample
-	auto min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-	// temporary queue remembers the indexes of samples you want to replace in the current sample
-	vector<std::pair<double, idx_t>> temporary_queue;
-	idx_t samples_to_replace = 0;
-	while (samples_to_replace < other->base_reservoir_sample.reservoir_weights.size()) {
-		// pop weights/indexes from other reservoir until the weights are higher than
-		// what is in the current reservoir.
-		while ((-1 * min_weight_other.first) < base_reservoir_sample.min_weight_threshold) {
-			other->base_reservoir_sample.reservoir_weights.pop();
-			if (other->base_reservoir_sample.reservoir_weights.empty()) {
-				// there are no samples in the other reservoir that have a weight above the
-				// min_weight_threshold of this reservoir. We don't need to add them to the current
-				// so we just return.
-				return;
-			}
-			min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-		}
-		// Don't replace samples in the current sample if other.sample doesn't have enough tuples to replenish
-		if (num_added_samples - temporary_queue.size() + other->base_reservoir_sample.reservoir_weights.size() <
-		    num_added_samples) {
-			break;
-		}
-		samples_to_replace += 1;
-		temporary_queue.push_back(base_reservoir_sample.reservoir_weights.top());
-		base_reservoir_sample.reservoir_weights.pop();
-		base_reservoir_sample.min_weight_threshold = base_reservoir_sample.reservoir_weights.top().first * -1;
-		other->base_reservoir_sample.reservoir_weights.pop();
-		// cannot have empty reservoir weights in other, we expect that we can replace some samples.
-		D_ASSERT(!other->base_reservoir_sample.reservoir_weights.empty());
-		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-	}
-
-	auto &other_as_rs = dynamic_cast<ReservoirSample &>(*other);
-	// 3. All entries in other can now go into this.reservoir sample
-	for (auto &weight_pair : temporary_queue) {
-		// although we are popping reservoir weights and replacing samples, other should have enough
-		// samples left to replace the min weighted samples from current.sample
-		D_ASSERT(!other->base_reservoir_sample.reservoir_weights.empty());
-		min_weight_other = other->base_reservoir_sample.reservoir_weights.top();
-		other->base_reservoir_sample.reservoir_weights.pop();
-		base_reservoir_sample.min_weighted_entry_index = weight_pair.second;
-		// replace element in reservoir chunk with the weight from the other reservoir chunk
-		ReplaceElement(*other_as_rs.reservoir_chunk, min_weight_other.second, min_weight_other.first);
-	}
-}
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (num_added_samples == 0) {
 		return nullptr;
@@ -175,10 +96,6 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement(with_weight);
-}
-
-void ReservoirSample::Finalize() {
-	return;
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -235,6 +152,10 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	input.Slice(sel, chunk_count - required_count);
 	D_ASSERT(reservoir_chunk->GetCapacity() == sample_count);
 	return input.size();
+}
+
+void ReservoirSample::Finalize() {
+	return;
 }
 
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
@@ -339,7 +260,6 @@ void ReservoirSamplePercentage::Finalize() {
 }
 
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
-	weights_initialized = false;
 	next_index_to_sample = 0;
 	min_weight_threshold = 0;
 	min_weighted_entry_index = 0;
@@ -362,7 +282,6 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
-		weights_initialized = true;
 	}
 }
 
