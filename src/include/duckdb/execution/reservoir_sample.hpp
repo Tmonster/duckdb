@@ -68,9 +68,11 @@ public:
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
 	virtual void Finalize() = 0;
+
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	virtual unique_ptr<DataChunk> GetChunk() = 0;
+	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
+	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0);
 	BaseReservoirSampling base_reservoir_sample;
 
 protected:
@@ -88,7 +90,8 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunk() override;
+	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
 
 private:
@@ -123,7 +126,8 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunk() override;
+	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
 
 private:
@@ -140,7 +144,7 @@ private:
 	vector<unique_ptr<ReservoirSample>> finished_samples;
 	//! The amount of tuples that have been processed so far (not put in the reservoir, just processed)
 	idx_t current_count = 0;
-	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
+	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunkAndShrink();
 	bool is_finalized;
 };
 

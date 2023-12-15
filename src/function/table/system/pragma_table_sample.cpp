@@ -61,7 +61,7 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 	// copy the sample of statistics into the output chunk
 	auto sample = table.GetSample();
 	if (sample) {
-		auto sample_chunk = sample->GetChunk();
+		auto sample_chunk = sample->GetChunk(0);
 		if (sample_chunk) {
 			sample_chunk->Copy(output, 0);
 		}

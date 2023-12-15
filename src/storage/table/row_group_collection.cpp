@@ -948,8 +948,11 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
 }
 
-unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	return std::move(stats.sample);
+optional_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	if (stats.sample) {
+		return optional_ptr<BlockingSample>(stats.sample.get());
+	}
+	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
