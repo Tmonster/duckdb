@@ -60,8 +60,12 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 	// if table has statistics.
 	// copy the sample of statistics into the output chunk
 	auto sample = table.GetSample();
-	auto sample_chunk = sample->GetChunk();
-	output.Copy(*sample->GetChunk(), 0);
+	if (sample) {
+		auto sample_chunk = sample->GetChunk();
+		if (sample_chunk) {
+			sample_chunk->Copy(output, 0);
+		}
+	}
 }
 
 static void PragmaTableSampleFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

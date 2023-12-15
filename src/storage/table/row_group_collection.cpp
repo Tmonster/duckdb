@@ -381,9 +381,9 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	state.current_row += append_count;
 	auto stats_lock = stats.GetLock();
 	if (!stats.Empty() && stats.sample != nullptr) {
-//		auto sample_chunk = make_uniq<DataChunk>();
-//		sample_chunk->Initialize(Allocator::DefaultAllocator(), types);
-//		chunk.Copy(*sample_chunk);
+		auto sample_chunk = make_uniq<DataChunk>();
+		sample_chunk->Initialize(Allocator::DefaultAllocator(), types);
+		chunk.Copy(*sample_chunk);
 		stats.sample->AddToReservoir(chunk);
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
@@ -946,6 +946,10 @@ void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
+}
+
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	return std::move(stats.sample);
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
