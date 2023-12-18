@@ -14,15 +14,6 @@ select * from pragma_table_sample('integers');
 ----
 2048
 
-mode output_result
 
 statement ok
 select * from pragma_table_sample('integers');
-
-
-mode skip
-
-query I
-select count(*) from integers USING SAMPLE 99.0% (Reservoir);
-----
-990000
