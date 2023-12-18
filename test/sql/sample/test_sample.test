@@ -63,6 +63,7 @@ SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
 ----
 5
 
+<<<<<<< HEAD
 # sample on a larger data set over RESERVOIR_THRESHOLD = 100000
 query I
 SELECT COUNT(*) FROM range(1000000) USING SAMPLE 1000100
@@ -72,6 +73,17 @@ SELECT COUNT(*) FROM range(1000000) USING SAMPLE 1000100
 
 query I
 SELECT COUNT(*) FROM range(1000000) USING SAMPLE 2
+=======
+# sample on a large data set over RESERVOIR_THRESHOLD = 100000
+query I
+SELECT COUNT(*) FROM range(2000000) USING SAMPLE 1000100
+----
+1000100
+
+
+query I
+SELECT COUNT(*) FROM range(2000000) USING SAMPLE 2
+>>>>>>> remove_chunk_collection_from_reservoir_sampler
 ----
 2
 

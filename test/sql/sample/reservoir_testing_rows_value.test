@@ -30,12 +30,10 @@ SELECT count(*) from t1 using sample 800;
 ----
 800
 
-
 query I
 SELECT count(*) from t1 using sample 1000;
 ----
 1000
-
 
 statement ok
 create or replace table t1 as select * from range(10000);

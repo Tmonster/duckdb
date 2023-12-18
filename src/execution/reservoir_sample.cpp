@@ -89,25 +89,13 @@ unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 		return ret;
 	}
 	// TODO: Why do I need to put another selection vector over this one?
-	auto ret = make_uniq<DataChunk>();
-	auto samples_remaining = 0;
-	auto reservoir_types = reservoir_chunk->GetTypes();
-	SelectionVector sel(num_added_samples);
-	for (idx_t i = 0; i < num_added_samples; i++) {
-		sel.set_index(i, i);
-	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), num_added_samples);
-	ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
-	ret->SetCardinality(num_added_samples);
-	// reduce capacity and cardinality of the sample data chunk
-	reservoir_chunk->SetCardinality(samples_remaining);
 	num_added_samples = 0;
-	return ret;
+	return std::move(reservoir_chunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
 	// replace the entry in the reservoir
-	// 8. The item in R with the minimum key is replaced by item
+	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
