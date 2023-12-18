@@ -23,13 +23,13 @@ struct PragmaTableSampleFunctionData : public TableFunctionData {
 };
 
 struct PragmaTableSampleOperatorData : public GlobalTableFunctionState {
-	PragmaTableSampleOperatorData() : sample_offset(0) {}
+	PragmaTableSampleOperatorData() : sample_offset(0) {
+	}
 	idx_t sample_offset;
 };
 
 static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
-
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 
 	// look up the table name in the catalog
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
@@ -57,7 +57,8 @@ unique_ptr<GlobalTableFunctionState> PragmaTableSampleInit(ClientContext &contex
 	return make_uniq<PragmaTableSampleOperatorData>();
 }
 
-static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
+static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOperatorData &data,
+                                   TableCatalogEntry &table, DataChunk &output) {
 	// if table has statistics.
 	// copy the sample of statistics into the output chunk
 	auto sample = table.GetSample();
