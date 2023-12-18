@@ -1,18 +1,18 @@
-# name: test/sql/sample/large_reservoir_sample.test_slow
+# name: test/sql/sample/table_sample.test_slow
 # description: Test reservoir sample crash on large data sets
 # group: [sample]
 
-#statement ok
-#PRAGMA enable_verification;
+statement ok
+PRAGMA enable_verification;
 
 
 statement ok
 create table integers as (select (range + 5)::VARCHAR a, range b from range(10000));
 
-#query I
-#select * from pragma_table_sample('integers');
-#----
-#2048
+query I
+select * from pragma_table_sample('integers');
+----
+2048
 
 mode output_result
 
