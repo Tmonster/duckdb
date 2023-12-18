@@ -66,6 +66,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		return ret;
 	}
 	// TODO: Why do I need to put another selection vector over this one?
+	num_added_samples = 0;
 	return std::move(reservoir_chunk);
 }
 
