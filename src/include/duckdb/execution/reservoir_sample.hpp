@@ -68,17 +68,10 @@ public:
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
 	virtual void Finalize() = 0;
-<<<<<<< HEAD
-
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
-=======
-	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	//! sample is completely built.
-	virtual unique_ptr<DataChunk> GetChunk() = 0;
->>>>>>> remove_chunk_collection_from_reservoir_sampler
 	BaseReservoirSampling base_reservoir_sample;
 
 protected:
