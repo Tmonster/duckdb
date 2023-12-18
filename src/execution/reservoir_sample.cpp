@@ -44,7 +44,30 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSample::GetChunk() {
+unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
+	if (offset >= reservoir_chunk->size()) {
+		return nullptr;
+	}
+	if (num_added_samples == 0) {
+		return nullptr;
+	}
+	auto ret = make_uniq<DataChunk>();
+	idx_t ret_chunk_size = STANDARD_VECTOR_SIZE;
+	if (offset + STANDARD_VECTOR_SIZE > reservoir_chunk->size()) {
+		ret_chunk_size = reservoir_chunk->size() - offset;
+	}
+	auto reservoir_types = reservoir_chunk->GetTypes();
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t i = offset; i < offset + ret_chunk_size; i++) {
+		sel.set_index(i - offset, i);
+	}
+	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
+	ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
+	ret->SetCardinality(STANDARD_VECTOR_SIZE);
+	return ret;
+}
+
+unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 	if (num_added_samples == 0) {
 		return nullptr;
 	}
@@ -192,13 +215,17 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
+	throw NotImplementedException("GetChunk() not implemented for reservoir chunks");
+}
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {
 	if (!is_finalized) {
 		Finalize();
 	}
 	while (!finished_samples.empty()) {
 		auto &front = finished_samples.front();
-		auto chunk = front->GetChunk();
+		auto chunk = front->GetChunkAndShrink();
 		if (chunk && chunk->size() > 0) {
 			return chunk;
 		}
@@ -224,7 +251,7 @@ void ReservoirSamplePercentage::Finalize() {
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_uniq<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
 		while (true) {
-			auto chunk = current_sample->GetChunk();
+			auto chunk = current_sample->GetChunkAndShrink();
 			if (!chunk || chunk->size() == 0) {
 				break;
 			}
