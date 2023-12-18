@@ -45,8 +45,8 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
-	if (offset > reservoir_chunk->size()) {
-		throw InternalException("offset > reservoir chunk size");
+	if (offset >= reservoir_chunk->size()) {
+		return nullptr;
 	}
 	if (num_added_samples == 0) {
 		return nullptr;

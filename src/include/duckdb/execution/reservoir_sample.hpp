@@ -72,7 +72,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
-	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0);
+	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
 	BaseReservoirSampling base_reservoir_sample;
 
 protected:

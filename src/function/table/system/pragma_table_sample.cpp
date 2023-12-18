@@ -23,7 +23,8 @@ struct PragmaTableSampleFunctionData : public TableFunctionData {
 };
 
 struct PragmaTableSampleOperatorData : public GlobalTableFunctionState {
-	PragmaTableSampleOperatorData() {}
+	PragmaTableSampleOperatorData() : sample_offset(0) {}
+	idx_t sample_offset;
 };
 
 static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
@@ -61,9 +62,10 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 	// copy the sample of statistics into the output chunk
 	auto sample = table.GetSample();
 	if (sample) {
-		auto sample_chunk = sample->GetChunk(0);
+		auto sample_chunk = sample->GetChunk(data.sample_offset);
 		if (sample_chunk) {
 			sample_chunk->Copy(output, 0);
+			data.sample_offset += sample_chunk->size();
 		}
 	}
 }
