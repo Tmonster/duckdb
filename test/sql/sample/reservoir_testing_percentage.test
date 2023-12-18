@@ -35,7 +35,6 @@ SELECT count(*) from t1 using sample 100 percent (reservoir);
 ----
 1000
 
-
 statement ok
 Insert into t1 select range a from range(9000);
 
@@ -70,7 +69,6 @@ query I
 select count(*) from t1 using sample 50 percent (reservoir);
 ----
 500000
-
 
 query I
 select count(*) from t1 using sample 60 percent (reservoir);
