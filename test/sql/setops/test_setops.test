@@ -115,6 +115,59 @@ SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' OR
 2	b
 1	a
 
+query I
+SELECT b FROM test WHERE a < 13 UNION ALL SELECT b FROM test WHERE a > 11
+----
+1
+1
+1
+2
+
+# mixing types, should upcast
+query T
+SELECT 1 UNION ALL SELECT 'asdf'
+----
+1
+asdf
+
+query T
+SELECT NULL UNION ALL SELECT 'asdf'
+----
+NULL
+asdf
+
+# only UNION, distinct results
+query I
+SELECT 1 UNION SELECT 1
+----
+1
+
+query IT
+SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' UNION SELECT 1, 'a' order by 1
+----
+1	a
+2	b
+3	c
+
+query I
+SELECT b FROM test WHERE a < 13 UNION  SELECT b FROM test WHERE a > 11 ORDER BY 1
+----
+1
+2
+
+# mixed fun
+query IT
+SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' ORDER BY 1
+----
+1	a
+2	b
+
+query IT
+SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' ORDER BY 1 DESC
+----
+2	b
+1	a
+
 
 # EXCEPT ALL / INTERSECT ALL
 query II
