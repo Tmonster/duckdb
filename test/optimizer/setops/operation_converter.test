@@ -9,5 +9,5 @@ statement ok
 create table right_table as select range*2 as b from range(10000);
 
 statement ok
-select * from left_table intersect select * from right_table;
+select * from (select * from left_table intersect select * from right_table) ll1 where ll1.a < 5;
 

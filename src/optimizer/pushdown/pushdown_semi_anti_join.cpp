@@ -9,6 +9,28 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+static bool CanPushDownRight(LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	if (join.join_type != JoinType::SEMI) {
+		return false;
+	}
+	auto &conditions = join.conditions;
+	for (auto &cond : conditions) {
+		auto &left = cond.left;
+		auto &right = cond.right;
+		if (cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			if (left->type == ExpressionType::BOUND_COLUMN_REF && right->type == ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalJoin>();
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -17,8 +39,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 
 	// push all current filters down the left side
 	op->children[0] = Rewrite(std::move(op->children[0]));
-	FilterPushdown right_pushdown(optimizer);
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	if (CanPushDownRight(*op)) {
+		op->children[1] = Rewrite(std::move(op->children[1]));
+	} else {
+		FilterPushdown right_pushdown(optimizer);
+		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
 
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
