@@ -17,12 +17,20 @@ endloop
 # out of range
 statement error
 PRAGMA tpcds(-1)
+----
+Syntax Error: Out of range TPC-DS query number
 
 statement error
 PRAGMA tpcds(3290819023812038903)
+----
+Invalid Input Error
 
 statement error
 PRAGMA tpcds(32908301298)
+----
+Invalid Input Error
 
 statement error
 PRAGMA tpcds(1.1)
+----
+Binder Error:
