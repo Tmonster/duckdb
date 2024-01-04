@@ -10,7 +10,8 @@
 
 namespace duckdb {
 
-static unique_ptr<LogicalWindow> CreateWindowWithPartitionedRowNum(idx_t window_table_index, unique_ptr<LogicalOperator> op) {
+static unique_ptr<LogicalWindow> CreateWindowWithPartitionedRowNum(idx_t window_table_index,
+                                                                   unique_ptr<LogicalOperator> op) {
 	// instead create a logical projection on top of whatever to add the window expression, then
 	auto window = make_uniq<LogicalWindow>(window_table_index);
 	auto row_number =
@@ -208,8 +209,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			for (idx_t i = 0; i < bindings.size() - 1; i++) {
 				projection_select_list.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], bindings[i]));
 			}
-			auto projection =
-			    make_uniq<LogicalProjection>(node.setop_index, std::move(projection_select_list));
+			auto projection = make_uniq<LogicalProjection>(node.setop_index, std::move(projection_select_list));
 			projection->children.push_back(std::move(op));
 			op = std::move(projection);
 		}

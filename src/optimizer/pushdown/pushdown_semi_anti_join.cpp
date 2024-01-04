@@ -9,7 +9,8 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr, vector<ColumnBinding> &replacement_bindings) {
+static void ReplaceBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
+                            vector<ColumnBinding> &replacement_bindings) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);

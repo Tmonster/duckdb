@@ -40,7 +40,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		throw InternalException("Logical Except/Intersect should have been transformed to semi anti before the physical planning phase");
+		throw InternalException(
+		    "Logical Except/Intersect should have been transformed to semi anti before the physical planning phase");
 	}
 	default:
 		throw InternalException("Unexpected operator type for set operation");
