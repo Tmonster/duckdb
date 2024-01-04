@@ -9,26 +9,25 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static bool CanPushDownRight(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		return false;
-	}
-	auto &join = op.Cast<LogicalComparisonJoin>();
-	if (join.join_type != JoinType::SEMI) {
-		return false;
-	}
-	auto &conditions = join.conditions;
-	for (auto &cond : conditions) {
-		auto &left = cond.left;
-		auto &right = cond.right;
-		if (cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			if (left->type == ExpressionType::BOUND_COLUMN_REF && right->type == ExpressionType::BOUND_COLUMN_REF) {
-				continue;
+static void ReplaceBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr, vector<ColumnBinding> &replacement_bindings) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		D_ASSERT(colref.depth == 0);
+
+		// rewrite the binding by looking into the bound_tables list of the subquery
+		idx_t binding_index = 0;
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			if (bindings[i] == colref.binding) {
+				binding_index = i;
+				break;
 			}
-			return false;
 		}
+		colref.binding = replacement_bindings[binding_index];
+		filter.bindings.insert(colref.binding.table_index);
+		return;
 	}
-	return true;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](Expression &child) { ReplaceBindings(bindings, filter, child, replacement_bindings); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op) {
@@ -37,13 +36,26 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 		return FinishPushdown(std::move(op));
 	}
 
-	// push all current filters down the left side
-	op->children[0] = Rewrite(std::move(op->children[0]));
-	if (CanPushDownRight(*op)) {
-		op->children[1] = Rewrite(std::move(op->children[1]));
-	} else {
+	if (CanFiltersPropogateRightSide(*op)) {
+		auto left_bindings = op->children[0]->GetColumnBindings();
+		auto right_bindings = op->children[1]->GetColumnBindings();
 		FilterPushdown right_pushdown(optimizer);
+		for (idx_t i = 0; i < filters.size(); i++) {
+			// first create a copy of the filter
+			auto right_filter = make_uniq<Filter>();
+			right_filter->filter = filters[i]->filter->Copy();
+
+			ReplaceBindings(left_bindings, *right_filter, *right_filter->filter, right_bindings);
+			right_filter->ExtractBindings();
+
+			// move the filters into the child pushdown nodes
+			right_pushdown.filters.push_back(std::move(right_filter));
+		}
+		op->children[0] = Rewrite(std::move(op->children[0]));
 		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	} else {
+		// push all current filters down the left side
+		op->children[0] = Rewrite(std::move(op->children[0]));
 	}
 
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;

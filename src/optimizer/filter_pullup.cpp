@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
@@ -40,8 +41,13 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	case JoinType::INNER:
 		return PullupInnerJoin(std::move(op));
 	case JoinType::LEFT:
-	case JoinType::ANTI:
+	case JoinType::ANTI: {
+		return PullupFromLeft(std::move(op));
+	}
 	case JoinType::SEMI: {
+		if (CanFiltersPropogateRightSide(*op)) {
+			return PullupBothSide(std::move(op));
+		}
 		return PullupFromLeft(std::move(op));
 	}
 	default:
