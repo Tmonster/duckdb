@@ -2,10 +2,31 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
+
+static unique_ptr<LogicalWindow> CreateWindowWithPartitionedRowNum(idx_t window_table_index,
+                                                                   unique_ptr<LogicalOperator> op) {
+	// instead create a logical projection on top of whatever to add the window expression, then
+	auto window = make_uniq<LogicalWindow>(window_table_index);
+	auto row_number =
+	    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	auto bindings = op->GetColumnBindings();
+	auto types = op->types;
+	for (idx_t i = 0; i < types.size(); i++) {
+		row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(types[i], bindings[i]));
+	}
+	window->expressions.push_back(std::move(row_number));
+	window->AddChild(std::move(op));
+	return window;
+}
 
 // Optionally push a PROJECTION operator
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
@@ -116,9 +137,104 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		break;
 	}
 
+	// here we convert the set operation to anti semi if required. Using the node.setop all we know what conversion we
+	// need.
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 	                                           std::move(right_node), logical_type, node.setop_all);
+	root->ResolveOperatorTypes();
 
+	unique_ptr<LogicalOperator> op;
+
+	// if we have an intersect or except, immediately translate it to a semi or anti join.
+	// Unions stay as they are.
+	if (logical_type == LogicalOperatorType::LOGICAL_INTERSECT || logical_type == LogicalOperatorType::LOGICAL_EXCEPT) {
+		auto &left = root->children[0];
+		auto &right = root->children[1];
+		auto left_types = root->children[0]->types;
+		auto right_types = root->children[1]->types;
+		auto old_bindings = root->GetColumnBindings();
+		if (node.setop_all) {
+			auto window_left_table_id = GenerateTableIndex();
+			root->children[0] = CreateWindowWithPartitionedRowNum(window_left_table_id, std::move(root->children[0]));
+
+			auto window_right_table_id = GenerateTableIndex();
+			root->children[1] = CreateWindowWithPartitionedRowNum(window_right_table_id, std::move(root->children[1]));
+
+			root->types.push_back(LogicalType::BIGINT);
+			root->column_count += 1;
+		}
+
+		auto left_bindings = left->GetColumnBindings();
+		auto right_bindings = right->GetColumnBindings();
+		D_ASSERT(left_bindings.size() == right_bindings.size());
+
+		vector<JoinCondition> conditions;
+		// create equality condition for all columns
+		idx_t binding_offset = node.setop_all ? 1 : 0;
+		for (idx_t i = 0; i < left_bindings.size() - binding_offset; i++) {
+			auto cond_type_left = LogicalType(LogicalType::UNKNOWN);
+			auto cond_type_right = LogicalType(LogicalType::UNKNOWN);
+			JoinCondition cond;
+			cond.left = make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]);
+			cond.right = make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]);
+			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			conditions.push_back(std::move(cond));
+		}
+
+		// create condition for the row number as well.
+		if (node.setop_all) {
+			JoinCondition cond;
+			cond.left =
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, left_bindings[left_bindings.size() - 1]);
+			cond.right =
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, right_bindings[right_bindings.size() - 1]);
+			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			conditions.push_back(std::move(cond));
+		}
+
+		JoinType join_type = root->type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
+
+		auto join_op = make_uniq<LogicalComparisonJoin>(join_type);
+		join_op->children.push_back(std::move(left));
+		join_op->children.push_back(std::move(right));
+		join_op->conditions = std::move(conditions);
+		join_op->ResolveOperatorTypes();
+
+		op = std::move(join_op);
+
+		// create projection to remove row_id.
+		if (node.setop_all) {
+			vector<unique_ptr<Expression>> projection_select_list;
+			auto bindings = op->GetColumnBindings();
+			for (idx_t i = 0; i < bindings.size() - 1; i++) {
+				projection_select_list.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], bindings[i]));
+			}
+			auto projection = make_uniq<LogicalProjection>(node.setop_index, std::move(projection_select_list));
+			projection->children.push_back(std::move(op));
+			op = std::move(projection);
+		}
+
+		if (!node.setop_all) {
+			// push a distinct operator on the join
+			auto &types = op->types;
+			auto join_bindings = op->GetColumnBindings();
+			vector<unique_ptr<Expression>> distinct_targets;
+			vector<unique_ptr<Expression>> select_list;
+			for (idx_t i = 0; i < join_bindings.size(); i++) {
+				distinct_targets.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings[i]));
+				select_list.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings[i]));
+			}
+			auto distinct = make_uniq<LogicalDistinct>(std::move(distinct_targets), DistinctType::DISTINCT);
+			distinct->children.push_back(std::move(op));
+			op = std::move(distinct);
+
+			auto projection = make_uniq<LogicalProjection>(node.setop_index, std::move(select_list));
+			projection->children.push_back(std::move(op));
+			op = std::move(projection);
+			op->ResolveOperatorTypes();
+		}
+		return VisitQueryNode(node, std::move(op));
+	}
 	return VisitQueryNode(node, std::move(root));
 }
 
