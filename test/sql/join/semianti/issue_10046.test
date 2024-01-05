@@ -1,9 +1,9 @@
-# name: test/sql/join/semianti/issue-10046.test
+# name: test/sql/join/semianti/issue_10046.test
 # description: Test anti ijoin results
 # group: [semianti]
-#
-#statement ok
-#PRAGMA enable_verification
+
+statement ok
+PRAGMA enable_verification
 
 statement ok
 create table t1 as select * from values (1, 2), (2, 4), (3, 8), (6, 25), (1, 25) t(a, b);

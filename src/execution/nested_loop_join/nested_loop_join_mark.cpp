@@ -158,6 +158,10 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, b
 	DataChunk scan_chunk;
 	right.InitializeScanChunk(scan_chunk);
 
+	if (conditions.size() > 1) {
+		throw InternalException("some test here has mark join with too many conditions");
+	}
+
 	while (right.Scan(scan_state, scan_chunk)) {
 		for (idx_t i = 0; i < conditions.size(); i++) {
 			bool found_match_temp[STANDARD_VECTOR_SIZE] = {false};
