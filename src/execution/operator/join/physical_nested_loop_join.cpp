@@ -309,7 +309,7 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	state.left_condition.Reset();
 	state.lhs_executor.Execute(input, state.left_condition);
 
-	bool found_match[STANDARD_VECTOR_SIZE] = {true};
+	bool found_match[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		found_match[i] = true;
 	}

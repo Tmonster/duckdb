@@ -198,6 +198,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
 
 	} else {
+		// here look at conditions
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
 		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
 		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
