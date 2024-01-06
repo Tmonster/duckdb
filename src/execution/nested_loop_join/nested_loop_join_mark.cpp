@@ -16,23 +16,27 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 	auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
 	auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 	for (idx_t i = 0; i < lcount; i++) {
-		if (found_match[i]) {
+		if (!found_match[i]) {
 			continue;
 		}
 		auto lidx = left_data.sel->get_index(i);
 		const auto left_null = !left_data.validity.RowIsValid(lidx);
 		if (!MATCH_OP::COMPARE_NULL && left_null) {
+			found_match[i] = false;
 			continue;
 		}
 		for (idx_t j = 0; j < rcount; j++) {
 			auto ridx = right_data.sel->get_index(j);
 			const auto right_null = !right_data.validity.RowIsValid(ridx);
 			if (!MATCH_OP::COMPARE_NULL && right_null) {
+				found_match[i] = false;
 				continue;
 			}
 			if (MATCH_OP::template Operation<T>(ldata[lidx], rdata[ridx], left_null, right_null)) {
 				found_match[i] = true;
 				break;
+			} else {
+				found_match[i] = false;
 			}
 		}
 	}
@@ -43,7 +47,7 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 	Vector left_reference(left.GetType());
 	SelectionVector true_sel(rcount);
 	for (idx_t i = 0; i < lcount; i++) {
-		if (found_match[i]) {
+		if (!found_match[i]) {
 			continue;
 		}
 		ConstantVector::Reference(left_reference, left, i, rcount);
@@ -76,8 +80,8 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 		default:
 			throw InternalException("Unsupported comparison type for MarkJoinNested");
 		}
-		if (count > 0) {
-			found_match[i] = true;
+		if (count == 0) {
+			found_match[i] = false;
 		}
 	}
 }
