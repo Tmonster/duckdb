@@ -41,7 +41,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 #if defined(__linux__)
 #include <libgen.h>
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) && !defined(TARGET_OS_IPHONE)
 #include <libproc.h>
 #elif defined(_WIN32)
 #include <RestartManager.h>
