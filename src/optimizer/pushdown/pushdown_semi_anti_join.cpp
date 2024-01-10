@@ -41,18 +41,25 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 		auto left_bindings = op->children[0]->GetColumnBindings();
 		auto right_bindings = op->children[1]->GetColumnBindings();
 		FilterPushdown right_pushdown(optimizer);
+		FilterPushdown left_pushdown(optimizer);
 		for (idx_t i = 0; i < filters.size(); i++) {
 			// first create a copy of the filter
 			auto right_filter = make_uniq<Filter>();
 			right_filter->filter = filters[i]->filter->Copy();
+			auto left_filter = make_uniq<Filter>();
+			left_filter->filter = filters[i]->filter->Copy();
 
 			ReplaceBindings(left_bindings, *right_filter, *right_filter->filter, right_bindings);
+			ReplaceBindings(right_bindings, *left_filter, *left_filter->filter, left_bindings);
 			right_filter->ExtractBindings();
+			left_filter->ExtractBindings();
 
 			// move the filters into the child pushdown nodes
 			right_pushdown.filters.push_back(std::move(right_filter));
+			left_pushdown.filters.push_back(std::move(left_filter));
 		}
-		op->children[0] = Rewrite(std::move(op->children[0]));
+		// If filter pulled up from right, need to replace bindings on left.
+		op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
 	} else {
 		// push all current filters down the left side

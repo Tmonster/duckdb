@@ -164,6 +164,20 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		statistics_map = propagator.GetStatisticsMap();
 	});
 
+	// After statistics propagagtion, there could be logical empty results
+	// adding another filter pull up/pushdown will propagate those empty results up
+	// perform filter pullup
+	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
+		FilterPullup filter_pullup;
+		plan = filter_pullup.Rewrite(std::move(plan));
+	});
+
+	// perform filter pushdown
+	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
+		FilterPushdown filter_pushdown(*this);
+		plan = filter_pushdown.Rewrite(std::move(plan));
+	});
+
 	// remove duplicate aggregates
 	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
 		CommonAggregateOptimizer common_aggregate;

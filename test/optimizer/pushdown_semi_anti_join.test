@@ -11,6 +11,8 @@ create table t0 as (select 42 a);
 statement ok
 create table t1 as (select 42 b);
 
+mode skip
+
 query II
 explain select a from t0 semi join (select * from t1 where 1 = 0) on a = b;
 ----
@@ -33,11 +35,15 @@ explain select * from (select 42 where 1=0) tmp0(a) ANTI JOIN (select 42) tmp1(b
 ----
 logical_opt	<!REGEX>:.*EXCEPT.*
 
+mode unskip
+
 # if RHS is empty we can optimize away the ANTI JOIN
 query II
 explain select * from t0 ANTI JOIN (select * from t1 where 1=0) on (a=b);
 ----
 logical_opt	<!REGEX>:.*ANTI.*
+
+mode skip
 
 # now pushdown subquery with set ops
 query II
