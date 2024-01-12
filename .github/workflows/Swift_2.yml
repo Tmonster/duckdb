@@ -1,4 +1,4 @@
-name: Swift
+name: Swift_2
 on:
   workflow_dispatch:
   repository_dispatch:
