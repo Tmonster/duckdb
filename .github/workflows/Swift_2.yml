@@ -14,7 +14,7 @@ on:
     types: [opened, reopened, ready_for_review]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: blah2-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
 
 jobs:
 
@@ -41,7 +41,7 @@ jobs:
         run: python3 tools/swift/create_package.py tools/swift
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_15.2.app && /usr/bin/xcodebuild -version
+        run: sudo xcode-select -switch /Applications/Xcode.app && /usr/bin/xcodebuild -version
 
       - name: Run Tests
         run: |
