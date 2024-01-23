@@ -57,8 +57,8 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 }
 
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, Interval::Invert(right));
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right) {
+	return AddOperator::Operation<date_t, interval_t, timestamp_t>(left, Interval::Invert(right));
 }
 
 template <>
@@ -226,6 +226,12 @@ template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
+}
+
+template <>
+dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	right.micros = -right.micros;
+	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(left, right);
 }
 
 } // namespace duckdb

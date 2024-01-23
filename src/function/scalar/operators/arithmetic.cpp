@@ -319,11 +319,14 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>);
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::INTEGER:
@@ -337,11 +340,14 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::INTERVAL,
 			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::DATE) {
-			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<interval_t, date_t, date_t, AddOperator>);
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<interval_t, date_t, timestamp_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME_TZ,
+			                      ScalarFunction::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t, AddTimeOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIMESTAMP) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
@@ -354,6 +360,15 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
+		}
+		break;
+	case LogicalTypeId::TIME_TZ:
+		if (right_type.id() == LogicalTypeId::DATE) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<dtime_tz_t, date_t, timestamp_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME_TZ,
+			                      ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, AddTimeOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -394,9 +409,16 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
 
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
+	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
+
 	// we can add times to dates
 	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+
+	// we can add times with time zones (offsets) to dates
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::DATE));
+	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
 
 	// we can add lists together
 	functions.AddFunction(ListConcatFun::GetFunction());
@@ -587,8 +609,8 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>);
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, SubtractOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -612,6 +634,13 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("-", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
+		}
+		break;
+	case LogicalTypeId::TIME_TZ:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			return ScalarFunction(
+			    "-", {left_type, right_type}, LogicalType::TIME_TZ,
+			    ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, SubtractTimeOperator>);
 		}
 		break;
 	default:
@@ -643,6 +672,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
 	set.AddFunction(functions);
