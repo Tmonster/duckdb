@@ -150,6 +150,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					break;
 				}
 			}
+			JoinType join_type = chosen_filter->join_type;
 
 			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
 			// Here we optimize build side probe side. Our build side is the right side
