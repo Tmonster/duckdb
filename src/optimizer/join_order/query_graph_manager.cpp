@@ -151,8 +151,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				}
 			}
 			JoinType join_type = chosen_filter->join_type;
-			if (join_type != JoinType::INNER || join_type != JoinType::SEMI || join_type != JoinType::ANTI) {
-				join_type == JoinType::INNER;
+			if (join_type != JoinType::INNER && join_type != JoinType::SEMI && join_type != JoinType::ANTI) {
+				join_type = JoinType::INNER;
 			}
 
 			auto join = make_uniq<LogicalComparisonJoin>(join_type);
