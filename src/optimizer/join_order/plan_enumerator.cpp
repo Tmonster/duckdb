@@ -137,7 +137,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 			break;
 		}
 	}
-//	D_ASSERT(join_type != JoinType::INVALID);
+	//	D_ASSERT(join_type != JoinType::INVALID);
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right, join_type);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
