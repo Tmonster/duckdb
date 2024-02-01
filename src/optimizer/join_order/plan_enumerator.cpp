@@ -119,14 +119,11 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = nullptr;
-	if (left.set.ToString() == "[0, 2]" && right.set.ToString() == "[1]") {
-		auto wat = 0;
-	}
 	// cross products are techincally still connections, but the filter expression is a null_ptr
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}
-	auto join_type = JoinType::INVALID;
+	JoinType join_type = JoinType::INNER;
 	for (auto &filter_binding : best_connection->filters) {
 		if (!filter_binding->left_set || !filter_binding->right_set) {
 			continue;
@@ -140,7 +137,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 			break;
 		}
 	}
-	D_ASSERT(join_type != JoinType::INVALID);
+//	D_ASSERT(join_type != JoinType::INVALID);
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right, join_type);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
