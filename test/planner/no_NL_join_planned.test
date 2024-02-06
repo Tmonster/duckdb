@@ -1,0 +1,18 @@
+# name: test/planner/no_NL_join_planned.test
+# description: Test that constant filters are converted to LOGICAL filters
+# group: [planner]
+
+statement ok
+create table t1 as select range a, range::VARCHAR b from range(1000);
+
+statement ok
+create table t2 as select range*2 a, range::VARCHAR b from range(100);
+
+statement ok
+select * from t1 left join t2 on t1.a=t2.a and t1.b = '20';
+
+
+query II
+explain select * from t1 left join t2 on t1.a=t2.a and t1.b = '20';
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
