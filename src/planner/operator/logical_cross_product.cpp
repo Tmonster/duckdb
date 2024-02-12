@@ -17,4 +17,12 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperat
 	return make_uniq<LogicalCrossProduct>(std::move(left), std::move(right));
 }
 
+vector<ColumnBinding> LogicalCrossProduct::GetColumnBindings() {
+	auto left_bindings = MapBindings(children[0]->GetColumnBindings(), left_projection_map);
+	// for other join types we project both the LHS and the RHS
+	auto right_bindings = MapBindings(children[1]->GetColumnBindings(), right_projection_map);
+	left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+	return left_bindings;
+}
+
 } // namespace duckdb

@@ -2,6 +2,7 @@
 # description: see description
 # group: [joins]
 
+
 statement ok
 ATTACH 'test4.db'
 

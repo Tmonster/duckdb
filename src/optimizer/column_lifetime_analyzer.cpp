@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
@@ -81,15 +82,34 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		// visit current operator expressions so they are added to the referenced_columns
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
-		column_binding_set_t unused_bindings;
-		auto old_op_bindings = op.GetColumnBindings();
-		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
+		column_binding_set_t unused_bindings_left, unused_bindings_right;
+		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings_left);
+		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings_right);
 
 		// now recurse into the filter and its children
 		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
-		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
+		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings_left, comp_join.left_projection_map);
+		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings_right, comp_join.right_projection_map);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		if (everything_referenced) {
+			break;
+		}
+		auto &cross_product = op.Cast<LogicalCrossProduct>();
+
+		column_binding_set_t unused_bindings_left, unused_bindings_right;
+		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings_left);
+		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings_right);
+
+		// now recurse into the cross product and its children
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+		// then generate the projection map
+		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings_left, cross_product.left_projection_map);
+		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings_right, cross_product.right_projection_map);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:

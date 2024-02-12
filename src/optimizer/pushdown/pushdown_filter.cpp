@@ -12,6 +12,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	if (!filter.projection_map.empty()) {
 		return FinishPushdown(std::move(op));
 	}
+	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = filter.children[0]->Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::MARK) {
+			auto break_here = 1;
+		}
+	}
 	// filter: gather the filters and remove the filter from the set of operations
 	for (auto &expression : filter.expressions) {
 		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
@@ -20,7 +26,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		}
 	}
 	GenerateFilters();
-	return Rewrite(std::move(filter.children[0]));
+
+	auto new_op = Rewrite(std::move(filter.children[0]));
+	return new_op;
 }
 
 } // namespace duckdb
