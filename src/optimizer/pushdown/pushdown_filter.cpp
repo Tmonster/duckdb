@@ -20,7 +20,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		}
 	}
 	GenerateFilters();
+	if (filter.projection_map.empty() && filter.projection_map_initialized) {
+		throw InternalException("check this test");
+		return Rewrite(std::move(filter.children[0]));
+	}
 	return Rewrite(std::move(filter.children[0]));
+//	throw InternalException("check this test");
+//	filter.children[0] = Rewrite(std::move(filter.children[0]));
+//	return op;
 }
 
 } // namespace duckdb

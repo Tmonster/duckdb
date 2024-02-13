@@ -4,6 +4,7 @@
 namespace duckdb {
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::LOGICAL_FILTER) {
+	projection_map_initialized = false;
 	expressions.push_back(std::move(expression));
 	SplitPredicates(expressions);
 }

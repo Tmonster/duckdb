@@ -139,6 +139,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);
+		filter.projection_map_initialized = true;
 		return;
 	}
 	default:

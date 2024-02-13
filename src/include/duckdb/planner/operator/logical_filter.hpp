@@ -21,6 +21,7 @@ public:
 	explicit LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
+	bool projection_map_initialized;
 	vector<idx_t> projection_map;
 
 public:
