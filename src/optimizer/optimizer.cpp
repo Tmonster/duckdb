@@ -151,6 +151,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// Once we know the column lifetime, we have more information regarding
+	// what relations should be the build side/probe side.
+	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
+		BuildProbeSideOptimizer build_probe_side_optimizer(context);
+		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
@@ -175,13 +182,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
 		column_lifetime.VisitOperator(*plan);
-	});
-
-	// Once we know the column lifetime, we have more information regarding
-	// what relations should be the build side/probe side.
-	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
-		BuildProbeSideOptimizer build_probe_side_optimizer(context);
-		build_probe_side_optimizer.VisitOperator(*plan);
 	});
 
 	// compress data based on statistics for materializing operators
