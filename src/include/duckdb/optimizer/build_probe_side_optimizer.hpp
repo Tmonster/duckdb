@@ -34,7 +34,7 @@ public:
 
 	void TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
 
-	BuildSize GetBuildSide(LogicalOperator &op);
+	BuildSize GetBuildSizes(LogicalOperator &op);
 
 private:
 	ClientContext &context;

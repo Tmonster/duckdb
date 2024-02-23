@@ -28,7 +28,7 @@ static void FlipChildren(LogicalOperator &op) {
 	}
 }
 
-BuildSize BuildProbeSideOptimizer::GetBuildSide(LogicalOperator &op) {
+BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 	BuildSize ret;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -74,7 +74,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-	auto build_sizes = GetBuildSide(op);
+	auto build_sizes = GetBuildSizes(op);
 
 	// special math.
 	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
