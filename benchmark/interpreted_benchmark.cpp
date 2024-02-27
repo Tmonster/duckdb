@@ -306,6 +306,12 @@ void InterpretedBenchmark::LoadBenchmark() {
 			// restart the load from the template file
 			LoadBenchmark();
 			return;
+		} else if (splits[0] == "loop") {
+			try {
+				repeat = std::stoi(splits[1]);
+			} catch (const std::exception& e) {
+				throw std::runtime_error("Expected an int argument to loop");
+			}
 		} else {
 			throw std::runtime_error(reader.FormatException("unrecognized command " + splits[0]));
 		}
@@ -421,7 +427,9 @@ string InterpretedBenchmark::GetQuery() {
 
 void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	state.result = state.con.Query(run_query);
+	for (idx_t i = 0; i < repeat; i++) {
+		state.result = state.con.Query(run_query);
+	}
 }
 
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {

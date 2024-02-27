@@ -82,6 +82,7 @@ private:
 	string display_group;
 	string subgroup;
 
+	idx_t repeat = 1;
 	bool in_memory = true;
 	bool require_reinit = false;
 };

@@ -1,0 +1,17 @@
+# name: benchmark/micro/select/select.benchmark
+# description: measure performance of select
+# group: [pushdown]
+
+name Select
+group micro
+subgroup select
+
+require tpch
+
+load
+CALL dbgen(sf=1);
+
+loop 500
+
+run
+select * from lineitem limit 500;
