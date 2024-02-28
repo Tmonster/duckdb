@@ -54,12 +54,18 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
-			if (schema_obj) {
-				auto &attached = schema_obj->catalog.GetAttached();
-				throw BinderException(
-				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-				    schema, attached.GetName(), schema);
+			auto &search_path = *context.client_data->catalog_search_path;
+			auto catalog_names = search_path.GetCatalogsForSchema(schema);
+			if (catalog_names.empty()) {
+				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+			}
+			for (auto &catalog_name : catalog_names) {
+				auto &catalog = Catalog::GetCatalog(context, catalog_name);
+				if (catalog.CheckAmbiguousCatalogOrSchema(context, schema)) {
+					throw BinderException(
+					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+					    schema, catalog_name, schema);
+				}
 			}
 			catalog = schema;
 			schema = string();
@@ -630,13 +636,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else {
+		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
 			// two cases:
 			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			Binder::BindLogicalType(context, create_type_info.type);
+			create_type_info.type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
+			                                         UserType::GetTypeName(create_type_info.type));
+		} else {
+			auto preserved_type = create_type_info.type;
+			BindLogicalType(context, create_type_info.type);
+			create_type_info.type = preserved_type;
 		}
 		break;
 	}
