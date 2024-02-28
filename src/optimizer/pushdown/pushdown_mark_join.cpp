@@ -37,12 +37,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
 				// filter just references the marker: turn into semi join
-#ifdef DEBUG
-				simplified_mark_join = true;
-#endif
-				join.join_type = JoinType::SEMI;
-				filters.erase(filters.begin() + i);
-				i--;
 				continue;
 			}
 			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can
@@ -62,13 +56,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 						}
 					}
 					if (all_null_values_are_equal) {
-#ifdef DEBUG
-						simplified_mark_join = true;
-#endif
-						// all null values are equal, convert to ANTI join
-						join.join_type = JoinType::ANTI;
-						filters.erase(filters.begin() + i);
-						i--;
 						continue;
 					}
 				}
