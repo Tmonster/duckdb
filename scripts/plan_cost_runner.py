@@ -135,19 +135,19 @@ def print_diffs(diffs):
         print("New probe cost:", new_cost.probe_side)
 
 
-def cardinality_is_higher(old_cost, new_cost):
-    new_cardinality_higher = (
-        old_cost.total < new_cost.total
-        or old_cost.build_side < new_cost.build_side
-        or old_cost.probe_side < new_cost.probe_side
+def cardinality_is_higher(left_cost, right_cost):
+    left_cardinality_higher = (
+        left_cost.total > right_cost.total
+        or left_cost.build_side > right_cost.build_side
+        or left_cost.probe_side > right_cost.probe_side
     )
-    new_timing_higher = old_cost.time < new_cost.time
+    left_timing_higher = left_cost.time > (right_cost.time * 1.05)
 
     # if the cardinalities have changed, its possible build side probe sides
     # have changed, but this may still lead to better execution. So return
     # result of timing
-    if new_cardinality_higher:
-        return new_timing_higher
+    if left_cardinality_higher:
+        return left_timing_higher
 
     # if new_cardinality_higher is False, we either have the same plan, or
     # an even better plan with less cardinalities.
