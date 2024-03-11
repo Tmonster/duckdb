@@ -39,8 +39,8 @@ struct GenerateJoinRelation {
 //! Filter info struct that is used by the cardinality estimator to set the initial cardinality
 //! but is also eventually transformed into a query edge.
 struct FilterInfo {
-	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index)
-	    : filter(std::move(filter)), set(set), filter_index(filter_index) {
+	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index, FilterType filter_type = FilterType::SINGLE_OP_FILTER)
+	    : filter(std::move(filter)), set(set), filter_index(filter_index), filter_type(filter_type) {
 	}
 
 	unique_ptr<Expression> filter;
@@ -50,6 +50,7 @@ struct FilterInfo {
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+	FilterType filter_type;
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -109,6 +110,8 @@ private:
 	void CreateHyperGraphEdges();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
+
+	unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr);
 
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
 };

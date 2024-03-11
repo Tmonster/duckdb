@@ -2,7 +2,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -59,7 +58,7 @@ const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() con
 	return filters_and_bindings;
 }
 
-static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
+unique_ptr<LogicalOperator> QueryGraphManager::PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
 	// first check if we have any filter to push it into
 	if (node->type != LogicalOperatorType::LOGICAL_FILTER) {
@@ -80,12 +79,13 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON &&
+		    filter_info->filter_type == FilterType::JOIN_FILTER) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
-			relation_manager.ExtractBindings(*comparison.left, left_bindings);
-			relation_manager.ExtractBindings(*comparison.right, right_bindings);
+			relation_manager.ExtractBindings(*comparison.left, left_bindings, filter_info->filter_type);
+			relation_manager.ExtractBindings(*comparison.right, right_bindings, filter_info->filter_type);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
@@ -100,8 +100,6 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 						// they are disjoint, we only need to create one set of edges in the join graph
 						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
 						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
-					} else {
-						continue;
 					}
 					continue;
 				}

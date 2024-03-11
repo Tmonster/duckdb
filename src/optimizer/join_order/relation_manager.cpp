@@ -35,14 +35,20 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 	auto relation_id = relations.size();
 
 	LogicalOperator *aggr_op = &op;
+	auto op_bindings = op.GetColumnBindings();
+
 	while (aggr_op->type != op_type) {
 		if (aggr_op->children.empty()) {
 			throw InternalException("Parent of Aggregate/window operation by does not have window/window op as child.");
 		}
 		aggr_op = aggr_op->children[0].get();
 	}
-
-	if (aggr_op->type == LogicalOperatorType::LOGICAL_WINDOW) {
+	for (auto &binding : aggr_op->GetColumnBindings()) {
+		if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
+			relation_mapping[binding.table_index] = relation_id;
+		}
+	}
+ 	if (aggr_op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 		auto window_bindings = aggr_op->GetColumnBindings();
 		for (auto &binding : window_bindings) {
 			if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
@@ -282,7 +288,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 }
 
-bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
+bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings,
+                                      FilterType filter_type) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
@@ -296,7 +303,10 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			// operator during plan reconstruction
 			return true;
 		}
-		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+		// some colref.binding.table indexes are created by window functions and IMMEDIATELY filtered (example LIMIT rownum)
+		// for this reason, we dont care if the table index is in the relation mapping, it has nothing to do with the join order optimizer
+		D_ASSERT(filter_type == FilterType::SINGLE_OP_FILTER ||
+		         relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -307,7 +317,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 	D_ASSERT(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
-		if (!ExtractBindings(expr, bindings)) {
+		if (!ExtractBindings(expr, bindings, filter_type)) {
 			can_reorder = false;
 			return;
 		}
@@ -335,9 +345,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				if (filter_set.find(*comparison) == filter_set.end()) {
 					filter_set.insert(*comparison);
 					unordered_set<idx_t> bindings;
-					ExtractBindings(*comparison, bindings);
+					ExtractBindings(*comparison, bindings, FilterType::JOIN_FILTER);
 					auto &set = set_manager.GetJoinRelation(bindings);
-					auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size());
+					auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), FilterType::JOIN_FILTER);
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
@@ -347,9 +357,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
 					unordered_set<idx_t> bindings;
-					ExtractBindings(*expression, bindings);
+					ExtractBindings(*expression, bindings, FilterType::SINGLE_OP_FILTER);
 					auto &set = set_manager.GetJoinRelation(bindings);
-					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
+					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size(), FilterType::SINGLE_OP_FILTER);
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}

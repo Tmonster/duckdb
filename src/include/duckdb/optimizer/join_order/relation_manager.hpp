@@ -22,6 +22,11 @@ namespace duckdb {
 
 struct FilterInfo;
 
+enum class FilterType : uint8_t {
+	JOIN_FILTER = 0,
+	SINGLE_OP_FILTER = 1
+};
+
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
 	LogicalOperator &op;
@@ -52,7 +57,7 @@ public:
 	                                            JoinRelationSetManager &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
-	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings, FilterType filter_type);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 
 	void AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
