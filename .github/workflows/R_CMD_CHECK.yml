@@ -106,7 +106,7 @@ jobs:
       - name: Fix file
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: sed -i 's/\^\*_files\$/\^\.*_files\$/g' .Rbuildignore
+        run: sed -i 's/\^\*_files\$/_files\$/g' .Rbuildignore
 
       - uses: r-lib/actions/check-r-package@v2
         with:
