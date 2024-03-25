@@ -177,6 +177,9 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
 		columnref = &left.Cast<BoundColumnRefExpression>();
 		constant = &right.Cast<BoundConstantExpression>();
+//		if (constant->value.type().IsIntegral() && constant->value == 550) {
+//			return;
+//		}
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
