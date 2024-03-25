@@ -102,7 +102,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
         env:
-          DUCKDB_PATH: ${{ $GITHUB_WORKSPACE/$DUCKDB_SRC }}
+          DUCKDB_PATH: ${{ env.GITHUB_WORKSPACE/env.DUCKDB_SRC }}
         run: ./vendor.sh
 
       - uses: r-lib/actions/check-r-package@v2
