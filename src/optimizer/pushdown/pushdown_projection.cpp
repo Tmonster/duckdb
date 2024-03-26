@@ -8,11 +8,6 @@ namespace duckdb {
 
 static bool IsVolatile(LogicalProjection &proj, const unique_ptr<Expression> &expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-//		auto to_str = expr->ToString();
-//		auto wat = (int)to_str.find("550");
-//		if (wat >= 0) {
-//			auto break_here = 0;
-//		}
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.table_index);
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());
@@ -51,8 +46,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	FilterPushdown child_pushdown(optimizer);
 	// There are some expressions can not be pushed down. We should keep them
 	// and add an extra filter operator.
+	D_ASSERT(!proj.children.empty());
 	if (proj.children.size() > 0 && proj.children[0]->type == LogicalOperatorType::LOGICAL_WINDOW) {
-		// filters cannot be pushed into window
+		// filters cannot be pushed into a window.
+		// We want to preserve the projection inbetween so that
+		// statistics propagation does not update stastics for the filtered column binding
+		// before the filter operator. see Internal#1576
 		return FinishPushdown(std::move(op));
 	}
 	vector<unique_ptr<Expression>> remain_expressions;
