@@ -5,6 +5,5 @@
 cache tiger-eye-34.duckdb
 
 run
-set disabled_optimizers='filter_pushdown';
 select * from (select id, num_employees from Accounts_asof_future('2024-12-31 00:00:00.0000+00'::TIMESTAMPTZ, multiverse_key := '9VqZ3zKFsT15MHe') where id = 'BP3wDgRb98EuHxg') where num_employees > 550;
  	
