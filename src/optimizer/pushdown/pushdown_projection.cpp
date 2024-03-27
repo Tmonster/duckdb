@@ -47,13 +47,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	// There are some expressions can not be pushed down. We should keep them
 	// and add an extra filter operator.
 	D_ASSERT(!proj.children.empty());
-	if (proj.children.size() > 0 && proj.children[0]->type == LogicalOperatorType::LOGICAL_WINDOW) {
-		// filters cannot be pushed into a window.
-		// We want to preserve the projection inbetween so that
-		// statistics propagation does not update stastics for the filtered column binding
-		// before the filter operator. see Internal#1576
-		return FinishPushdown(std::move(op));
-	}
+//	if (proj.children.size() > 0 && proj.children[0]->type == LogicalOperatorType::LOGICAL_WINDOW) {
+//		// filters cannot be pushed into a window.
+//		// We want to preserve the projection inbetween so that
+//		// statistics propagation does not update stastics for the filtered column binding
+//		// before the filter operator. see Internal#1576
+//		return FinishPushdown(std::move(op));
+//	}
 	vector<unique_ptr<Expression>> remain_expressions;
 	for (auto &filter : filters) {
 		auto &f = *filter;
