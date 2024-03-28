@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table t1 as select range::VARCHAR a from range(1000);
+create table t1 as select range::VARCHAR a, range b from range(1000);
 
 statement ok
 copy t1 to '__TEST_DIR__/t1.parquet' (FORMAT PARQUET);
@@ -22,3 +22,31 @@ query II
 explain select * from '__TEST_DIR__/t1.parquet' where a in ('400');
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*
+
+# make sure in filters that can be converted to zone maps are still converted to
+# <= and >= filters (i.e zone maps)
+query II
+explain select b from '__TEST_DIR__/t1.parquet' where b in (400, 401, 402, 403);
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*
+
+statement ok
+create table t2 as select range a from range(10);
+
+# not in filters are correct
+query I
+select a from t2 where a not in (6, 7, 8);
+----
+0
+1
+2
+3
+4
+5
+9
+
+# not in filters cannot be pushed down since they are OR filters
+query II
+explain select a from t2 where a not in (6, 7, 8);
+----
+physical_plan	<REGEX>:.*FILTER.*SEQ_SCAN.*

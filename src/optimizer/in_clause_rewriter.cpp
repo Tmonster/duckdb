@@ -23,9 +23,85 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 	return op;
 }
 
+MaybeZoneMapFilter InClauseRewriter::CreateZoneMapFilter(BoundOperatorExpression &expr) {
+	auto ret = MaybeZoneMapFilter();
+	D_ASSERT(expr.type != ExpressionType::COMPARE_IN || expr.type != ExpressionType::COMPARE_NOT_IN);
+	auto is_regular_in = expr.type == ExpressionType::COMPARE_IN;
+	auto &compare_in = expr.Cast<BoundOperatorExpression>();
+	if (compare_in.children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+		return ret;
+	}
+	auto &column_ref = compare_in.children[0]->Cast<BoundColumnRefExpression>();
+	auto column_index = column_ref.binding.column_index;
+	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+		return ret;
+	}
+
+	//! check if all children are const expr
+	bool children_constant = true;
+	for (size_t i {1}; i < compare_in.children.size(); i++) {
+		if (compare_in.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+			children_constant = false;
+			break;
+		}
+	}
+	if (!children_constant) {
+		return ret;
+	}
+	auto &fst_const_value_expr = compare_in.children[1]->Cast<BoundConstantExpression>();
+	auto &type = fst_const_value_expr.value.type();
+
+	//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+	// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
+	if (!type.IsIntegral()) {
+		return ret;
+	}
+	vector<hugeint_t> in_values;
+	bool can_simplify_in_clause = true;
+	for (idx_t i = 1; i < compare_in.children.size(); i++) {
+		auto &const_value_expr = compare_in.children[i]->Cast<BoundConstantExpression>();
+		if (const_value_expr.value.IsNull()) {
+			can_simplify_in_clause = false;
+			break;
+		}
+		in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
+	}
+	if (!can_simplify_in_clause || in_values.empty()) {
+		return ret;
+	}
+	sort(in_values.begin(), in_values.end());
+
+	for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
+		if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
+			can_simplify_in_clause = false;
+			break;
+		}
+	}
+	if (!can_simplify_in_clause) {
+		return ret;
+	}
+	auto lower_bound = make_uniq<BoundComparisonExpression>(
+	    is_regular_in ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN,
+	    expr.children[0]->Copy(), make_uniq<BoundConstantExpression>(Value::Numeric(type, in_values.front())));
+	auto upper_bound = make_uniq<BoundComparisonExpression>(
+	    is_regular_in ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN,
+	    expr.children[0]->Copy(), make_uniq<BoundConstantExpression>(Value::Numeric(type, in_values.back())));
+	auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_AND
+	                                                                       : ExpressionType::CONJUNCTION_OR);
+	conjunction->children.push_back(std::move(lower_bound));
+	conjunction->children.push_back(std::move(upper_bound));
+	ret.zone_map_filter = std::move(conjunction);
+	ret.filter_created = true;
+	return ret;
+}
+
 unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
 		return nullptr;
+	}
+	auto can_create_zone_map = CreateZoneMapFilter(expr);
+	if (can_create_zone_map.filter_created) {
+		return std::move(can_create_zone_map.zone_map_filter);
 	}
 	D_ASSERT(root);
 	auto in_type = expr.children[0]->return_type;
