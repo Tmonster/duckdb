@@ -25,6 +25,7 @@ public:
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
+	column_binding_set_t remove_bindings;
 	struct Filter {
 		unordered_set<idx_t> bindings;
 		unique_ptr<Expression> filter;
@@ -40,6 +41,8 @@ public:
 private:
 	vector<unique_ptr<Filter>> filters;
 	Optimizer &optimizer;
+
+//	void RemoveExpressions(LogicalOperator &op);
 
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);

@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-
+#include "iostream"
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
@@ -15,6 +15,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto break_here = 0;
+		auto column_bindings = op->GetColumnBindings();
+		for (auto &binding: column_bindings) {
+			std::cout << binding.table_index << "." << binding.column_index << std::endl;
+		}
+		auto boop = 0;
+	}
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 #ifdef DEBUG
@@ -37,12 +45,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
 				// filter just references the marker: turn into semi join
-//#ifdef DEBUG
-//				simplified_mark_join = true;
-//#endif
-//				join.join_type = JoinType::SEMI;
-//				filters.erase(filters.begin() + i);
-//				i--;
+#ifdef DEBUG
+				simplified_mark_join = true;
+#endif
+				remove_bindings.insert(ColumnBinding(join.mark_index, 0));
+				join.join_type = JoinType::SEMI;
+				filters.erase(filters.begin() + i);
+				i--;
 				continue;
 			}
 			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can
@@ -62,13 +71,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 						}
 					}
 					if (all_null_values_are_equal) {
-//#ifdef DEBUG
-//						simplified_mark_join = true;
-//#endif
-//						// all null values are equal, convert to ANTI join
-//						join.join_type = JoinType::ANTI;
-//						filters.erase(filters.begin() + i);
-//						i--;
+#ifdef DEBUG
+						simplified_mark_join = true;
+#endif
+						remove_bindings.insert(ColumnBinding(join.mark_index, 0));
+						// all null values are equal, convert to ANTI join
+						join.join_type = JoinType::ANTI;
+						filters.erase(filters.begin() + i);
+						i--;
 						continue;
 					}
 				}

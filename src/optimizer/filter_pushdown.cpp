@@ -12,40 +12,64 @@ using Filter = FilterPushdown::Filter;
 FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
 }
 
+//FilterPushdown::RemoveExpressions(LogicalOperator &op) {
+//	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+//		auto &colref = expr.Cast<BoundColumnRefExpression>();
+//		D_ASSERT(colref.depth == 0);
+//
+//		colref.binding.table_index = setop.table_index;
+//		return;
+//	}
+//	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ReplaceFilterTableIndex(child, setop); });
+//}
+
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
+	unique_ptr<LogicalOperator> ret;
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return PushdownAggregate(std::move(op));
+		ret = PushdownAggregate(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
-		return PushdownFilter(std::move(op));
+		ret = PushdownFilter(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		return PushdownCrossProduct(std::move(op));
+		ret = PushdownCrossProduct(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		return PushdownJoin(std::move(op));
+		ret = PushdownJoin(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return PushdownProjection(std::move(op));
+		ret = PushdownProjection(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_UNION:
-		return PushdownSetOperation(std::move(op));
+		ret = PushdownSetOperation(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		return PushdownDistinct(std::move(op));
+		ret = PushdownDistinct(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(std::move(op->children[0]));
-		return op;
+		ret = std::move(op);
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
-		return PushdownGet(std::move(op));
+		ret = PushdownGet(std::move(op));
+		break;
 	case LogicalOperatorType::LOGICAL_LIMIT:
-		return PushdownLimit(std::move(op));
+		ret = PushdownLimit(std::move(op));
+		break;
 	default:
-		return FinishPushdown(std::move(op));
+		ret = FinishPushdown(std::move(op));
+		break;
 	}
+	return ret;
 }
 
 ClientContext &FilterPushdown::GetContext() {
