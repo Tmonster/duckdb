@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,17 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 			auto &bound = mod->Cast<BoundDistinctModifier>();
 			auto distinct = make_uniq<LogicalDistinct>(std::move(bound.target_distincts), bound.distinct_type);
 			distinct->AddChild(std::move(root));
-			root = std::move(distinct);
+			auto proj_index = GenerateTableIndex();
+			vector<unique_ptr<Expression>> projection_list;
+			auto distinct_types = distinct->types;
+			auto distinct_bindings = distinct->GetColumnBindings();
+			D_ASSERT(distinct->types.size() == distinct->GetColumnBindings().size());
+			for (idx_t i = 0; i < distinct->types.size(); i++) {
+				projection_list.push_back(make_uniq<BoundColumnRefExpression>(distinct_types.at(i), distinct_bindings.at(i)));
+			}
+			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_list));
+			proj->children.push_back(std::move(distinct));
+			root = std::move(proj);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
