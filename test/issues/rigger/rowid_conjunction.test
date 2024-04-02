@@ -9,10 +9,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE t0(c0 TINYINT);
-
-statement ok
-INSERT INTO t0 VALUES (1), (2), (3), (NULL);
+CREATE TABLE t0 as select * from VALUES (1::TINYINT), (2::TINYINT), (3::TINYINT), (NULL) t(c0);
 
 statement error
 SELECT * FROM t0 WHERE (((0.7839485854397868 BETWEEN false AND PRINTF(((0.8341154324178778)NOT SIMILAR TO(t0.c0)), NULL, ((0.9015841357551267) ::VARCHAR), DATE '1969-12-25')))AND(t0.rowid))

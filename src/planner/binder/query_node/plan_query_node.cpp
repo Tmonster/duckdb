@@ -5,28 +5,20 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root) {
 	D_ASSERT(root);
+	ColumnBindingReplacer bindings_replacer;
 	for (auto &mod : node.modifiers) {
 		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &bound = mod->Cast<BoundDistinctModifier>();
 			auto distinct = make_uniq<LogicalDistinct>(std::move(bound.target_distincts), bound.distinct_type);
 			distinct->AddChild(std::move(root));
-			auto proj_index = GenerateTableIndex();
-			vector<unique_ptr<Expression>> projection_list;
-			auto distinct_types = distinct->types;
-			auto distinct_bindings = distinct->GetColumnBindings();
-			D_ASSERT(distinct->types.size() == distinct->GetColumnBindings().size());
-			for (idx_t i = 0; i < distinct->types.size(); i++) {
-				projection_list.push_back(make_uniq<BoundColumnRefExpression>(distinct_types.at(i), distinct_bindings.at(i)));
-			}
-			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_list));
-			proj->children.push_back(std::move(distinct));
-			root = std::move(proj);
+			root = std::move(distinct);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -57,6 +49,34 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 			throw BinderException("Unimplemented modifier type!");
 		}
 	}
+//	auto proj_index = GenerateTableIndex();
+//	vector<unique_ptr<Expression>> projection_list;
+//	auto distinct_bindings = root->GetColumnBindings();
+//	for (auto &binding : root->GetColumnBindings()) {
+//		auto to_replace = ReplacementBinding(binding, ColumnBinding(proj_index, binding.column_index));
+//		bindings_replacer.replacement_bindings.push_back(to_replace);
+//	}
+//	vector<unique_ptr<Expression>> expressions;
+//	switch (root->type) {
+//	case LogicalOperatorType::LOGICAL_LIMIT:
+//		break;
+//	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+//		auto &order = root->Cast<LogicalOrder>();
+//		for (auto &target : order.)
+//		break;
+//	}
+//	case LogicalOperatorType::LOGICAL_DISTINCT:
+//		auto &distinct = root->Cast<LogicalDistinct>();
+//		for (auto &target : distinct.distinct_targets) {
+//			expressions.push_back(target->Copy());
+//		}
+//	}
+//	for (auto &expression : expressions) {
+//		bindings_replacer.VisitExpression(&expression);
+//		projection_list.push_back(std::move(expression));
+//	}
+//	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_list));
+//	proj->children.push_back(std::move(root));
 	return root;
 }
 

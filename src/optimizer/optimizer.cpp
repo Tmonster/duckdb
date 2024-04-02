@@ -200,6 +200,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		});
 	}
 
+	plan->Print();
 	Planner::VerifyPlan(context, plan);
 
 	return std::move(plan);

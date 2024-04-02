@@ -251,6 +251,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			return make_uniq<NodeStatistics>(0, 0);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
+			// here we need pass the filter index as well.
+			// the columns coming out of the filter have the statistics, not the columns coming into the filter.
 			UpdateFilterStatistics(*condition);
 		}
 	}
