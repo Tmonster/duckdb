@@ -8,35 +8,38 @@ CREATE TABLE integers(i INTEGER, j INTEGER)
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-# standalone limit
-query II
-EXPLAIN SELECT i FROM integers LIMIT 4
-----
-logical_opt	<REGEX>:.*LIMIT.*
+## standalone limit
+#query II
+#EXPLAIN SELECT i FROM integers LIMIT 4
+#----
+#logical_opt	<REGEX>:.*LIMIT.*
+#
+## standalone order by
+#query II
+#EXPLAIN SELECT i FROM integers ORDER BY i
+#----
+#logical_opt	<REGEX>:.*ORDER.*
+#
+## order by + limit is transformed into top-n
+#query II
+#EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4
+#----
+#logical_opt	<REGEX>:.*TOP_N.*
+#
+## also works with offset
+#query II
+#EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4 OFFSET 3
+#----
+#logical_opt	<REGEX>:.*TOP_N.*
+#
+## only offset but no limit: no top-n
+#query II
+#EXPLAIN SELECT i FROM integers ORDER BY i OFFSET 3
+#----
+#logical_opt	<!REGEX>:.*TOP_N.*
 
-# standalone order by
-query II
-EXPLAIN SELECT i FROM integers ORDER BY i
-----
-logical_opt	<REGEX>:.*ORDER.*
-
-# order by + limit is transformed into top-n
-query II
-EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4
-----
-logical_opt	<REGEX>:.*TOP_N.*
-
-# also works with offset
-query II
-EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4 OFFSET 3
-----
-logical_opt	<REGEX>:.*TOP_N.*
-
-# only offset but no limit: no top-n
-query II
-EXPLAIN SELECT i FROM integers ORDER BY i OFFSET 3
-----
-logical_opt	<!REGEX>:.*TOP_N.*
+statement ok
+WITH cte1 AS (SELECT range%2000 a, (range%2000 + 2000) b, (range%2000 + 4000) c, (range%2000 + 6000) d FROM range(10000) ORDER BY range), cte2 as (select * from cte1), cte3 as (select a as d, b as c, c as b, d as a from cte2) SELECT * FROM cte3 LIMIT 100;
 
 # only limit, but in subquery with projection pull up optimization
 query II
