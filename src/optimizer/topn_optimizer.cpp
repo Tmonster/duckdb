@@ -27,6 +27,7 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
+		auto old_bindings = op->GetColumnBindings();
 		auto &limit = op->Cast<LogicalLimit>();
 		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
 		auto limit_val = int64_t(limit.limit_val.GetConstantValue());
@@ -34,13 +35,13 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 			offset_val = limit.offset_val.GetConstantValue();
 		}
-		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit_val, offset_val);
+		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit_val, offset_val, order_by.projections);
 		topn->AddChild(std::move(order_by.children[0]));
+		auto topn_bindings = topn->GetColumnBindings();
 		op = std::move(topn);
-	} else {
-		for (auto &child : op->children) {
-			child = Optimize(std::move(child));
-		}
+	}
+	for (auto &child : op->children) {
+		child = Optimize(std::move(child));
 	}
 	return op;
 }

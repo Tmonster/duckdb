@@ -19,8 +19,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_TOP_N;
 
 public:
-	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(std::move(orders)), limit(limit), offset(offset) {
+	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset, vector<column_t> &projections)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(std::move(orders)), limit(limit), offset(offset),
+	      projections(projections) {
 	}
 
 	vector<BoundOrderByNode> orders;
@@ -28,10 +29,12 @@ public:
 	int64_t limit;
 	//! The offset from the start to begin emitting elements
 	int64_t offset;
+	// Projection mappings
+	vector<column_t> projections;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
-		return children[0]->GetColumnBindings();
+		return MapBindings(children[0]->GetColumnBindings(), projections);
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -41,7 +44,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = children[0]->types;
+		types = MapTypes(children[0]->types, projections);
 	}
 };
 } // namespace duckdb

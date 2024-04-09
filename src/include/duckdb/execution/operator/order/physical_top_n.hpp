@@ -21,11 +21,12 @@ public:
 
 public:
 	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-	             idx_t estimated_cardinality);
+	             idx_t estimated_cardinality, vector<column_t> projections);
 
 	vector<BoundOrderByNode> orders;
 	idx_t limit;
 	idx_t offset;
+	vector<column_t> projections;
 
 public:
 	// Source interface

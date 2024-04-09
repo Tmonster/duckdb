@@ -11,9 +11,9 @@
 namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-                           idx_t estimated_cardinality)
+                           idx_t estimated_cardinality, vector<column_t> projections)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)),
-      limit(limit), offset(offset) {
+      projections(projections), limit(limit), offset(offset) {
 }
 
 //===--------------------------------------------------------------------===//
