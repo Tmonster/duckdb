@@ -122,19 +122,6 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}
-	auto join_type = JoinType::INVALID;
-	for (auto &filter_binding : best_connection->filters) {
-		if (!filter_binding->left_set || !filter_binding->right_set) {
-			continue;
-		}
-
-		join_type = filter_binding->join_type;
-		// prefer joining on semi and anti joins as they have a higher chance of being more
-		// selective
-		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-			break;
-		}
-	}
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
