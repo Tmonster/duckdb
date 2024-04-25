@@ -3,16 +3,16 @@
 # group: [list]
 
 statement ok
-create table t1 as select * from range(1000) t1(id);
+create or replace table t1 as select * from range(1000) t1(id);
 
 statement ok
-create table t3 as select * from range(750000) t3(item_id);
+create or replace table t3 as select * from range(750000) t3(item_id);
 
 statement ok
-create table t2 as select id, array(select item_id from t3 limit 20000) as item_ids from t1;
+create table t2 as select id, array(select item_id from t3 limit 2000) as item_ids from t1;
 
 statement ok
-select * from t2, UNNEST(t2.item_ids) t3(what);
+select * from t2, UNNEST(t2.item_ids) t4(what);
 
 mode skip
 
