@@ -1,0 +1,30 @@
+# name: test/sql/types/list/unnest_and_cross_product.test
+# description: Test nested unnests
+# group: [list]
+
+statement ok
+create table t1 as select * from range(1000) t1(id);
+
+statement ok
+create table t3 as select * from range(750000) t3(item_id);
+
+statement ok
+create table t2 as select id, array(select item_id from t3 limit 2000) as item_ids from t1;
+
+statement ok
+select * from t2, UNNEST(select * from t2.item_ids) t3(what);
+
+mode skip
+
+statement ok
+SELECT *
+FROM t1
+INNER JOIN t2 ON t2.id = t1.id,
+UNNEST(COALESCE(t2.item_ids, [])) u(item_id);
+
+statement ok
+SELECT t3.item_id
+FROM t1
+INNER JOIN t2 ON t2.id = t1.id,
+UNNEST(COALESCE(t2.item_ids, [])) u(item_id)
+INNER JOIN t3 on t3.item_id = u.item_id;
