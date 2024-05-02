@@ -290,12 +290,9 @@ void JoinHashTable::InitializePointerTable() {
 	if (hash_map.get()) {
 		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
-		if (capacity > current_capacity) {
-			// Need more space
+		if (capacity != current_capacity) {
+			// Different size, re-allocate
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
-		} else {
-			// Just use the current hash map
-			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map
@@ -485,7 +482,7 @@ void ScanStructure::AdvancePointers() {
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
-	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector);
+	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector, nullptr);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -516,7 +513,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
-		// for right semi join, just mark the entry as found and move on. Propogation happens later
+		// for right semi join, just mark the entry as found and move on. Propagation happens later
 		if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 			// matches were found
 			// construct the result
@@ -852,7 +849,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		auto &vector = result.data[left_column_count + i];
 		const auto output_col_idx = output_columns[i];
 		D_ASSERT(vector.GetType() == layout.GetTypes()[output_col_idx]);
-		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector);
+		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
 	}
 }
 
@@ -943,7 +940,8 @@ void JoinHashTable::SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &l
 
 		auto new_estimated_size = double(max_partition_size) / partition_multiplier;
 		auto new_estimated_count = double(max_partition_count) / partition_multiplier;
-		auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
+		auto new_estimated_ht_size =
+		    new_estimated_size + static_cast<double>(PointerTableSize(NumericCast<idx_t>(new_estimated_count)));
 
 		if (new_estimated_ht_size <= double(max_ht_size) / 4) {
 			// Aim for an estimated partition size of max_ht_size / 4

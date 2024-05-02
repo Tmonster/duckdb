@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/scanner/column_count_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 
 namespace duckdb {
 
@@ -37,6 +37,10 @@ bool ColumnCountResult::EmptyLine(ColumnCountResult &result, const idx_t buffer_
 	return false;
 }
 
+void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
+	// nop
+}
+
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        shared_ptr<CSVErrorHandler> error_handler)
@@ -46,8 +50,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto scanner = make_uniq<StringValueScanner>(0, buffer_manager, state_machine, error_handler);
-	scanner->sniffing = true;
+	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
 	return scanner;
 }
 

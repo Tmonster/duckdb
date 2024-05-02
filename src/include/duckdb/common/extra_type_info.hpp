@@ -45,12 +45,12 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -190,8 +190,8 @@ private:
 
 struct ArrayTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
-	idx_t size;
-	explicit ArrayTypeInfo(LogicalType child_type_p, idx_t size_p);
+	uint32_t size;
+	explicit ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p);
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -219,7 +219,7 @@ private:
 };
 
 struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
-	IntegerLiteralTypeInfo(Value constant_value);
+	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 

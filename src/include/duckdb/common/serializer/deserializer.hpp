@@ -15,7 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/uhugeint.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -105,6 +105,18 @@ public:
 
 	template <typename T>
 	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(default_value);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
+	                                    T &&default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
 			OnOptionalPropertyEnd(false);
@@ -453,6 +465,13 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, PhysicalIndex>::value, T>::type Read() {
 		return PhysicalIndex(ReadUnsignedInt64());
+	}
+
+	// Deserialize an optional_idx
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type Read() {
+		auto idx = ReadUnsignedInt64();
+		return idx == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(idx);
 	}
 
 protected:

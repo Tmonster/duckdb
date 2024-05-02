@@ -19,12 +19,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -48,7 +50,7 @@ using duckdb_parquet::format::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
-	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
+	auto transport = std::make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -111,7 +113,7 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 		metadata->read(file_proto.get());
 	}
 
-	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
@@ -241,12 +243,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::VARCHAR;
+		case ConvertedType::NULL_TYPE:
+			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::BSON:
 		default:
-			throw IOException("Unsupported converted type");
+			throw IOException("Unsupported converted type (%d)", (int32_t)s_ele.converted_type);
 		}
 	} else {
 		// no converted type set
@@ -874,6 +878,11 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	case TableFilterType::IS_NULL:
 		FilterIsNull(v, filter_mask, count);
 		break;
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
+		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
+	} break;
 	default:
 		D_ASSERT(0);
 		break;

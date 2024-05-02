@@ -195,12 +195,16 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 		}
 		case ConstraintType::UNIQUE: {
 			auto &unique = constraint->Cast<UniqueConstraint>();
-			bool &constraint_info = unique.is_primary_key ? result.pk : result.unique;
-			if (unique.index == column.Logical()) {
-				constraint_info = true;
-			}
-			if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
-				constraint_info = true;
+			bool &constraint_info = unique.IsPrimaryKey() ? result.pk : result.unique;
+			if (unique.HasIndex()) {
+				if (unique.GetIndex() == column.Logical()) {
+					constraint_info = true;
+				}
+			} else {
+				auto &columns = unique.GetColumnNames();
+				if (std::find(columns.begin(), columns.end(), column.GetName()) != columns.end()) {
+					constraint_info = true;
+				}
 			}
 			break;
 		}
@@ -251,7 +255,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto type = view.types[i];
-		auto &name = view.aliases[i];
+		auto &name = i < view.aliases.size() ? view.aliases[i] : view.names[i];
 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name, type, output, index);

@@ -41,4 +41,16 @@ struct CSVSnifferFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ReadBlobFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ReadTextFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct QueryTableFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

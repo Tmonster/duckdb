@@ -10,12 +10,12 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	D_ASSERT(Empty());
 
 	column_stats = std::move(data.table_stats.column_stats);
-	if (data.table_stats.sample) {
-		sample = std::move(data.table_stats.sample);
+	if (data.table_stats.table_sample) {
+		table_sample = std::move(data.table_stats.table_sample);
 	} else {
 		auto &allocator = Allocator::DefaultAllocator();
 		idx_t sample_size = STANDARD_VECTOR_SIZE;
-		sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
+		table_sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
@@ -26,7 +26,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 
 	auto &allocator = Allocator::DefaultAllocator();
-	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
+	table_sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}
@@ -41,11 +41,11 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
 	// TODO: add new chunk with one type so that sample does not need to be destroyed
-	if (parent.sample) {
-		sample = std::move(parent.sample);
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
 	}
-	if (sample) {
-		sample->Destroy();
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -59,11 +59,11 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 		}
 	}
 	// TODO: split the sample chunk and fuse it back together without the deleted column
-	if (parent.sample) {
-		sample = std::move(parent.sample);
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
 	}
-	if (sample) {
-		sample->Destroy();
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -78,11 +78,11 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
-	if (parent.sample) {
-		sample = std::move(parent.sample);
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
 	}
-	if (sample) {
-		sample->Destroy();
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -99,10 +99,10 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	// if the sample has been nullified, no need to merge.
-	if (sample) {
-		sample->Merge(std::move(other.sample));
+	if (table_sample) {
+		table_sample->Merge(std::move(other.table_sample));
 	} else {
-		sample = std::move(other.sample);
+		table_sample = std::move(other.table_sample);
 	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {
@@ -138,14 +138,14 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
-	if (sample) {
-		other.sample = sample->Copy();
+	if (table_sample) {
+		other.table_sample = table_sample->Copy();
 	}
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
-	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", sample, nullptr);
+	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", table_sample, nullptr);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
@@ -163,7 +163,7 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
-	sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", nullptr);
+	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", nullptr);
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

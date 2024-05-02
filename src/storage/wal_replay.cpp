@@ -25,6 +25,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
@@ -158,10 +159,10 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
+bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
 	Connection con(database.GetDatabase());
-	auto initial_source = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str());
-	if (initial_source->Finished()) {
+	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
+	if (reader.Finished()) {
 		// WAL is empty
 		return false;
 	}
@@ -174,26 +175,28 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry (deserialize only)
-			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, *initial_source, true);
+			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
 				// check if the file is exhausted
-				if (initial_source->Finished()) {
+				if (reader.Finished()) {
 					// we finished reading the file: break
 					break;
 				}
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		                                   // serialization exception - torn WAL
-		                                   // continue reading
-	} catch (std::exception &ex) {
-		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
-		return false;
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::SERIALIZATION) {
+			// serialization exception - torn WAL
+			// continue reading
+		} else {
+			Printer::PrintF("Exception in WAL playback during initial read: %s\n", error.RawMessage());
+			return false;
+		}
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
 	} // LCOV_EXCL_STOP
-	initial_source.reset();
 	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
 		auto &manager = database.GetStorageManager();
@@ -205,8 +208,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
 	ReplayState state(database, *con.context);
+
+	// reset the reader - we are going to read the WAL from the beginning again
+	reader.Reset();
 
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
@@ -226,13 +231,13 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				con.BeginTransaction();
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		// serialization error during WAL replay: rollback
-		con.Rollback();
-	} catch (std::exception &ex) {
-		// FIXME: this should report a proper warning in the connection
-		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
-		// exception thrown in WAL replay: rollback
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::SERIALIZATION) {
+			// FIXME: this should report a proper warning in the connection
+			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
+			// exception thrown in WAL replay: rollback
+		}
 		con.Rollback();
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
@@ -545,7 +550,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 			// read the data into a buffer handle
 			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+			buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &block_handle);
 			auto buffer_handle = buffer_manager.Pin(block_handle);
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -576,7 +581,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = table.GetStorage().info;
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -612,9 +617,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto index_instance =
-	    index_type->create_instance(info.index_name, info.constraint_type, info.column_ids, unbound_expressions,
-	                                TableIOManager::Get(data_table), data_table.db, index_info);
+
+	CreateIndexInput input(TableIOManager::Get(data_table), data_table.db, info.constraint_type, info.index_name,
+	                       info.column_ids, unbound_expressions, index_info, info.options);
+
+	auto index_instance = index_type->create_instance(input);
 	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
@@ -649,11 +656,13 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw Exception("Corrupt WAL: insert without table");
+		throw InternalException("Corrupt WAL: insert without table");
 	}
 
 	// append to the current table
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk);
+	// we don't do any constraint verification here
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
@@ -672,9 +681,10 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
+	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(*state.current_table, context, row_identifiers, 1);
+		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 

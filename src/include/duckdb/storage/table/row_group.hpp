@@ -54,7 +54,7 @@ public:
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
-	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
+	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
 	~RowGroup();
 
 private:
@@ -139,6 +139,10 @@ public:
 
 	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 
+	idx_t GetAllocationSize() const {
+		return allocation_size;
+	}
+
 	void Verify();
 
 	void NextVector(CollectionScanState &state);
@@ -172,6 +176,7 @@ private:
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
 	atomic<bool> deletes_is_loaded;
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

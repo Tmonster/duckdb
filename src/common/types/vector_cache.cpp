@@ -18,7 +18,7 @@ public:
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, false, false);
-			auxiliary = make_shared<VectorListBuffer>(std::move(child_vector));
+			auxiliary = make_shared_ptr<VectorListBuffer>(std::move(child_vector));
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -26,7 +26,7 @@ public:
 			auto array_size = ArrayType::GetSize(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
 			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
-			auxiliary = make_shared<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
+			auxiliary = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -34,7 +34,7 @@ public:
 			for (auto &child_type : child_types) {
 				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second, capacity));
 			}
-			auto struct_buffer = make_shared<VectorStructBuffer>(type);
+			auto struct_buffer = make_shared_ptr<VectorStructBuffer>(type);
 			auxiliary = std::move(struct_buffer);
 			break;
 		}
@@ -49,7 +49,7 @@ public:
 		auto internal_type = type.InternalType();
 		result.vector_type = VectorType::FLAT_VECTOR;
 		AssignSharedPointer(result.buffer, buffer);
-		result.validity.Reset();
+		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			result.data = owned_data.get();
@@ -77,10 +77,6 @@ public:
 			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
 			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
 			child_cache.ResetFromCache(array_child, child_caches[0]);
-
-			// Ensure the child validity is (will be) large enough, even if its not initialized.
-			auto validity_target_size = array_child.validity.TargetCount();
-			array_child.validity.Resize(validity_target_size, std::max(validity_target_size, child_cache.capacity));
 			break;
 		}
 		case PhysicalType::STRUCT: {

@@ -27,6 +27,10 @@ public:
 	vector<string> aliases;
 	//! Return types
 	vector<LogicalType> types;
+	//! Names of the query
+	vector<string> names;
+	//! Comments on columns of the query. Note: vector can be empty when no comments are set
+	vector<Value> column_comments;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 
@@ -42,6 +46,7 @@ public:
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
 	string ToString() const override;
 };
 

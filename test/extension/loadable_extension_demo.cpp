@@ -28,6 +28,8 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
+	args.Flatten();
+
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
 	left_vector.ToUnifiedFormat(count, lhs_data);
@@ -67,6 +69,7 @@ inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
+	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
 	left_vector.ToUnifiedFormat(count, lhs_data);
@@ -168,6 +171,14 @@ struct QuackExtensionData : public ParserExtensionParseData {
 
 	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
 		return make_uniq<QuackExtensionData>(number_of_quacks);
+	}
+
+	string ToString() const override {
+		vector<string> quacks;
+		for (idx_t i = 0; i < number_of_quacks; i++) {
+			quacks.push_back("QUACK");
+		}
+		return StringUtil::Join(quacks, " ");
 	}
 };
 

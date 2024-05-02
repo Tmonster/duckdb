@@ -5,6 +5,7 @@ add_subdirectory(extension)
 add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
+add_subdirectory(buffered_data)
 add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)
@@ -18,6 +19,7 @@ add_library_unity(
   attached_database.cpp
   client_context_file_opener.cpp
   client_context.cpp
+  client_context_wrapper.cpp
   client_data.cpp
   client_verify.cpp
   connection_manager.cpp

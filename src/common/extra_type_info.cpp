@@ -1,6 +1,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -178,7 +179,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
 				                            data[idx].GetString());
 			}
-			values[data[idx]] = i;
+			values[data[idx]] = UnsafeNumericCast<T>(i);
 		}
 	}
 
@@ -189,7 +190,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			strings[i] = StringVector::AddStringOrBlob(values_insert_order, list.ReadElement<string>());
 		});
-		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
+		return make_shared_ptr<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
 	const string_map_t<T> &GetValues() const {
@@ -226,13 +227,13 @@ LogicalType EnumTypeInfo::CreateType(Vector &ordered_data, idx_t size) {
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
+		info = make_shared_ptr<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
 		break;
 	case PhysicalType::UINT16:
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
+		info = make_shared_ptr<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
 		break;
 	case PhysicalType::UINT32:
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
+		info = make_shared_ptr<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
 		break;
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
@@ -274,11 +275,11 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) 
 	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	case PhysicalType::UINT16:
-		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	case PhysicalType::UINT32:
-		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}
@@ -321,7 +322,7 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 // ArrayTypeInfo
 //===--------------------------------------------------------------------===//
 
-ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, idx_t size_p)
+ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
 }
 

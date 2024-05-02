@@ -15,6 +15,9 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+	if (path_val.IsNull()) {
+		throw InternalException("JSON path cannot be NULL");
+	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
@@ -58,9 +61,11 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
-		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		path_type = CheckPath(path_val, path, len);
+		if (!path_val.IsNull()) {
+			constant = true;
+			path_type = CheckPath(path_val, path, len);
+		}
 	}
 	bound_function.arguments[1] = LogicalType::VARCHAR;
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
@@ -224,8 +229,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    if (!doc) {
 			    mask.SetInvalid(idx);
 			    if (success) {
-				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
-				                                 parameters.error_message);
+				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error), parameters);
 				    success = false;
 			    }
 		    }
@@ -248,7 +252,7 @@ void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
 	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
-	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::ReinterpretCast,
+	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::TryVectorNullCast,
 	                           null_to_json_cost);
 }
 

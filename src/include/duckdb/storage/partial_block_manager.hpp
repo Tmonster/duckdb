@@ -69,7 +69,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 };
@@ -110,7 +110,7 @@ public:
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
 	//! Register a partially filled block that is filled with "segment_size" entries
-	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
+	void RegisterPartialBlock(PartialBlockAllocation allocation);
 
 	//! Clear remaining blocks without writing them to disk
 	void ClearBlocks();

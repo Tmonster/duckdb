@@ -22,7 +22,7 @@ class Deserializer;
 
 class TableStatisticsLock {
 public:
-	TableStatisticsLock(mutex &l) : guard(l) {
+	explicit TableStatisticsLock(mutex &l) : guard(l) {
 	}
 
 	lock_guard<mutex> guard;
@@ -53,8 +53,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
+	//! The table sample
 	//! Sample for table
-	unique_ptr<BlockingSample> sample;
+	unique_ptr<BlockingSample> table_sample;
 
 private:
 	//! The statistics lock

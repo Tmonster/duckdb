@@ -21,45 +21,45 @@ string UnknownIndex::GenerateErrorMessage() const {
 	    index_type.c_str(), name.c_str());
 }
 
-PreservedError UnknownIndex::Append(IndexLock &, DataChunk &, Vector &) {
-	throw NotImplementedException(GenerateErrorMessage());
+ErrorData UnknownIndex::Append(IndexLock &, DataChunk &, Vector &) {
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::VerifyAppend(DataChunk &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::VerifyAppend(DataChunk &, ConflictManager &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::CommitDrop(IndexLock &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::Delete(IndexLock &, DataChunk &, Vector &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
-PreservedError UnknownIndex::Insert(IndexLock &, DataChunk &, Vector &) {
-	throw NotImplementedException(GenerateErrorMessage());
+ErrorData UnknownIndex::Insert(IndexLock &, DataChunk &, Vector &) {
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 IndexStorageInfo UnknownIndex::GetStorageInfo(bool) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 bool UnknownIndex::MergeIndexes(IndexLock &, Index &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::Vacuum(IndexLock &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 idx_t UnknownIndex::GetInMemorySize(IndexLock &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 void UnknownIndex::CheckConstraintsForChunk(DataChunk &, ConflictManager &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 string UnknownIndex::VerifyAndToString(IndexLock &, bool) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 
 string UnknownIndex::GetConstraintViolationMessage(VerifyExistenceType, idx_t, DataChunk &) {
-	throw NotImplementedException(GenerateErrorMessage());
+	throw MissingExtensionException(GenerateErrorMessage());
 }
 
 } // namespace duckdb

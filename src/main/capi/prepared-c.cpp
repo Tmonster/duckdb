@@ -10,6 +10,7 @@ using duckdb::case_insensitive_map_t;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::ErrorData;
 using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
@@ -31,8 +32,9 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	try {
 		wrapper->statements = conn->ExtractStatements(query);
-	} catch (const duckdb::ParserException &e) {
-		wrapper->error = e.what();
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
+		wrapper->error = error.Message();
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
@@ -331,7 +333,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	}
 
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	return duckdb_translate_result(std::move(result), out_result);
+	return DuckDBTranslateResult(std::move(result), out_result);
 }
 
 duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
@@ -342,7 +344,7 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 	}
 
 	auto result = wrapper->statement->Execute(wrapper->values, true);
-	return duckdb_translate_result(std::move(result), out_result);
+	return DuckDBTranslateResult(std::move(result), out_result);
 }
 
 duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {

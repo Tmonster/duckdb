@@ -35,6 +35,7 @@ public:
 	bool parallel;
 	bool per_thread_output;
 	optional_idx file_size_bytes;
+	bool rotate;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;
@@ -71,6 +72,8 @@ public:
 	}
 
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
+
+	string GetTrimmedPath(ClientContext &context) const;
 
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink) const;

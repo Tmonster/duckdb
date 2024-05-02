@@ -9,13 +9,13 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
-#include "json_enums.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "json_enums.hpp"
 #include "json_transform.hpp"
 
 namespace duckdb {
@@ -128,6 +128,8 @@ public:
 	double field_appearance_threshold = 0.1;
 	//! The maximum number of files we sample to sample sample_size rows
 	idx_t maximum_sample_files = 32;
+	//! Whether we auto-detect and convert JSON strings to integers
+	bool convert_strings_to_integers = false;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -224,18 +226,23 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                            bool &file_done);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                        bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                          bool &file_done);
+	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
+	data_ptr_t GetReconstructBuffer(JSONScanGlobalState &gstate);
+
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReconstructFirstObject();
-	void ParseNextChunk();
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
+	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void ThrowInvalidAtEndError();
 
 	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;

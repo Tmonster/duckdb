@@ -8,6 +8,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -475,6 +476,9 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
 	}
+	case LogicalTypeId::SQLNULL: {
+		return "\"NULL\"";
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -567,6 +571,10 @@ bool LogicalType::IsNumeric() const {
 
 bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
+bool LogicalType::Contains(LogicalTypeId type_id) const {
+	return Contains([&](const LogicalType &type) { return type.id() == type_id; });
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
@@ -668,7 +676,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
-		auto new_width = other_width + scale;
+		auto new_width = NumericCast<uint8_t>(other_width + scale);
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
 		if (new_width > DecimalType::MaxWidth()) {
 			new_width = DecimalType::MaxWidth();
@@ -820,13 +828,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// using the max of these of the two types gives us the new decimal size
 		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
 		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
+		auto extra_width =
+		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-		auto width = extra_width + scale;
+		auto width = NumericCast<uint8_t>(extra_width + scale);
 		if (width > DecimalType::MaxWidth()) {
 			// if the resulting decimal does not fit, we truncate the scale
 			width = DecimalType::MaxWidth();
-			scale = width - extra_width;
+			scale = NumericCast<uint8_t>(width - extra_width);
 		}
 		result = LogicalType::DECIMAL(width, scale);
 		return true;
@@ -862,6 +871,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// struct: perform recursively on each child
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
+		bool left_unnamed = StructType::IsUnnamed(left);
+		auto any_unnamed = left_unnamed || StructType::IsUnnamed(right);
 		if (left_child_types.size() != right_child_types.size()) {
 			// child types are not of equal size, we can't cast
 			// return false
@@ -870,10 +881,15 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			LogicalType child_type;
+			// Child names must be in the same order OR either one of the structs must be unnamed
+			if (!any_unnamed && !StringUtil::CIEquals(left_child_types[i].first, right_child_types[i].first)) {
+				return false;
+			}
 			if (!OP::Operation(left_child_types[i].second, right_child_types[i].second, child_type)) {
 				return false;
 			}
-			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
+			auto &child_name = left_unnamed ? right_child_types[i].first : left_child_types[i].first;
+			child_types.emplace_back(child_name, std::move(child_type));
 		}
 		result = LogicalType::STRUCT(child_types);
 		return true;
@@ -1053,9 +1069,39 @@ LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalTyp
 
 void LogicalType::Verify() const {
 #ifdef DEBUG
-	if (id_ == LogicalTypeId::DECIMAL) {
+	switch (id_) {
+	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
 		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		break;
+	case LogicalTypeId::STRUCT: {
+		// verify child types
+		case_insensitive_set_t child_names;
+		bool all_empty = true;
+		for (auto &entry : StructType::GetChildTypes(*this)) {
+			if (entry.first.empty()) {
+				D_ASSERT(all_empty);
+			} else {
+				// check for duplicate struct names
+				all_empty = false;
+				auto existing_entry = child_names.find(entry.first);
+				D_ASSERT(existing_entry == child_names.end());
+				child_names.insert(entry.first);
+			}
+			entry.second.Verify();
+		}
+		break;
+	}
+	case LogicalTypeId::LIST:
+		ListType::GetChildType(*this).Verify();
+		break;
+	case LogicalTypeId::MAP: {
+		MapType::KeyType(*this).Verify();
+		MapType::ValueType(*this).Verify();
+		break;
+	}
+	default:
+		break;
 	}
 #endif
 }
@@ -1067,7 +1113,7 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	float epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
+	float epsilon = static_cast<float>(std::fabs(rdecimal) * 0.01 + 0.00000001);
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -1087,7 +1133,7 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 void LogicalType::SetAlias(string alias) {
 	if (!type_info_) {
-		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
+		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
 	} else {
 		type_info_->alias = std::move(alias);
 	}
@@ -1134,9 +1180,9 @@ uint8_t DecimalType::MaxWidth() {
 	return DecimalWidth<hugeint_t>::max;
 }
 
-LogicalType LogicalType::DECIMAL(int width, int scale) {
+LogicalType LogicalType::DECIMAL(uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= scale);
-	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
+	auto type_info = make_shared_ptr<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, std::move(type_info));
 }
 
@@ -1158,7 +1204,7 @@ string StringType::GetCollation(const LogicalType &type) {
 }
 
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
-	auto string_info = make_shared<StringTypeInfo>(std::move(collation));
+	auto string_info = make_shared_ptr<StringTypeInfo>(std::move(collation));
 	return LogicalType(LogicalTypeId::VARCHAR, std::move(string_info));
 }
 
@@ -1173,7 +1219,7 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 }
 
 LogicalType LogicalType::LIST(const LogicalType &child) {
-	auto info = make_shared<ListTypeInfo>(child);
+	auto info = make_shared_ptr<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::LIST, std::move(info));
 }
 
@@ -1223,6 +1269,16 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 	return child_types[index].first;
 }
 
+idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &name) {
+	auto &child_types = StructType::GetChildTypes(type);
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		if (StringUtil::CIEquals(child_types[i].first, name)) {
+			return i;
+		}
+	}
+	throw InternalException("Could not find child with name \"%s\" in struct type \"%s\"", name, type.ToString());
+}
+
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
@@ -1235,12 +1291,12 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(std::move(children));
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
 LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
-	auto info = make_shared<AggregateStateTypeInfo>(std::move(state_type));
+	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
 }
 
@@ -1265,7 +1321,7 @@ LogicalType LogicalType::MAP(const LogicalType &child_p) {
 	new_children[1].first = "value";
 
 	auto child = LogicalType::STRUCT(std::move(new_children));
-	auto info = make_shared<ListTypeInfo>(child);
+	auto info = make_shared_ptr<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::MAP, std::move(info));
 }
 
@@ -1294,7 +1350,7 @@ LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::UTINYINT});
-	auto info = make_shared<StructTypeInfo>(std::move(members));
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(members));
 	return LogicalType(LogicalTypeId::UNION, std::move(info));
 }
 
@@ -1347,12 +1403,12 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 }
 
 LogicalType LogicalType::USER(const string &user_type_name) {
-	auto info = make_shared<UserTypeInfo>(user_type_name);
+	auto info = make_shared_ptr<UserTypeInfo>(user_type_name);
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
 LogicalType LogicalType::USER(string catalog, string schema, string name) {
-	auto info = make_shared<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name));
+	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name));
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
@@ -1434,23 +1490,56 @@ bool ArrayType::IsAnySize(const LogicalType &type) {
 	return info->Cast<ArrayTypeInfo>().size == 0;
 }
 
-LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
-	D_ASSERT(size > 0);
-	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
-	auto info = make_shared<ArrayTypeInfo>(child, size);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+LogicalType ArrayType::ConvertToList(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::ARRAY: {
+		return LogicalType::LIST(ConvertToList(ArrayType::GetChildType(type)));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ConvertToList(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		auto children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::STRUCT(children);
+	}
+	case LogicalTypeId::MAP: {
+		auto key_type = ConvertToList(MapType::KeyType(type));
+		auto value_type = ConvertToList(MapType::ValueType(type));
+		return LogicalType::MAP(key_type, value_type);
+	}
+	case LogicalTypeId::UNION: {
+		auto children = UnionType::CopyMemberTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::UNION(children);
+	}
+	default:
+		return type;
+	}
 }
 
-LogicalType LogicalType::ARRAY(const LogicalType &child) {
-	auto info = make_shared<ArrayTypeInfo>(child, 0);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+LogicalType LogicalType::ARRAY(const LogicalType &child, optional_idx size) {
+	if (!size.IsValid()) {
+		// Create an incomplete ARRAY type, used for binding
+		auto info = make_shared_ptr<ArrayTypeInfo>(child, 0);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	} else {
+		auto array_size = size.GetIndex();
+		D_ASSERT(array_size > 0);
+		D_ASSERT(array_size < ArrayType::MAX_ARRAY_SIZE);
+		auto info = make_shared_ptr<ArrayTypeInfo>(child, array_size);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // Any Type
 //===--------------------------------------------------------------------===//
 LogicalType LogicalType::ANY_PARAMS(LogicalType target, idx_t cast_score) { // NOLINT
-	auto type_info = make_shared<AnyTypeInfo>(std::move(target), cast_score);
+	auto type_info = make_shared_ptr<AnyTypeInfo>(std::move(target), cast_score);
 	return LogicalType(LogicalTypeId::ANY, std::move(type_info));
 }
 
@@ -1503,7 +1592,7 @@ LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 	if (!constant.type().IsIntegral()) {
 		throw InternalException("INTEGER_LITERAL can only be made from literals of integer types");
 	}
-	auto type_info = make_shared<IntegerLiteralTypeInfo>(constant);
+	auto type_info = make_shared_ptr<IntegerLiteralTypeInfo>(constant);
 	return LogicalType(LogicalTypeId::INTEGER_LITERAL, std::move(type_info));
 }
 

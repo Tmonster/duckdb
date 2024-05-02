@@ -242,7 +242,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(start + i)) {
 			if (result_mask.AllValid()) {
-				result_mask.Initialize();
+				result_mask.Initialize(result_mask.TargetCount());
 			}
 			result_mask.SetInvalid(result_offset + i);
 		}
@@ -323,7 +323,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize();
+				result_mask.Initialize(result_mask.TargetCount());
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
@@ -363,7 +363,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 				continue;
 			}
 			if (!result_data) {
-				result_mask.Initialize();
+				result_mask.Initialize(result_mask.TargetCount());
 				result_data = result_mask.GetData();
 			}
 			result_data[i] = input_entry;
@@ -384,7 +384,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
 	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr));
 	auto &result_mask = FlatVector::Validity(result);
-	if (!mask.RowIsValidUnsafe(row_id)) {
+	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
 		result_mask.SetInvalid(result_idx);
 	}
 }

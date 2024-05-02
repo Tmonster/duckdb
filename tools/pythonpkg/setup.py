@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import ctypes
-import logging
 import os
-import sys
 import platform
 import sys
 import traceback
@@ -123,7 +121,15 @@ if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
-use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+is_pyodide = 'PYODIDE' in os.environ
+no_source_wheel = is_pyodide
+use_jemalloc = (
+    not is_android
+    and not is_pyodide
+    and platform.system() == 'Linux'
+    and platform.architecture()[0] == '64bit'
+    and platform.machine() == 'x86_64'
+)
 
 if use_jemalloc:
     extensions.append('jemalloc')
@@ -132,14 +138,18 @@ unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16
 
+try:
+    import pybind11
+except ImportError:
+    raise Exception(
+        'pybind11 could not be imported. This usually means you\'re calling setup.py directly, or using a version of pip that doesn\'t support PEP517'
+    ) from None
+
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
-    try:
-        from pybind11.setup_helpers import ParallelCompile
-    except ImportError:
-        logging.warning('Pybind11 not available yet')
-    else:
-        ParallelCompile().install()
+    from pybind11.setup_helpers import ParallelCompile
+
+    ParallelCompile().install()
 
 
 def open_utf8(fpath, flags):
@@ -166,30 +176,29 @@ if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
 existing_duckdb_dir = ''
-new_sys_args = []
 libraries = []
-for i in range(len(sys.argv)):
-    if sys.argv[i].startswith("--binary-dir="):
-        existing_duckdb_dir = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith('--package_name='):
-        lib_name = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith("--compile-flags="):
-        # FIXME: this is overwriting the previously set toolchain_args ?
-        toolchain_args = ['-std=c++11'] + [
-            x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0
-        ]
-    elif sys.argv[i].startswith("--libs="):
-        libraries = [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]
-    else:
-        new_sys_args.append(sys.argv[i])
-sys.argv = new_sys_args
+if 'DUCKDB_BINARY_DIR' in os.environ:
+    existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
+if 'DUCKDB_COMPILE_FLAGS' in os.environ:
+    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+if 'DUCKDB_LIBS' in os.environ:
+    libraries = os.environ['DUCKDB_LIBS'].split(' ')
+
 define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
+
+custom_platform = os.environ.get('DUCKDB_CUSTOM_PLATFORM')
+if custom_platform is not None:
+    define_macros.append(('DUCKDB_CUSTOM_PLATFORM', custom_platform))
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
     define_macros.extend([('DUCKDB_BUILD_LIBRARY', None), ('WIN32', None)])
+
+if is_pyodide:
+    # show more useful error messages in the browser
+    define_macros.append(('PYBIND11_DETAILED_ERROR_MESSAGES', None))
 
 if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
@@ -198,22 +207,17 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
+if not is_pyodide:
+    # currently pyodide environment is not compatible with dynamic extension loading
+    define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
-linker_args = toolchain_args
+linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
-    linker_args.extend(['rstrtmgr.lib'])
+    linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
 
-
-class get_pybind_include(object):
-    def __init__(self, user=False):
-        self.user = user
-
-    def __str__(self):
-        import pybind11
-
-        return pybind11.get_include(self.user)
-
+short_paths = False
+if platform.system() == 'Windows':
+    short_paths = True
 
 extra_files = []
 header_files = []
@@ -228,7 +232,8 @@ script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
-include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
+
+include_directories = [main_include_path, pybind11.get_include(False), pybind11.get_include(True)]
 if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
     include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
 
@@ -253,7 +258,7 @@ if len(existing_duckdb_dir) == 0:
         import package_build
 
         (source_list, include_list, original_sources) = package_build.build_package(
-            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build"
+            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build", short_paths
         )
 
         duckdb_sources = [
@@ -351,6 +356,8 @@ def setup_data_files(data_files):
 
 
 data_files = setup_data_files(extra_files + header_files)
+if no_source_wheel:
+    data_files = []
 
 packages = [
     lib_name,

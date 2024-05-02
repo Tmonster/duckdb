@@ -94,16 +94,23 @@ struct AlpCompression {
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(T) * 8;
 
 	/*
+	 * Check for special values which are impossible for ALP to encode
+	 * because they cannot be cast to int64 without an undefined behaviour
+	 */
+	static bool IsImpossibleToEncode(T n) {
+		return !Value::IsFinite(n) || Value::IsNan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT ||
+		       n < AlpConstants::ENCODING_LOWER_LIMIT || (n == 0.0 && std::signbit(n)); //! Verification for -0.0
+	}
+
+	/*
 	 * Conversion from a Floating-Point number to Int64 without rounding
 	 */
 	static int64_t NumberToInt64(T n) {
-		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
-		//! Special values which cannot be casted to int64 without an undefined behaviour
-		if (!Value::IsFinite(n) || Value::IsNan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT ||
-		    n < AlpConstants::ENCODING_LOWER_LIMIT) {
-			return AlpConstants::ENCODING_UPPER_LIMIT;
+		if (IsImpossibleToEncode(n)) {
+			return NumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
 		}
-		return static_cast<int64_t>(n);
+		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
+		return NumericCast<int64_t>(n);
 	}
 
 	/*
@@ -178,7 +185,7 @@ struct AlpCompression {
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
 		uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
-		estimated_bits_per_value = std::ceil(std::log2(delta + 1));
+		estimated_bits_per_value = NumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
 		    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
@@ -247,7 +254,8 @@ struct AlpCompression {
 	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, State &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
-		uint32_t idx_increments = MaxValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		auto idx_increments = MaxValue<uint32_t>(
+		    1, UnsafeNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}
@@ -299,7 +307,7 @@ struct AlpCompression {
 			state.encoded_integers[i] = encoded_value;
 			//! We detect exceptions using a predicated comparison
 			auto is_exception = (decoded_value != actual_value);
-			state.exceptions_positions[exceptions_idx] = i;
+			state.exceptions_positions[exceptions_idx] = UnsafeNumericCast<uint16_t>(i);
 			exceptions_idx += is_exception;
 		}
 
@@ -351,9 +359,9 @@ struct AlpCompression {
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(state.values_encoded, u_encoded_integers, n_values,
 			                                                  bit_width);
 		}
-		state.bit_width = bit_width; // in bits
-		state.bp_size = bp_size;     // in bytes
-		state.frame_of_reference = min_value;
+		state.bit_width = bit_width;                                 // in bits
+		state.bp_size = bp_size;                                     // in bytes
+		state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
 	}
 
 	/*

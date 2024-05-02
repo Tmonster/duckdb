@@ -199,6 +199,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
+	header.block_alloc_size = block_manager.GetBlockAllocSize();
+	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
@@ -227,7 +229,7 @@ MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
 	return storage.block_manager->GetMetadataManager();
 }
 
-void SingleFileCheckpointReader::LoadFromStorage() {
+void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> context) {
 	auto &block_manager = *storage.block_manager;
 	auto &metadata_manager = GetMetadataManager();
 	MetaBlockPointer meta_block(block_manager.GetMetaBlock(), 0);
@@ -236,13 +238,20 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
-	Connection con(storage.GetDatabase());
-	con.BeginTransaction();
-	// create the MetadataReader to read from the storage
-	MetadataReader reader(metadata_manager, meta_block);
-	//	reader.SetContext(*con.context);
-	LoadCheckpoint(*con.context, reader);
-	con.Commit();
+	if (context) {
+		// create the MetadataReader to read from the storage
+		MetadataReader reader(metadata_manager, meta_block);
+		//	reader.SetContext(*con.context);
+		LoadCheckpoint(*context, reader);
+	} else {
+		Connection con(storage.GetDatabase());
+		con.BeginTransaction();
+		// create the MetadataReader to read from the storage
+		MetadataReader reader(metadata_manager, meta_block);
+		//	reader.SetContext(*con.context);
+		LoadCheckpoint(*con.context, reader);
+		con.Commit();
+	}
 }
 
 void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
@@ -416,7 +425,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = table.GetStorage().info;
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {

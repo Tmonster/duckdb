@@ -54,7 +54,7 @@ HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 	hlls[1] = other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
 	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
+		throw InternalException("Could not merge HLLs");
 	}
 	return new HyperLogLog(new_hll);
 }
@@ -171,6 +171,8 @@ inline uint64_t HashOtherSize(const_data_ptr_t &data, const idx_t &len) {
 		CreateIntegerRecursive<1>(data, x);
 		break;
 	case 0:
+	default:
+		D_ASSERT((len & 7) == 0);
 		break;
 	}
 	return TemplatedHash<uint64_t>(x);

@@ -33,21 +33,7 @@ script_dir="$(dirname "$(readlink -f "$0")")"
 # calculate SHA256 hash of extension binary
 cat $ext > $ext.append
 
-if [[ $4 == wasm* ]]; then
-  # 0 for custom section
-  # 113 in hex = 275 in decimal, total lenght of what follows (1 + 16 + 2 + 256)
-  # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x02]
-  echo -n -e '\x00' >> $ext.append
-  echo -n -e '\x93\x02' >> $ext.append
-  # 10 in hex = 16 in decimal, lenght of name, 1 byte
-  echo -n -e '\x10' >> $ext.append
-  echo -n -e 'duckdb_signature' >> $ext.append
-  # the name of the WebAssembly custom section, 16 bytes
-  # 100 in hex, 256 in decimal
-  # [1(continuation) + 0000000(payload) = ff, 0(continuation) + 10(payload)],
-  # for a grand total of 2 bytes
-  echo -n -e '\x80\x02' >> $ext.append
-fi
+( command -v truncate && truncate -s -256 $ext.append ) || ( command -v gtruncate && gtruncate -s -256 $ext.append ) || exit 1
 
 # (Optionally) Sign binary
 if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
@@ -78,13 +64,6 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     exit 0
 fi
 
-if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
-  echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
-  $script_dir/compute-extension-hash.sh $ext.append > $ext.hash
-  openssl pkeyutl -sign -in $ext.hash -inkey private.pem -pkeyopt digest:sha256 -out $ext.sign
-  rm -f private.pem
-fi
-
 # Set dry run unless guard var is set
 DRY_RUN_PARAM="--dryrun"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
@@ -99,7 +78,7 @@ if [[ $7 = 'true' ]]; then
   fi
 
   if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/duckdb-wasm/$1/$2/duckdb-wasm/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
+    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
   else
     aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
   fi
@@ -108,7 +87,7 @@ fi
 # upload to latest version
 if [[ $6 = 'true' ]]; then
   if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/duckdb-wasm/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
+    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
   else
     aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
   fi

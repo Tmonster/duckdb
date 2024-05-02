@@ -21,7 +21,7 @@ class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
 
-class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
+class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
@@ -61,8 +61,8 @@ public:
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
 	                     bool append_to_table);
-	PreservedError AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
-	                               const vector<LogicalType> &table_types, row_t &start_row);
+	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
+	                          const vector<LogicalType> &table_types, row_t &start_row);
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();

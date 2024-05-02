@@ -12,6 +12,8 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -22,7 +24,7 @@ public:
 
 public:
 	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
-	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(schema),
+	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
 	~CreateInfo() override {
@@ -42,6 +44,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! User provided comment
+	Value comment;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -54,8 +58,8 @@ public:
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
 
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
-		                        EnumUtil::ToString(info_type));
+		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
+		                              EnumUtil::ToString(info_type));
 	}
 };
 
