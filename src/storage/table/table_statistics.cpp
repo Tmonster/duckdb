@@ -8,14 +8,13 @@ namespace duckdb {
 
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
 	column_stats = std::move(data.table_stats.column_stats);
 	if (data.table_stats.table_sample) {
 		table_sample = std::move(data.table_stats.table_sample);
 	} else {
-		auto &allocator = Allocator::DefaultAllocator();
-		idx_t sample_size = STANDARD_VECTOR_SIZE;
-		table_sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
+		table_sample = make_uniq<ReservoirSamplePercentage>(0.1, 1);
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
@@ -24,9 +23,9 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 
 void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
-	auto &allocator = Allocator::DefaultAllocator();
-	table_sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
+	table_sample = make_uniq<ReservoirSamplePercentage>(0.1, 1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}

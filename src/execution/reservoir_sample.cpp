@@ -390,12 +390,24 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
+
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw NotImplementedException("Merging Percentage samples is not yet supported");
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
 	throw NotImplementedException("Cannot copy percentage sample");
+}
+
+ReservoirSample ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
+	// Make sure that the reservoir sample percentage more than sample count samples.
+	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
+	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
+	// insert the first chunk from the percentage sample as if these are all first time
+	//
+	reservoir_sample->AddToReservoir(*GetChunkAndShrink());
+	reservoir_sample->base_reservoir_sample = std::move(base_reservoir_sample);
+//	hile()
 }
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
