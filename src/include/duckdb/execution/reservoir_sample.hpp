@@ -20,7 +20,6 @@ namespace duckdb {
 enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
-
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -36,8 +35,6 @@ public:
 	unique_ptr<BaseReservoirSampling> Copy();
 	//! The random generator
 	RandomEngine random;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
 	//! The next element to sample
 	idx_t next_index_to_sample;
 	//! The reservoir threshold of the current min entry
@@ -50,6 +47,9 @@ public:
 	//! when collecting a sample in parallel, we want to know how many values each thread has seen
 	//! so we can collect the samples from the thread local states in a uniform manner
 	idx_t num_entries_seen_total;
+	//! Priority queue of [random element, index] for each of the elements in the sample
+	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 };
@@ -126,6 +126,7 @@ public:
 	unique_ptr<ReservoirChunk> Copy();
 };
 
+
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
@@ -133,7 +134,7 @@ public:
 
 public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
-	ReservoirSample(idx_t sample_count, int64_t seed = 1);
+	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -168,7 +169,6 @@ public:
 	//! when calculating percentages, it is set to reservoir_threshold * percentage
 	//! when explicit number used, sample_count = number
 	idx_t sample_count;
-
 	//! The current reservoir
 	unique_ptr<ReservoirChunk> reservoir_chunk;
 };
@@ -182,14 +182,14 @@ public:
 
 public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
-	ReservoirSamplePercentage(double percentage, int64_t seed = -1);
+	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
 	//! create a new reservoir sample that has a fixes sample size of "sample_count"
 	//! dump all samples into the new reservoir sample and return.
-	ReservoirSample ConvertToFixedReservoirSample(idx_t sample_count);
+	// ReservoirSample ConvertToFixedReservoirSample(idx_t sample_count);
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 

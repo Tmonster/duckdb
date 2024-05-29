@@ -150,7 +150,7 @@ bool AttachedDatabase::IsReadOnly() const {
 }
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
-	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG;
+	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
@@ -164,14 +164,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context) {
+void AttachedDatabase::Initialize(const optional_idx block_alloc_size) {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize(block_alloc_size, context);
+		storage->Initialize(block_alloc_size);
 	}
 }
 
@@ -236,7 +236,9 @@ void AttachedDatabase::Close() {
 			if (!config.options.checkpoint_on_shutdown) {
 				return;
 			}
-			storage->CreateCheckpoint(true);
+			CheckpointOptions options;
+			options.wal_action = CheckpointWALAction::DELETE_WAL;
+			storage->CreateCheckpoint(options);
 		}
 	} catch (...) { // NOLINT
 	}
