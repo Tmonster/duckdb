@@ -126,7 +126,6 @@ public:
 	unique_ptr<ReservoirChunk> Copy();
 };
 
-
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:

@@ -18,4 +18,3 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperat
 }
 
 } // namespace duckdb
-	

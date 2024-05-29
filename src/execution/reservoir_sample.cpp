@@ -390,7 +390,6 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw NotImplementedException("Merging Percentage samples is not yet supported");
 }
