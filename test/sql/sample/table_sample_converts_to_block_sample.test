@@ -1,0 +1,36 @@
+# name: test/sql/sample/table_sample_converts_to_block_sample.test
+# description: Test sampling of larger relations
+# group: [sample]
+
+require vector_size 2048
+
+# table samples first collect only 1% of the table, until the table has a cardinality of 2048.
+# then the sample stays at a fixed 2048 values.
+
+statement ok
+create table materialized_range as select * from range(102400);
+
+# only 1% of 102400
+query I
+select count(*) from pragma_table_sample('materialized_range');
+----
+1024
+
+statement ok
+insert into materialized_range select * from range(102400);
+
+# only 1% of 102400
+query I
+select count(*) from pragma_table_sample('materialized_range');
+----
+2048
+
+# insert another
+statement ok
+insert into materialized_range select * from range(204800);
+
+# only 1% of 102400
+query I
+select count(*) from from pragma_table_sample('integers_1');
+----
+2048

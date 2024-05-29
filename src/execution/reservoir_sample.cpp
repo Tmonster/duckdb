@@ -211,6 +211,20 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	return ret;
 }
 
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
+	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
+	}
+	if (!is_finalized) {
+		Finalize();
+	}
+	if (finished_samples.size() != 1) {
+		throw InternalException("this also should not be happening");
+	}
+	return finished_samples.at(0)->GetChunk(offset);
+}
+
 unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 	if (!reservoir_chunk || Chunk().size() == 0 || destroyed) {
 		return nullptr;
@@ -391,26 +405,60 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 }
 
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
-	throw NotImplementedException("Merging Percentage samples is not yet supported");
+	// just merge. it must to up to the calling function to convert the percentage sample
+	// into a block sample.
+	D_ASSERT(other->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE);
+	auto &other_percentage_sample = other->Cast<ReservoirSamplePercentage>();
+
+	// first add the finished samples from other if they exist.
+	for (auto &finished_sample : other_percentage_sample.finished_samples) {
+		finished_samples.push_back(std::move(finished_sample));
+	}
+
+	// now merge the current samples.
+	current_sample->Merge(std::move(other_percentage_sample.current_sample));
+}
+idx_t ReservoirSample::NumSamplesCollected() {
+	return base_reservoir_sample->reservoir_weights.size();
+}
+
+idx_t ReservoirSamplePercentage::NumSamplesCollected() {
+	idx_t samples_collected = 0;
+	for (auto &finished_sample : finished_samples) {
+		samples_collected += finished_sample->NumSamplesCollected();
+	}
+	samples_collected += current_sample->NumSamplesCollected();
+	return samples_collected;
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
-	throw NotImplementedException("Cannot copy percentage sample");
+	auto ret = make_uniq<ReservoirSamplePercentage>(Allocator::DefaultAllocator(), sample_percentage, 1);
+	ret->base_reservoir_sample = base_reservoir_sample->Copy();
+	auto cur_sample_copy = current_sample->Copy();
+	D_ASSERT(current_sample->type == SampleType::RESERVOIR_SAMPLE);
+	ret->current_sample = duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(current_sample->Copy());
+
+	for (auto &finished_sample : finished_samples) {
+		ret->finished_samples.push_back(
+		    duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(finished_sample->Copy()));
+	}
+	return ret;
 }
 
-// ReservoirSample ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
-// 	// Make sure that the reservoir sample percentage more than sample count samples.
-// 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
-// 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
-// 	// insert the first chunk from the percentage sample as if these are all first time
-// 	//
-// 	reservoir_sample->AddToReservoir(*GetChunkAndShrink());
-// 	reservoir_sample->base_reservoir_sample = std::move(base_reservoir_sample);
-// //	hile()
-// }
+unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
+	// Make sure that the reservoir sample percentage more than sample count samples.
+	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
+	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
+	// insert the first chunk from the percentage sample as if these are all first time
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
-	throw NotImplementedException("GetChunk() not implemented for reservoir sample chunks");
+	// start by merging every ReservoirSample from the finished samples,
+	for (auto &finished_sample : finished_samples) {
+		reservoir_sample->Merge(std::move(finished_sample));
+	}
+	// now merge the current sample.
+	reservoir_sample->Merge(std::move(current_sample));
+
+	return reservoir_sample;
 }
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {

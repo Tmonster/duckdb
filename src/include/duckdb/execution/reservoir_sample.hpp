@@ -72,6 +72,8 @@ public:
 	virtual ~BlockingSample() {
 	}
 
+	virtual idx_t NumSamplesCollected() = 0;
+
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
@@ -135,6 +137,7 @@ public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
 	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
+	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
@@ -183,12 +186,13 @@ public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
 	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
+	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
 	//! create a new reservoir sample that has a fixes sample size of "sample_count"
 	//! dump all samples into the new reservoir sample and return.
-	// ReservoirSample ConvertToFixedReservoirSample(idx_t sample_count);
+	unique_ptr<ReservoirSample> ConvertToFixedReservoirSample(idx_t sample_count);
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
@@ -197,6 +201,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	//! Fetches a chunk from the sample. This method is not destructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
 
@@ -215,6 +220,7 @@ private:
 
 	//! The set of finished samples of the reservoir sample
 	vector<unique_ptr<ReservoirSample>> finished_samples;
+
 	//! The amount of tuples that have been processed so far (not put in the reservoir, just processed)
 	idx_t current_count = 0;
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to
