@@ -1,6 +1,9 @@
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
+
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+
+#include <fmt/format.h>
 
 namespace duckdb {
 
@@ -213,16 +216,26 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
-	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
-	}
 	if (!is_finalized) {
 		Finalize();
 	}
-	if (finished_samples.size() != 1) {
-		throw InternalException("this also should not be happening");
+	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
 	}
-	return finished_samples.at(0)->GetChunk(offset);
+	hugeint_t offset_signed = offset;
+	idx_t finished_sample_index = 0;
+	while (offset_signed > 0) {
+		offset_signed -= finished_samples.at(finished_sample_index)->NumSamplesCollected();
+		finished_sample_index += 1;
+	}
+	if (offset_signed < 0) {
+		finished_sample_index -= 1;
+		offset_signed += finished_samples.at(finished_sample_index)->NumSamplesCollected();
+	}
+	if (finished_sample_index >= finished_samples.size()) {
+		return nullptr;
+	}
+	return finished_samples.at(finished_sample_index)->GetChunk((idx_t)offset_signed);
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
@@ -417,6 +430,7 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 
 	// now merge the current samples.
 	current_sample->Merge(std::move(other_percentage_sample.current_sample));
+	current_count += other_percentage_sample.current_count;
 }
 idx_t ReservoirSample::NumSamplesCollected() {
 	return base_reservoir_sample->reservoir_weights.size();
@@ -427,12 +441,14 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	for (auto &finished_sample : finished_samples) {
 		samples_collected += finished_sample->NumSamplesCollected();
 	}
-	samples_collected += current_sample->NumSamplesCollected();
+	if (current_sample) {
+		samples_collected += current_sample->NumSamplesCollected();
+	}
 	return samples_collected;
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
-	auto ret = make_uniq<ReservoirSamplePercentage>(Allocator::DefaultAllocator(), sample_percentage, 1);
+	auto ret = make_uniq<ReservoirSamplePercentage>(Allocator::DefaultAllocator(), (sample_percentage * 100), 1);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	auto cur_sample_copy = current_sample->Copy();
 	D_ASSERT(current_sample->type == SampleType::RESERVOIR_SAMPLE);
@@ -442,10 +458,16 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
 		ret->finished_samples.push_back(
 		    duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(finished_sample->Copy()));
 	}
+	ret->current_count = current_count;
+	ret->is_finalized = is_finalized;
+	ret->reservoir_sample_size = reservoir_sample_size;
 	return ret;
 }
 
 unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
+	if (!is_finalized) {
+		Finalize();
+	}
 	// Make sure that the reservoir sample percentage more than sample count samples.
 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
