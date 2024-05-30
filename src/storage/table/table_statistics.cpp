@@ -1,8 +1,9 @@
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 
@@ -109,6 +110,9 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
+		// if (table_sample->NumSamplesCollected() > 1024) {
+		// 	auto break_here = 0;
+		// }
 		table_sample->Merge(std::move(other.table_sample));
 		auto blah =  table_sample->NumSamplesCollected();
 		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&

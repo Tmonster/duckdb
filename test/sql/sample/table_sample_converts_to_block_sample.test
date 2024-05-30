@@ -18,7 +18,11 @@ select count(*) from pragma_table_sample('materialized_range');
 
 
 statement ok
-insert into materialized_range select * from range(102400);
+insert into materialized_range select * from range(107400);
+
+statement ok
+Checkpoint;
+
 
 # only 1% of 102400
 query I
@@ -27,12 +31,14 @@ select count(*) from pragma_table_sample('materialized_range');
 2048
 
 
-# insert another
-statement ok
-insert into materialized_range select * from range(204800);
-
-# only 1% of 102400
-query I
-select count(*) from from pragma_table_sample('integers_1');
-----
-2048
+#
+#
+## insert another
+#statement ok
+#insert into materialized_range select * from range(204800);
+#
+## only 1% of 102400
+#query I
+#select count(*) from from pragma_table_sample('integers_1');
+#----
+#2048

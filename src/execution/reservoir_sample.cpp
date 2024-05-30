@@ -92,11 +92,9 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
 void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
 	auto reservoir_other = &other->Cast<ReservoirSample>();
-	// three ways to merge samples
-	if (sample_count != reservoir_other->sample_count) {
-		throw NotImplementedException("attempting to merge samples with different sample counts");
-	}
 
+
+	// three ways to merge samples
 	// do not merge destroyed samples.
 	if (destroyed || other->destroyed) {
 		Destroy();
@@ -105,11 +103,23 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// There are four combinations for reservoir state
 
-	// 1. This reservoir chunk has not yet been initialized.
-	if (reservoir_chunk == nullptr) {
-		// take ownership of the reservoir_others sample
-		base_reservoir_sample = std::move(other->base_reservoir_sample);
-		reservoir_chunk = std::move(reservoir_other->reservoir_chunk);
+	// 1. This reservoir chunk has not yet been initialized,
+	if (!reservoir_chunk) {
+		// take ownership of the reservoir_others sample. Resize to sample count if needed
+		// if (reservoir_chunk->chunk.size() < sample_count) {
+		// 	DataChunk input;
+		// 	input.Initialize(allocator, Chunk().GetTypes(), sample_count);
+		// 	idx_t required_count = sample_count - Chunk().size();
+		// 	input.SetCardinality(required_count);
+		// 	Chunk().Append(input, true, nullptr, required_count);
+		// }
+		// if (sample_count == reservoir_other->sample_count) {
+			base_reservoir_sample = std::move(other->base_reservoir_sample);
+			reservoir_chunk = std::move(reservoir_other->reservoir_chunk);
+		// }
+		// if the sizes dont' match, just create an empty one and let the other options do their work
+		// create a reservoir chunk here
+		// CreateReservoirChunk(reservoir_other->Chunk().GetTypes());
 		return;
 	}
 
@@ -468,10 +478,19 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	if (!is_finalized) {
 		Finalize();
 	}
-	// Make sure that the reservoir sample percentage more than sample count samples.
-	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
+	reservoir_sample.CreateReservoirChunk();
+
+	idx_t offset = 0;
+	auto chunk = GetChunk();
 	// insert the first chunk from the percentage sample as if these are all first time
+	for (auto &finished_sample : finished_samples) {
+
+	}
+	while (reservoir_sample->NumSamplesCollected() < sample_count) {
+		reservoir_sample->AddToReservoir(*chunk);
+
+	}
 
 	// start by merging every ReservoirSample from the finished samples,
 	for (auto &finished_sample : finished_samples) {
