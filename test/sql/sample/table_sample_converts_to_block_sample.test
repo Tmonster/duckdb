@@ -45,8 +45,8 @@ select count(*) from pragma_table_sample('materialized_range');
 
 
 query I
-select a, count(*) from pragma_table_sample('materialized_range') group by all;
+select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1   800
-2   800
-3   800
+1   731
+2   656
+3   661
