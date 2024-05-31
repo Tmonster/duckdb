@@ -376,15 +376,18 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
-	if (!stats.Empty() && stats.table_sample != nullptr) {
-		auto copy_for_sample = make_uniq<DataChunk>();
-		copy_for_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-		chunk.Copy(*copy_for_sample);
-		stats.table_sample->AddToReservoir(*copy_for_sample);
-	}
-	if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE && stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-		auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
-		stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+	if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
+		if (!stats.Empty()) {
+			auto copy_for_sample = make_uniq<DataChunk>();
+			copy_for_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+			chunk.Copy(*copy_for_sample);
+			stats.table_sample->AddToReservoir(*copy_for_sample);
+		}
+		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+			stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+			auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
+			stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+		}
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
@@ -1085,9 +1088,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	// When adding a column destroy the sample
-	auto stats_guard = stats.GetLock();
-	if (stats.table_sample) {
-		stats.table_sample->Destroy();
+	D_ASSERT(lock);
+	if (result->stats.table_sample) {
+		result->stats.table_sample->Destroy();
 	}
 	return result;
 }
@@ -1100,6 +1103,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto result =
 	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 	result->stats.InitializeRemoveColumn(stats, col_idx);
+
+	result->stats.table_sample->Destroy();
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);

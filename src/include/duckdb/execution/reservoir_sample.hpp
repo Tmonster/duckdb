@@ -143,6 +143,12 @@ public:
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
+	//! Special Merge.
+	//! Here you have multiple reservoir samples with small smaple counts and you want
+	//! one large reservoir sample while maintaining the weights of all of the smaller
+	//! reservoir samples while simultaneously updating their positions.
+	void CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples);
+
 	unique_ptr<BlockingSample> Copy() override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the

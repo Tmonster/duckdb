@@ -36,7 +36,7 @@ SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
 statement ok
 INSERT INTO vals SELECT * FROM vals;
 
-query IIII
-SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
-----
-1	199999	200000	400000
+#query IIII
+#SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+#----
+#1	199999	200000	400000

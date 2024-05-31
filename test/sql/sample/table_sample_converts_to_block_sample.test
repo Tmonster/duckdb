@@ -7,35 +7,41 @@ require vector_size 2048
 # table samples first collect only 1% of the table, until the table has a cardinality of 2048.
 # then the sample stays at a fixed 2048 values.
 
-statement ok
-create table materialized_range as select 1 a from range(50000);
+#statement ok
+#select a, count(*) from (select( range%3+1) as a from range(2*204800)) t(a) group by all USING SAMPLE reservoir(2048 rows);
+#
+#
+#mode skip
 
-# only 2.048% of 10000
+
+statement ok
+create table materialized_range as select 1 a from range(102400);
+
+# only 1% of 102400
 query I
 select count(*) from pragma_table_sample('materialized_range');
 ----
 1024
 
-
 statement ok
-insert into materialized_range select 2 a from range(50000);
+insert into materialized_range select 2 a from range(102400);
 
-# collect another 2.048% of 50000
+# collect another 1% of 102400
 query I
 select count(*) from pragma_table_sample('materialized_range');
 ----
 2048
 
-query I
+query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1   1062
-2   986
+1	1026
+2	1022
 
 
 # insert another
 statement ok
-insert into materialized_range select 3 a from range(50000);
+insert into materialized_range select 3 a from range(102400);
 
 # sample remains at 2048 values
 query I
@@ -44,9 +50,19 @@ select count(*) from pragma_table_sample('materialized_range');
 2048
 
 
-query I
+query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1   731
-2   656
-3   661
+1	706
+2	663
+3	679
+
+
+# the above seems skewed, but this test shows that if all samples are added at the same time
+# to a reservoir sample, they are not skewed
+query II
+select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) ;
+----
+1	682
+2	709
+3	657

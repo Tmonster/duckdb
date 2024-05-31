@@ -1,6 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include <fmt/format.h>
@@ -20,10 +19,12 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserialize
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count) {
 	type = SampleType::RESERVOIR_SAMPLE;
+	auto what = 0;
 }
 
 ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
     : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
+	auto the_fuck = 0;
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -89,8 +90,78 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
 	return copy;
 }
 
+struct ReplacementHelper {
+	bool set;
+	std::pair<double, idx_t> pair;
+};
+
+void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples) {
+#ifdef DEBUG
+	// if any of the smaller samples have a sample count
+	for (const auto &small_sample : small_samples) {
+		D_ASSERT(small_sample->sample_count < sample_count);
+	}
+#endif
+	D_ASSERT(!small_samples.empty());
+	CreateReservoirChunk(small_samples.at(0)->GetChunk()->GetTypes());
+	Chunk().SetCardinality(sample_count);
+	idx_t inserted_tuples = 0;
+	vector<ReplacementHelper> replacement_candidates;
+	// set all the replacement candidates
+	idx_t num_entries_seen_total = 0;
+	idx_t num_entries_to_skip_b4_next_sample = 0;
+	for (const auto &small_sample : small_samples) {
+		const auto candidate = small_sample->PopFromWeightQueue();
+		const ReplacementHelper help {true, candidate};
+		replacement_candidates.push_back(help);
+		num_entries_seen_total += small_sample->base_reservoir_sample->num_entries_seen_total;
+		num_entries_to_skip_b4_next_sample += small_sample->base_reservoir_sample->num_entries_to_skip_b4_next_sample;
+	}
+	base_reservoir_sample->num_entries_seen_total = num_entries_seen_total;
+	// not in this chunk! increment current count and go to the next chunk
+	base_reservoir_sample->num_entries_to_skip_b4_next_sample = base_reservoir_sample->next_index_to_sample;
+
+	while (inserted_tuples < sample_count) {
+		// first find the candidate with the lowest weight
+		double cur_lowest = NumericLimits<double>::Minimum();
+		idx_t lowest_ind = 0;
+		for (idx_t i = 0; i < replacement_candidates.size(); i++) {
+			if (!replacement_candidates.at(i).set) {
+				continue;
+			}
+			if (cur_lowest < replacement_candidates.at(i).pair.first) {
+				cur_lowest = replacement_candidates.at(i).pair.first;
+				lowest_ind = i;
+			}
+		}
+
+		// replace the element with the lowest index
+		auto top_other = replacement_candidates.at(lowest_ind).pair;
+		auto index_to_replace = inserted_tuples;
+		ReplaceElement(index_to_replace, small_samples.at(lowest_ind)->Chunk(), top_other.second, -top_other.first);
+		inserted_tuples += 1;
+
+		if (!small_samples.at(lowest_ind)->base_reservoir_sample->reservoir_weights.empty()) {
+			const auto candidate = small_samples.at(lowest_ind)->PopFromWeightQueue();
+			const ReplacementHelper help {true, candidate};
+			replacement_candidates.at(lowest_ind) = help;
+		} else {
+			const ReplacementHelper help {false, make_pair(0, 0)};
+			replacement_candidates.at(lowest_ind) = help;
+		}
+	}
+	auto done_here = 0;
+}
+
 void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
-	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
+	if (other->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE && reservoir_chunk != nullptr) {
+		auto &other_percentage_sample = other->Cast<ReservoirSamplePercentage>();
+		other_percentage_sample.Finalize();
+		auto other_sample_count = other_percentage_sample.NumSamplesCollected();
+		auto converted_percentage_sample = other_percentage_sample.ConvertToFixedReservoirSample(other_sample_count);
+		return Merge(std::move(converted_percentage_sample));
+	}
+
 	auto reservoir_other = &other->Cast<ReservoirSample>();
 
 	// do not merge destroyed samples.
@@ -212,7 +283,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	ret->SetCardinality(ret_chunk_size);
 	return ret;
 }
-
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	if (!is_finalized) {
@@ -356,10 +426,10 @@ void ReservoirSample::Finalize() {
 }
 
 ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed, idx_t reservoir_sample_size)
-	: BlockingSample(seed), allocator(Allocator::DefaultAllocator()), sample_percentage(percentage / 100.0), reservoir_sample_size(reservoir_sample_size), current_count(0),
-	  is_finalized(false) {
+    : BlockingSample(seed), allocator(Allocator::DefaultAllocator()), sample_percentage(percentage / 100.0),
+      reservoir_sample_size(reservoir_sample_size), current_count(0), is_finalized(false) {
 	current_sample =
-		make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random.NextRandomInteger());
+	    make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random.NextRandomInteger());
 	type = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 }
 
@@ -438,6 +508,8 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 		// now merge the current samples.
 		current_sample->Merge(std::move(other_percentage_sample.current_sample));
 		current_count += other_percentage_sample.current_count;
+	} else {
+		throw InternalException("oops");
 	}
 }
 idx_t ReservoirSample::NumSamplesCollected() {
@@ -449,8 +521,10 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	for (auto &finished_sample : finished_samples) {
 		samples_collected += finished_sample->NumSamplesCollected();
 	}
-	if (current_sample) {
-		samples_collected += current_sample->NumSamplesCollected();
+	if (!is_finalized && current_sample) {
+		// Sometimes a percentage sample can overcollect. When finalize is called the
+		// percentage becomes accurate, however.
+		samples_collected += current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage;
 	}
 	return samples_collected;
 }
@@ -476,17 +550,39 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	if (!is_finalized) {
 		Finalize();
 	}
+
+	auto blah = NumSamplesCollected();
+	// This function should never be called if the number of samples collected is smaller than the sample count
+	D_ASSERT(NumSamplesCollected() >= sample_count);
+
 	// Make sure that the reservoir sample percentage more than sample count samples.
 	// D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
 	// insert the first chunk from the percentage sample as if these are all first time
 
-	// start by merging every ReservoirSample from the finished samples,
-	for (auto &finished_sample : finished_samples) {
-		reservoir_sample->Merge(std::move(finished_sample));
+	// if the sample counts of our finished samples and our desired Reservoir Sample do not line up
+	// then we need to make sure we can convert them properly
+	vector<unique_ptr<ReservoirSample>> mini_small_samples;
+	idx_t finished_samples_count = 0;
+	idx_t finished_sample_index = 0;
+	bool mini_samples_merged = false;
+	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
+		if (!mini_samples_merged) {
+			auto &finished_sample = finished_samples.at(finished_sample_index);
+			if (finished_sample->sample_count != sample_count) {
+				finished_samples_count += finished_sample->sample_count;
+				mini_small_samples.push_back(std::move(finished_samples.at(finished_sample_index)));
+			}
+			// you have enough of the smaller finished samples. Now you can combine them
+			// and merge into a larger blocking sample.
+			if (finished_samples_count >= sample_count) {
+				reservoir_sample->CombineMerge(std::move(mini_small_samples));
+				mini_samples_merged = true;
+			}
+		} else {
+			reservoir_sample->Merge(std::move(finished_samples.at(finished_sample_index)));
+		}
 	}
-	// current sample should be null since we called finalize()
-	D_ASSERT(!current_sample);
 
 	return reservoir_sample;
 }
