@@ -92,10 +92,6 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
 void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
 	auto reservoir_other = &other->Cast<ReservoirSample>();
-	// three ways to merge samples
-	if (sample_count != reservoir_other->sample_count) {
-		throw NotImplementedException("attempting to merge samples with different sample counts");
-	}
 
 	// do not merge destroyed samples.
 	if (destroyed || other->destroyed) {
@@ -107,6 +103,9 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// 1. This reservoir chunk has not yet been initialized.
 	if (reservoir_chunk == nullptr) {
+		if (sample_count != reservoir_other->sample_count) {
+			throw InternalException("Need to implement this first");
+		}
 		// take ownership of the reservoir_others sample
 		base_reservoir_sample = std::move(other->base_reservoir_sample);
 		reservoir_chunk = std::move(reservoir_other->reservoir_chunk);
@@ -135,7 +134,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	// merge the one that has not yet been filled into the full one.
 	// The one not yet filled has not skipped any tuples yet, so we are not biased to it's sample when
 	// using AddToReservoir.
-	if (Chunk().size() + reservoir_other->Chunk().size() < (sample_count * 2)) {
+	if (Chunk().size() + reservoir_other->Chunk().size() < sample_count + reservoir_other->sample_count) {
 		// one of the samples is full, but not the other.
 		if (GetPriorityQueueSize() == sample_count) {
 			auto chunk = reservoir_other->GetChunkAndShrink();
@@ -164,7 +163,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	//	so we remove sample_count tuples/rows from the reservoirs that have the lowest weights
 	//	Then push the rest of the samples from other into this, using the weights the tuples had in other
 	idx_t pop_count = Chunk().size() + reservoir_other->Chunk().size() - sample_count;
-	D_ASSERT(pop_count == sample_count);
+	D_ASSERT(pop_count == reservoir_other->sample_count);
 
 	// store indexes that need to be replaced in this
 	// store weights for new values that will be replacing old values
@@ -356,6 +355,14 @@ void ReservoirSample::Finalize() {
 	return;
 }
 
+ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed, idx_t reservoir_sample_size)
+	: BlockingSample(seed), allocator(Allocator::DefaultAllocator()), sample_percentage(percentage / 100.0), reservoir_sample_size(reservoir_sample_size), current_count(0),
+	  is_finalized(false) {
+	current_sample =
+		make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random.NextRandomInteger());
+	type = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+}
+
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
       is_finalized(false) {
@@ -420,17 +427,18 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	// just merge. it must to up to the calling function to convert the percentage sample
 	// into a block sample.
-	D_ASSERT(other->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE);
-	auto &other_percentage_sample = other->Cast<ReservoirSamplePercentage>();
+	if (other->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE) {
+		auto &other_percentage_sample = other->Cast<ReservoirSamplePercentage>();
 
-	// first add the finished samples from other if they exist.
-	for (auto &finished_sample : other_percentage_sample.finished_samples) {
-		finished_samples.push_back(std::move(finished_sample));
+		// first add the finished samples from other if they exist.
+		for (auto &finished_sample : other_percentage_sample.finished_samples) {
+			finished_samples.push_back(std::move(finished_sample));
+		}
+
+		// now merge the current samples.
+		current_sample->Merge(std::move(other_percentage_sample.current_sample));
+		current_count += other_percentage_sample.current_count;
 	}
-
-	// now merge the current samples.
-	current_sample->Merge(std::move(other_percentage_sample.current_sample));
-	current_count += other_percentage_sample.current_count;
 }
 idx_t ReservoirSample::NumSamplesCollected() {
 	return base_reservoir_sample->reservoir_weights.size();
@@ -469,7 +477,7 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 		Finalize();
 	}
 	// Make sure that the reservoir sample percentage more than sample count samples.
-	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
+	// D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
 	// insert the first chunk from the percentage sample as if these are all first time
 
@@ -477,8 +485,8 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	for (auto &finished_sample : finished_samples) {
 		reservoir_sample->Merge(std::move(finished_sample));
 	}
-	// now merge the current sample.
-	reservoir_sample->Merge(std::move(current_sample));
+	// current sample should be null since we called finalize()
+	D_ASSERT(!current_sample);
 
 	return reservoir_sample;
 }

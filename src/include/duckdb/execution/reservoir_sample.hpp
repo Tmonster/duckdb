@@ -184,6 +184,7 @@ public:
 
 public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
+	ReservoirSamplePercentage(double percentage, int64_t seed, idx_t reservoir_sample_size);
 	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	idx_t NumSamplesCollected() override;
