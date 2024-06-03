@@ -403,9 +403,6 @@ void ColumnData::RevertAppend(row_t start_row) {
 	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 	auto &transient = *segment;
-	if (transient.segment_type != ColumnSegmentType::TRANSIENT) {
-		auto break_here = 0;
-	}
 	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely

@@ -1,5 +1,4 @@
 #include "duckdb/execution/reservoir_sample.hpp"
-
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include <fmt/format.h>
@@ -16,16 +15,138 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserialize
 	return result;
 }
 
+unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
+	auto copy = make_uniq<ReservoirChunk>();
+	copy->chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+
+	chunk.Copy(copy->chunk);
+	return copy;
+}
+
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count) {
 	type = SampleType::RESERVOIR_SAMPLE;
-	auto what = 0;
 }
 
 ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
     : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
-	auto the_fuck = 0;
 }
+
+void BaseReservoirSampling::IncreaseNumEntriesSeenTotal(idx_t count) {
+	num_entries_seen_total += count;
+}
+
+BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
+	next_index_to_sample = 0;
+	min_weight_threshold = 0;
+	min_weighted_entry_index = 0;
+	num_entries_to_skip_b4_next_sample = 0;
+	num_entries_seen_total = 0;
+}
+
+BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(1) {
+}
+
+unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
+	auto ret = make_uniq<BaseReservoirSampling>(1);
+	ret->reservoir_weights = reservoir_weights;
+	ret->next_index_to_sample = next_index_to_sample;
+	ret->min_weight_threshold = min_weight_threshold;
+	ret->min_weighted_entry_index = min_weighted_entry_index;
+	ret->num_entries_to_skip_b4_next_sample = num_entries_to_skip_b4_next_sample;
+	ret->num_entries_seen_total = num_entries_seen_total;
+	return ret;
+}
+
+void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
+	//! 1: The first m items of V are inserted into R
+	//! first we need to check if the reservoir already has "m" elements
+	//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
+	//! we then define the threshold to enter the reservoir T_w as the minimum key of R
+	//! we use a priority queue to extract the minimum key in O(1) time
+	if (cur_size == sample_size) {
+		//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
+		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
+		//! we use a priority queue to extract the minimum key in O(1) time
+		for (idx_t i = 0; i < sample_size; i++) {
+			double k_i = random.NextRandom();
+			reservoir_weights.emplace(-k_i, i);
+		}
+		SetNextEntry();
+	}
+}
+
+void BaseReservoirSampling::SetNextEntry() {
+	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
+	auto &min_key = reservoir_weights.top();
+	double t_w = -min_key.first;
+	double r = random.NextRandom();
+	double x_w = log(r) / log(t_w);
+	//! 5. From the current item vc skip items until item vi , such that:
+	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
+	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
+	min_weight_threshold = t_w;
+	min_weighted_entry_index = min_key.second;
+	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
+	num_entries_to_skip_b4_next_sample = 0;
+}
+
+void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, double with_weight) {
+
+	double r2 = with_weight;
+	//! now we insert the new weight into the reservoir
+	reservoir_weights.emplace(std::make_pair(-r2, entry_index));
+	//! we update the min entry with the new min entry in the reservoir
+	SetNextEntry();
+}
+
+void BaseReservoirSampling::ReplaceElement(double with_weight) {
+	//! replace the entry in the reservoir
+	//! pop the minimum entry
+	reservoir_weights.pop();
+	//! now update the reservoir
+	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
+	//! 9. The new threshold Tw is the new minimum key of R
+	//! we generate a random number between (min_weight_threshold, 1)
+	double r2 = random.NextRandom(min_weight_threshold, 1);
+
+	//! if we are merging two reservoir samples use the weight passed
+	if (with_weight >= 0) {
+		r2 = with_weight;
+	}
+	//! now we insert the new weight into the reservoir
+	reservoir_weights.emplace(-r2, min_weighted_entry_index);
+	//! we update the min entry with the new min entry in the reservoir
+	SetNextEntry();
+}
+
+
+std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
+	auto ret = base_reservoir_sample->reservoir_weights.top();
+	base_reservoir_sample->reservoir_weights.pop();
+
+	if (base_reservoir_sample->reservoir_weights.empty()) {
+		// 1 is maximum weight
+		base_reservoir_sample->min_weight_threshold = 1;
+		return ret;
+	}
+	auto &min_key = base_reservoir_sample->reservoir_weights.top();
+	base_reservoir_sample->min_weight_threshold = -min_key.first;
+	return ret;
+}
+
+double BlockingSample::GetMinWeightThreshold() {
+	return base_reservoir_sample->min_weight_threshold;
+}
+
+idx_t BlockingSample::GetPriorityQueueSize() {
+	return base_reservoir_sample->reservoir_weights.size();
+}
+
+void BlockingSample::Destroy() {
+	destroyed = true;
+}
+
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0 || destroyed) {
@@ -48,22 +169,24 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	D_ASSERT(reservoir_chunk);
 	D_ASSERT(Chunk().size() == sample_count);
 	// Initialize the weights if we have collected sample_count rows and weights have not been initialized
-	if (Chunk().size() == sample_count && base_reservoir_sample->reservoir_weights.empty()) {
+	if (Chunk().size() == sample_count && GetPriorityQueueSize() == 0) {
 		base_reservoir_sample->InitializeReservoirWeights(Chunk().size(), sample_count);
 	}
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset =
-		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
+		auto offset =
+			base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
 		// in this chunk! replace the element
-		ReplaceElement(input, base_offset + offset);
+		// first pop from weight queue
+		// auto old_entry = PopFromWeightQueue();
+		ReplaceElement( input, base_offset + offset);
 		// shift the chunk forward
 		remaining -= offset;
 		base_offset += offset;
@@ -82,13 +205,7 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	return base_ret;
 }
 
-unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
-	auto copy = make_uniq<ReservoirChunk>();
-	copy->chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 
-	chunk.Copy(copy->chunk);
-	return copy;
-}
 
 struct ReplacementHelper {
 	bool set;
@@ -118,7 +235,6 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 		num_entries_to_skip_b4_next_sample += small_sample->base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 	}
 	base_reservoir_sample->num_entries_seen_total = num_entries_seen_total;
-	// not in this chunk! increment current count and go to the next chunk
 	base_reservoir_sample->num_entries_to_skip_b4_next_sample = base_reservoir_sample->next_index_to_sample;
 
 	while (inserted_tuples < sample_count) {
@@ -141,7 +257,7 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 		ReplaceElement(index_to_replace, small_samples.at(lowest_ind)->Chunk(), top_other.second, -top_other.first);
 		inserted_tuples += 1;
 
-		if (!small_samples.at(lowest_ind)->base_reservoir_sample->reservoir_weights.empty()) {
+		if (small_samples.at(lowest_ind)->GetPriorityQueueSize() != 0) {
 			const auto candidate = small_samples.at(lowest_ind)->PopFromWeightQueue();
 			const ReplacementHelper help {true, candidate};
 			replacement_candidates.at(lowest_ind) = help;
@@ -150,7 +266,6 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 			replacement_candidates.at(lowest_ind) = help;
 		}
 	}
-	auto done_here = 0;
 }
 
 void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
@@ -284,29 +399,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	return ret;
 }
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
-	if (!is_finalized) {
-		Finalize();
-	}
-	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
-	}
-	hugeint_t offset_signed = offset;
-	idx_t finished_sample_index = 0;
-	while (offset_signed > 0) {
-		offset_signed -= finished_samples.at(finished_sample_index)->NumSamplesCollected();
-		finished_sample_index += 1;
-	}
-	if (offset_signed < 0) {
-		finished_sample_index -= 1;
-		offset_signed += finished_samples.at(finished_sample_index)->NumSamplesCollected();
-	}
-	if (finished_sample_index >= finished_samples.size()) {
-		return nullptr;
-	}
-	return finished_samples.at(finished_sample_index)->GetChunk((idx_t)offset_signed);
-}
-
 unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 	if (!reservoir_chunk || Chunk().size() == 0 || destroyed) {
 		return nullptr;
@@ -351,15 +443,15 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	base_reservoir_sample->ReplaceElement(with_weight);
 }
 
-void ReservoirSample::ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight) {
+void ReservoirSample::ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight) {
 	// replace the entry in the reservoir with Input[index_in_chunk]
 	// If index_in_self_chunk is provided, then the
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		Chunk().SetValue(col_idx, index, input.GetValue(col_idx, index_in_chunk));
+		Chunk().SetValue(col_idx, reservoir_chunk_index, input.GetValue(col_idx, index_in_input_chunk));
 	}
-	base_reservoir_sample->ReplaceElementWithIndex(index, with_weight);
+	base_reservoir_sample->ReplaceElementWithIndex(reservoir_chunk_index, with_weight);
 }
 
 void ReservoirSample::CreateReservoirChunk(const vector<LogicalType> &types) {
@@ -392,7 +484,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		CreateReservoirChunk(input.GetTypes());
 	}
 	Chunk().Append(input, false, nullptr, required_count);
-	if (num_added_samples + required_count >= sample_count && base_reservoir_sample->reservoir_weights.empty()) {
+	if (num_added_samples + required_count >= sample_count && GetPriorityQueueSize() == 0) {
 		base_reservoir_sample->InitializeReservoirWeights(Chunk().size(), sample_count);
 	}
 
@@ -416,6 +508,11 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	return input.size();
 }
 
+idx_t ReservoirSample::NumSamplesCollected() {
+	auto samples = GetPriorityQueueSize();
+	return samples == 0 ? Chunk().size() : samples;
+}
+
 DataChunk &ReservoirSample::Chunk() {
 	D_ASSERT(reservoir_chunk);
 	return reservoir_chunk->chunk;
@@ -436,7 +533,7 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t 
 ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
       is_finalized(false) {
-	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
+	reservoir_sample_size = (idx_t)(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample =
 	    make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random.NextRandomInteger());
 	type = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
@@ -447,7 +544,7 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t 
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
-	base_reservoir_sample->num_entries_seen_total += input.size();
+	base_reservoir_sample->IncreaseNumEntriesSeenTotal(input.size());
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
 		// we don't have enough space in our current reservoir
 		// first check what we still need to append to the current sample
@@ -512,8 +609,28 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 		throw InternalException("oops");
 	}
 }
-idx_t ReservoirSample::NumSamplesCollected() {
-	return base_reservoir_sample->reservoir_weights.size();
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
+	if (!is_finalized) {
+		Finalize();
+	}
+	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
+	}
+	int64_t offset_signed = (int64_t)offset;
+	int64_t finished_sample_index = 0;
+	while (offset_signed > 0) {
+		offset_signed -= finished_samples.at((idx_t)finished_sample_index)->NumSamplesCollected();
+		finished_sample_index += 1;
+	}
+	if (offset_signed < 0) {
+		finished_sample_index -= 1;
+		offset_signed += finished_samples.at((idx_t)finished_sample_index)->NumSamplesCollected();
+	}
+	if (finished_sample_index >= finished_samples.size()) {
+		return nullptr;
+	}
+	return finished_samples.at(finished_sample_index)->GetChunk((idx_t)offset_signed);
 }
 
 idx_t ReservoirSamplePercentage::NumSamplesCollected() {
@@ -524,7 +641,7 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	if (!is_finalized && current_sample) {
 		// Sometimes a percentage sample can overcollect. When finalize is called the
 		// percentage becomes accurate, however.
-		samples_collected += current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage;
+		samples_collected += current_sample->NumSamplesCollected();
 	}
 	return samples_collected;
 }
@@ -551,10 +668,8 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 		Finalize();
 	}
 
-	auto blah = NumSamplesCollected();
 	// This function should never be called if the number of samples collected is smaller than the sample count
 	D_ASSERT(NumSamplesCollected() >= sample_count);
-
 	// Make sure that the reservoir sample percentage more than sample count samples.
 	// D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sample_count);
 	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
@@ -570,7 +685,12 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 		if (!mini_samples_merged) {
 			auto &finished_sample = finished_samples.at(finished_sample_index);
 			if (finished_sample->sample_count != sample_count) {
-				finished_samples_count += finished_sample->sample_count;
+				auto num_samples_collected = finished_sample->NumSamplesCollected();
+				if (num_samples_collected < finished_sample->sample_count) {
+					// finished sample has not yet assigned weights.
+					finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected, num_samples_collected);
+				}
+				finished_samples_count += num_samples_collected;
 				mini_small_samples.push_back(std::move(finished_samples.at(finished_sample_index)));
 			}
 			// you have enough of the smaller finished samples. Now you can combine them
@@ -580,6 +700,7 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 				mini_samples_merged = true;
 			}
 		} else {
+			// if the smaller samples have been merged, you can just merge finished samples now
 			reservoir_sample->Merge(std::move(finished_samples.at(finished_sample_index)));
 		}
 	}
@@ -635,114 +756,5 @@ void ReservoirSamplePercentage::Finalize() {
 	is_finalized = true;
 }
 
-BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
-	next_index_to_sample = 0;
-	min_weight_threshold = 0;
-	min_weighted_entry_index = 0;
-	num_entries_to_skip_b4_next_sample = 0;
-	num_entries_seen_total = 0;
-}
-
-BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(1) {
-}
-
-unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
-	auto ret = make_uniq<BaseReservoirSampling>(1);
-	ret->reservoir_weights = reservoir_weights;
-	ret->next_index_to_sample = next_index_to_sample;
-	ret->min_weight_threshold = min_weight_threshold;
-	ret->min_weighted_entry_index = min_weighted_entry_index;
-	ret->num_entries_to_skip_b4_next_sample = num_entries_to_skip_b4_next_sample;
-	ret->num_entries_seen_total = num_entries_seen_total;
-	return ret;
-}
-
-void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
-	//! 1: The first m items of V are inserted into R
-	//! first we need to check if the reservoir already has "m" elements
-	//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
-	//! we then define the threshold to enter the reservoir T_w as the minimum key of R
-	//! we use a priority queue to extract the minimum key in O(1) time
-	if (cur_size == sample_size) {
-		//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
-		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
-		//! we use a priority queue to extract the minimum key in O(1) time
-		for (idx_t i = 0; i < sample_size; i++) {
-			double k_i = random.NextRandom();
-			reservoir_weights.emplace(-k_i, i);
-		}
-		SetNextEntry();
-	}
-}
-
-void BaseReservoirSampling::SetNextEntry() {
-	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
-	auto &min_key = reservoir_weights.top();
-	double t_w = -min_key.first;
-	double r = random.NextRandom();
-	double x_w = log(r) / log(t_w);
-	//! 5. From the current item vc skip items until item vi , such that:
-	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
-	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
-	min_weight_threshold = t_w;
-	min_weighted_entry_index = min_key.second;
-	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
-	num_entries_to_skip_b4_next_sample = 0;
-}
-
-void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, double with_weight) {
-
-	double r2 = with_weight;
-	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, entry_index));
-	//! we update the min entry with the new min entry in the reservoir
-	SetNextEntry();
-}
-
-void BaseReservoirSampling::ReplaceElement(double with_weight) {
-	//! replace the entry in the reservoir
-	//! pop the minimum entry
-	reservoir_weights.pop();
-	//! now update the reservoir
-	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
-	//! 9. The new threshold Tw is the new minimum key of R
-	//! we generate a random number between (min_weight_threshold, 1)
-	double r2 = random.NextRandom(min_weight_threshold, 1);
-
-	//! if we are merging two reservoir samples use the weight passed
-	if (with_weight >= 0) {
-		r2 = with_weight;
-	}
-	//! now we insert the new weight into the reservoir
-	reservoir_weights.emplace(-r2, min_weighted_entry_index);
-	//! we update the min entry with the new min entry in the reservoir
-	SetNextEntry();
-}
-
-std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
-	auto ret = base_reservoir_sample->reservoir_weights.top();
-	base_reservoir_sample->reservoir_weights.pop();
-
-	if (base_reservoir_sample->reservoir_weights.empty()) {
-		// 1 is maximum weight
-		base_reservoir_sample->min_weight_threshold = 1;
-		return ret;
-	}
-	auto &min_key = base_reservoir_sample->reservoir_weights.top();
-	base_reservoir_sample->min_weight_threshold = -min_key.first;
-	return ret;
-}
-
-double BlockingSample::GetMinWeightThreshold() {
-	return base_reservoir_sample->min_weight_threshold;
-}
-
-idx_t BlockingSample::GetPriorityQueueSize() {
-	return base_reservoir_sample->reservoir_weights.size();
-}
-
-void BlockingSample::Destroy() {
-	destroyed = true;
-}
 
 } // namespace duckdb

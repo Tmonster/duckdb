@@ -32,9 +32,12 @@ public:
 	void ReplaceElementWithIndex(idx_t entry_index, double with_weight);
 	void ReplaceElement(double with_weight = -1);
 
+	void IncreaseNumEntriesSeenTotal(idx_t count);
+
 	unique_ptr<BaseReservoirSampling> Copy();
 	//! The random generator
 	RandomEngine random;
+
 	//! The next element to sample
 	idx_t next_index_to_sample;
 	//! The reservoir threshold of the current min entry
@@ -52,6 +55,11 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
+
+	// Blocking sample is a virtual class. It should be allowed to see the weights and
+	// of tuples in the sample. The blocking sample can then easily maintain statisitcal properties
+	// from the sample point of view.
+	friend class BlockingSample;
 };
 
 class BlockingSample {
@@ -163,7 +171,7 @@ public:
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
-	void ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight);
+	void ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight);
 
 	void CreateReservoirChunk(const vector<LogicalType> &types);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
