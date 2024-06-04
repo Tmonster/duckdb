@@ -1201,7 +1201,7 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 }
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	if (stats.table_sample) {
+	if (stats.table_sample && !stats.table_sample->destroyed) {
 		return stats.table_sample->Copy();
 	}
 	return nullptr;
