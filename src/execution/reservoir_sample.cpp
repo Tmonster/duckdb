@@ -229,7 +229,7 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 		num_entries_to_skip_b4_next_sample += small_sample->base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 	}
 	base_reservoir_sample->num_entries_seen_total = num_entries_seen_total;
-	base_reservoir_sample->num_entries_to_skip_b4_next_sample = base_reservoir_sample->next_index_to_sample;
+	base_reservoir_sample->num_entries_to_skip_b4_next_sample = num_entries_to_skip_b4_next_sample;
 
 	while (inserted_tuples < sample_count) {
 		// first find the candidate with the lowest weight
@@ -612,20 +612,21 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
 		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
 	}
-	int64_t offset_signed = (int64_t)offset;
-	int64_t finished_sample_index = 0;
-	while (offset_signed > 0) {
-		offset_signed -= finished_samples.at((idx_t)finished_sample_index)->NumSamplesCollected();
-		finished_sample_index += 1;
-	}
-	if (offset_signed < 0) {
-		finished_sample_index -= 1;
-		offset_signed += finished_samples.at((idx_t)finished_sample_index)->NumSamplesCollected();
+	idx_t finished_sample_index = 0;
+	bool can_skip_finished_sample = true;
+	while (can_skip_finished_sample && finished_sample_index < finished_samples.size()) {
+		auto finished_sample_count = finished_samples.at(finished_sample_index)->NumSamplesCollected();
+		if (offset >= finished_sample_count) {
+			offset -= finished_sample_count;
+			finished_sample_index += 1;
+		} else {
+			can_skip_finished_sample = false;
+		}
 	}
 	if (finished_sample_index >= finished_samples.size()) {
 		return nullptr;
 	}
-	return finished_samples.at(finished_sample_index)->GetChunk((idx_t)offset_signed);
+	return finished_samples.at(finished_sample_index)->GetChunk(offset);
 }
 
 idx_t ReservoirSamplePercentage::NumSamplesCollected() {
@@ -636,7 +637,7 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	if (!is_finalized && current_sample) {
 		// Sometimes a percentage sample can overcollect. When finalize is called the
 		// percentage becomes accurate, however.
-		samples_collected += current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage;
+		samples_collected += idx_t(current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage);
 	}
 	return samples_collected;
 }
