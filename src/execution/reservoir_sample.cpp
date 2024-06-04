@@ -656,7 +656,7 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
 	ret->current_count = current_count;
 	ret->is_finalized = is_finalized;
 	ret->reservoir_sample_size = reservoir_sample_size;
-	return ret;
+	return unique_ptr_cast<ReservoirSamplePercentage, BlockingSample>(std::move(ret));
 }
 
 unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
