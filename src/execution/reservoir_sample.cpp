@@ -505,16 +505,10 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 
 idx_t ReservoirSample::NumSamplesCollected() {
 	auto samples = GetPriorityQueueSize();
-	if (samples == 0 && !reservoir_chunk) {
-		auto break_here = 0;
-	}
 	return samples == 0 && reservoir_chunk ? Chunk().size() : samples;
 }
 
 DataChunk &ReservoirSample::Chunk() {
-	if (!reservoir_chunk) {
-		auto break_here = 0;
-	}
 	D_ASSERT(reservoir_chunk);
 	return reservoir_chunk->chunk;
 }

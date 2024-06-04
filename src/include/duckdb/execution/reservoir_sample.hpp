@@ -207,7 +207,7 @@ public:
 
 	//! create a new reservoir sample that has a fixes sample size of "sample_count"
 	//! dump all samples into the new reservoir sample and return.
-	unique_ptr<ReservoirSample> ConvertToFixedReservoirSample(idx_t sample_count) const;
+	unique_ptr<ReservoirSample> ConvertToFixedReservoirSample(idx_t sample_count);
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
