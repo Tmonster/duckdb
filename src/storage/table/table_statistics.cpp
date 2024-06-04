@@ -109,18 +109,16 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
-		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the blocking sample.
+		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the
+		// blocking sample.
 		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-			other.table_sample->type == SampleType::RESERVOIR_SAMPLE &&
-			table_sample->NumSamplesCollected() == 0) {
+		    other.table_sample->type == SampleType::RESERVOIR_SAMPLE && table_sample->NumSamplesCollected() == 0) {
 			table_sample = std::move(other.table_sample);
-		}
-		else if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-			other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
+		} else if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		           other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
 			other.table_sample->Merge(std::move(table_sample));
 			table_sample = std::move(other.table_sample);
-		}
-		else if (other.table_sample) {
+		} else if (other.table_sample) {
 			table_sample->Merge(std::move(other.table_sample));
 		}
 		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&

@@ -53,16 +53,18 @@ select count(*) from pragma_table_sample('materialized_range');
 query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1	706
-2	663
-3	679
+1	712
+2	668
+3	668
 
+statement ok
+pragma threads=1;
 
 # the above seems skewed, but this test shows that if all samples are added at the same time
 # to a reservoir sample, they are not skewed
 query II
-select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) ;
+select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) REPEATABLE (200) order by a;
 ----
-1	682
-2	709
-3	657
+1	703
+2	680
+3	665

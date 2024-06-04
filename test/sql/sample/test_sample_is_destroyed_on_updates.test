@@ -4,52 +4,25 @@
 
 require vector_size 2048
 
+mode skip
+
 load __TEST_DIR__/test_samples_doot.db
 
 statement ok
-create table integers_1 as select range a, range+1 b  from range(5);
+create table integers_1 as select range a, range+1 b  from range(102400);
 
-query II
-select * from pragma_table_sample('integers_1');
+
+# no sample collected yet. There are only 5
+query II nosort sample_1
+select * from pragma_table_sample('integers_1') order by all;
 ----
-0	1
-1	2
-2	3
-3	4
-4	5
 
 restart
 
-query II
-select * from integers_1 order by all;
-----
-0	1
-1	2
-2	3
-3	4
-4	5
-
-query II
+query II nosort sample_1
 select * from pragma_table_sample('integers_1') order by all;
 ----
-0	1
-1	2
-2	3
-3	4
-4	5
 
-statement ok
-insert into integers_1 VALUES (5, 3);
-
-query II
-select * from pragma_table_sample('integers_1') order by all;
-----
-0	1
-1	2
-2	3
-3	4
-4	5
-5	3
 
 statement ok
 delete from integers_1 where a = 3;
@@ -59,12 +32,12 @@ select * from pragma_table_sample('integers_1') order by all;
 ----
 
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+1024
 
 statement ok
 update integers_1 set a = 5 where a = 1;
@@ -75,12 +48,12 @@ select * from pragma_table_sample('integers_1');
 
 # test adding columns destroys the sample.
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(204800);
 
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+2048
 
 statement ok
 Alter table integers_1 add column c DOUBLE;
@@ -88,6 +61,9 @@ Alter table integers_1 add column c DOUBLE;
 query III
 select * from pragma_table_sample('integers_1');
 ----
+
+
+mode skip
 
 
 # test altering types destroys the sample

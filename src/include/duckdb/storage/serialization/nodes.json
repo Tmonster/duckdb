@@ -282,25 +282,6 @@
     "constructor": ["sample_count"]
   },
   {
-    "class": "ReservoirSamplePercentage",
-    "base": "BlockingSample",
-    "enum": "RESERVOIR_PERCENTAGE_SAMPLE",
-    "includes": [],
-    "members": [
-      {
-        "id": 200,
-        "name": "sample_percentage",
-        "type": "double"
-      },
-      {
-        "id": 201,
-        "name": "reservoir_sample_size",
-        "type": "idx_t"
-      }
-    ],
-    "constructor": ["sample_percentage"]
-  },
-  {
     "class": "PivotColumn",
     "includes": [
       "duckdb/parser/tableref/pivotref.hpp"

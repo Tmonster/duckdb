@@ -384,7 +384,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			stats.table_sample->AddToReservoir(*copy_for_sample);
 		}
 		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-			stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+		    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
 			auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
 			stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
 		}

@@ -120,7 +120,6 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 	SetNextEntry();
 }
 
-
 std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
 	auto ret = base_reservoir_sample->reservoir_weights.top();
 	base_reservoir_sample->reservoir_weights.pop();
@@ -146,7 +145,6 @@ idx_t BlockingSample::GetPriorityQueueSize() {
 void BlockingSample::Destroy() {
 	destroyed = true;
 }
-
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0 || destroyed) {
@@ -176,17 +174,15 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		auto offset =
-			base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
+		idx_t offset =
+		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
 		// in this chunk! replace the element
-		// first pop from weight queue
-		// auto old_entry = PopFromWeightQueue();
-		ReplaceElement( input, base_offset + offset);
+		ReplaceElement(input, base_offset + offset);
 		// shift the chunk forward
 		remaining -= offset;
 		base_offset += offset;
@@ -204,8 +200,6 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	unique_ptr<BlockingSample> base_ret = std::move(ret);
 	return base_ret;
 }
-
-
 
 struct ReplacementHelper {
 	bool set;
@@ -443,7 +437,8 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	base_reservoir_sample->ReplaceElement(with_weight);
 }
 
-void ReservoirSample::ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight) {
+void ReservoirSample::ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk,
+                                     double with_weight) {
 	// replace the entry in the reservoir with Input[index_in_chunk]
 	// If index_in_self_chunk is provided, then the
 	// 8. The item in R with the minimum key is replaced by item vi
@@ -510,10 +505,16 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 
 idx_t ReservoirSample::NumSamplesCollected() {
 	auto samples = GetPriorityQueueSize();
-	return samples == 0 ? Chunk().size() : samples;
+	if (samples == 0 && !reservoir_chunk) {
+		auto break_here = 0;
+	}
+	return samples == 0 && reservoir_chunk ? Chunk().size() : samples;
 }
 
 DataChunk &ReservoirSample::Chunk() {
+	if (!reservoir_chunk) {
+		auto break_here = 0;
+	}
 	D_ASSERT(reservoir_chunk);
 	return reservoir_chunk->chunk;
 }
@@ -544,7 +545,7 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t 
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
-	base_reservoir_sample->IncreaseNumEntriesSeenTotal(input.size());
+	base_reservoir_sample->num_entries_seen_total += input.size();
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
 		// we don't have enough space in our current reservoir
 		// first check what we still need to append to the current sample
@@ -641,7 +642,7 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	if (!is_finalized && current_sample) {
 		// Sometimes a percentage sample can overcollect. When finalize is called the
 		// percentage becomes accurate, however.
-		samples_collected += current_sample->NumSamplesCollected();
+		samples_collected += current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage;
 	}
 	return samples_collected;
 }
@@ -688,7 +689,8 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 				auto num_samples_collected = finished_sample->NumSamplesCollected();
 				if (num_samples_collected < finished_sample->sample_count) {
 					// finished sample has not yet assigned weights.
-					finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected, num_samples_collected);
+					finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected,
+					                                                                   num_samples_collected);
 				}
 				finished_samples_count += num_samples_collected;
 				mini_small_samples.push_back(std::move(finished_samples.at(finished_sample_index)));
@@ -755,6 +757,5 @@ void ReservoirSamplePercentage::Finalize() {
 	current_sample = nullptr;
 	is_finalized = true;
 }
-
 
 } // namespace duckdb
