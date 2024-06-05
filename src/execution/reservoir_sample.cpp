@@ -843,7 +843,6 @@ void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	auto copy_as_reservoir_sample = copy_percentage.ConvertToFixedReservoirSample(copy->NumSamplesCollected());
 	copy_as_reservoir_sample->base_reservoir_sample->reservoir_weights.emplace(
 	    std::make_pair(NumericLimits<double>::Maximum(), idx_t(copy_percentage.sample_percentage * 100)));
-	auto top_weight = copy_as_reservoir_sample->base_reservoir_sample->reservoir_weights.top();
 
 	copy_as_reservoir_sample->Serialize(serializer);
 }
