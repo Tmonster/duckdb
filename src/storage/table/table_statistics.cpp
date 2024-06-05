@@ -15,7 +15,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	if (data.table_stats.table_sample) {
 		table_sample = std::move(data.table_stats.table_sample);
 	} else {
-		table_sample = make_uniq<ReservoirSamplePercentage>(2.048, 1);
+		table_sample = make_uniq<ReservoirSamplePercentage>(1, 1);
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
@@ -26,7 +26,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
-	table_sample = make_uniq<ReservoirSamplePercentage>(2.048, 1);
+	table_sample = make_uniq<ReservoirSamplePercentage>(1, 1);
 	stats_lock = make_shared_ptr<mutex>();
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
@@ -109,12 +109,18 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
-		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE && other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
-			auto &t_percentage_sample = table_sample->Cast<ReservoirSamplePercentage>();
-			table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the
+		// blocking sample.
+		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		    other.table_sample->type == SampleType::RESERVOIR_SAMPLE && table_sample->NumSamplesCollected() == 0) {
+			table_sample = std::move(other.table_sample);
+		} else if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		           other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
+			other.table_sample->Merge(std::move(table_sample));
+			table_sample = std::move(other.table_sample);
+		} else if (other.table_sample) {
+			table_sample->Merge(std::move(other.table_sample));
 		}
-		table_sample->Merge(std::move(other.table_sample));
-		auto blah =  table_sample->NumSamplesCollected();
 		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
 		    table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
 			auto &t_percentage_sample = table_sample->Cast<ReservoirSamplePercentage>();

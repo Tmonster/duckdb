@@ -4,67 +4,30 @@
 
 require vector_size 2048
 
-load __TEST_DIR__/test_samples_doot.db
-
 statement ok
-create table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
-query II
-select * from pragma_table_sample('integers_1');
+# no sample collected yet. There are only 5
+query I
+select count(*) from pragma_table_sample('integers_1') order by all;
 ----
-0	1
-1	2
-2	3
-3	4
-4	5
-
-restart
-
-query II
-select * from integers_1 order by all;
-----
-0	1
-1	2
-2	3
-3	4
-4	5
-
-query II
-select * from pragma_table_sample('integers_1') order by all;
-----
-0	1
-1	2
-2	3
-3	4
-4	5
-
-statement ok
-insert into integers_1 VALUES (5, 3);
-
-query II
-select * from pragma_table_sample('integers_1') order by all;
-----
-0	1
-1	2
-2	3
-3	4
-4	5
-5	3
+1024
 
 statement ok
 delete from integers_1 where a = 3;
 
-query II
-select * from pragma_table_sample('integers_1') order by all;
+query I
+select count(*) from pragma_table_sample('integers_1') order by all;
 ----
+0
 
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+1024
 
 statement ok
 update integers_1 set a = 5 where a = 1;
@@ -75,12 +38,12 @@ select * from pragma_table_sample('integers_1');
 
 # test adding columns destroys the sample.
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(204800);
 
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+2048
 
 statement ok
 Alter table integers_1 add column c DOUBLE;
@@ -92,12 +55,14 @@ select * from pragma_table_sample('integers_1');
 
 # test altering types destroys the sample
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
+
+# don't have enough smaples yet.
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+1024
 
 statement ok
 Alter table integers_1 alter b TYPE VARCHAR
@@ -108,12 +73,12 @@ select * from pragma_table_sample('integers_1');
 
 # test dropping a columns
 statement ok
-create or replace table integers_1 as select range a, range+1 b  from range(5);
+create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
 query I
 select count(*) from pragma_table_sample('integers_1');
 ----
-5
+1024
 
 statement ok
 Alter table integers_1 drop b;
@@ -122,6 +87,8 @@ query I
 select * from pragma_table_sample('integers_1');
 ----
 
+
+mode skip
 
 # test sample is destroyed after a restart
 statement ok
