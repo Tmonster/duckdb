@@ -802,6 +802,13 @@ unique_ptr<BlockingSample> BlockingSample::PercentageToReservoir(unique_ptr<Bloc
 	return std::move(percentage_sample);
 }
 
+void BlockingSample::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample",
+	                                                                       base_reservoir_sample);
+	serializer.WriteProperty<SampleType>(101, "type", type);
+	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
+}
+
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
 	auto base_reservoir_sample =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
