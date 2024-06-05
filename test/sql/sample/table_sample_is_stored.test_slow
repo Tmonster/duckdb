@@ -60,22 +60,15 @@ select count(*) from pragma_table_sample('integers_2');
 ----
 2048
 
-## checking statistical properties of the sample
-#query II
-#select ceil(avg(next-prev)) avg_diff, avg_diff > 2430 and avg_diff < 2450 from (select b as prev, LEAD(b, 1) OVER (ORDER BY b) AS next from pragma_table_sample('integers_1') order by all) t(prev, next);
-#----
-#2443.0	true
-
 query I
-select floor(avg(interval_count))::INT from (
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 1000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 2000000 and b > 1000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 3000000 and b > 2000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 4000000 and b > 3000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 5000000 and b > 4000000
-);
+select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
 ----
-409
+0	116
+1	440
+2	442
+3	440
+4	440
+5	170
 
 
 # adding another interval should subtract an equal number from the rest of the intervals
@@ -83,16 +76,15 @@ statement ok
 insert into integers_1 (select (range + 5)::VARCHAR a, range b from range(5000000,6000000));
 
 query I
-select floor(avg(interval_count))::INT from (
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 1000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 2000000 and b > 1000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 3000000 and b > 2000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 4000000 and b > 3000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 5000000 and b > 4000000 UNION ALL
-	select count(*) interval_count from pragma_table_sample('integers_1') where b < 6000000 and b > 5000000
-);
+select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
 ----
-341
+0	93
+1	344
+2	348
+3	350
+4	347
+5	341
+6	225
 
 # If double the table count is appended, around half the sample should account for the new values.
 statement ok
@@ -103,14 +95,12 @@ select count(*) from integers_1;
 ----
 12000000
 
-
 # about half of the samples should have the pair '-1', 1
 
 query I
 select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
 ----
 1291
-
 
 restart
 

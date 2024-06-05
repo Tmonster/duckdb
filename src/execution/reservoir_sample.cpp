@@ -699,6 +699,9 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 			auto &finished_sample = finished_samples.at(finished_sample_index);
 			if (finished_sample->sample_count != sample_count) {
 				auto num_samples_collected = finished_sample->NumSamplesCollected();
+				if (num_samples_collected == 0) {
+					continue;
+				}
 				if (num_samples_collected < finished_sample->sample_count) {
 					// finished sample has not yet assigned weights.
 					finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected,
