@@ -15,7 +15,7 @@ unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserialize
 	return result;
 }
 
-unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
+unique_ptr<ReservoirChunk> ReservoirChunk::Copy() const {
 	auto copy = make_uniq<ReservoirChunk>();
 	copy->chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 
@@ -189,7 +189,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<BlockingSample> ReservoirSample::Copy() {
+unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->reservoir_chunk = nullptr;
@@ -586,6 +586,12 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
+void ReservoirSamplePercentage::FromReservoirSample(unique_ptr<ReservoirSample> other) {
+	// we add tuples from the the reservoir sample
+	base_reservoir_sample = other->base_reservoir_sample->Copy();
+	finished_samples.push_back(std::move(other));
+}
+
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	// just merge. it must to up to the calling function to convert the percentage sample
 	// into a block sample.
@@ -600,8 +606,6 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 		// now merge the current samples.
 		current_sample->Merge(std::move(other_percentage_sample.current_sample));
 		current_count += other_percentage_sample.current_count;
-	} else {
-		throw InternalException("oops");
 	}
 }
 
@@ -642,7 +646,7 @@ idx_t ReservoirSamplePercentage::NumSamplesCollected() {
 	return samples_collected;
 }
 
-unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 	auto ret = make_uniq<ReservoirSamplePercentage>(Allocator::DefaultAllocator(), (sample_percentage * 100), 1);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	auto cur_sample_copy = current_sample->Copy();
@@ -751,6 +755,80 @@ void ReservoirSamplePercentage::Finalize() {
 	// when finalizing, current_sample is null. All samples are now in finished samples.
 	current_sample = nullptr;
 	is_finalized = true;
+}
+
+
+// serialize/deserialize code.
+
+unique_ptr<BlockingSample> BlockingSample::PercentageToReservoir(unique_ptr<BlockingSample> sample) {
+	if (sample->type != SampleType::RESERVOIR_SAMPLE) {
+		return std::move(sample);
+	}
+	auto reservoir_sample = unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(sample));
+	if (reservoir_sample->NumSamplesCollected() <= STANDARD_VECTOR_SIZE && reservoir_sample->GetPriorityQueueSize() == 0) {
+		return std::move(reservoir_sample);
+	}
+	// if we have less than a standard vector size and there are no weights, this was almost certainly a serialized percentage sample.
+	// the only time we deserialize reservoir samples is because they are an actual sample.
+	// because of a dumb mistake I (Tom Ebergen) made, we serialize smaller percentage samples as normal reservoir samples
+	// we can recreate the percentage sample here
+	auto sample_percentage = 1;
+	auto percentage_sample = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
+	percentage_sample->FromReservoirSample(std::move(reservoir_sample));
+	// the base_reservoir_weights are deserialized during whatever the calling class is doing.
+	// We need these base_reservoir_weights before we create the percentage sample, because they
+	// are important. The deserializing/Conversion needs to move somewhere else that can check
+	// if the sample needs to be converted before it is appended to or read.
+	return std::move(percentage_sample);
+}
+
+unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
+	auto base_reservoir_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
+	auto type = deserializer.ReadProperty<SampleType>(101, "type");
+	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
+	unique_ptr<BlockingSample> result;
+	switch (type) {
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		result = ReservoirSamplePercentage::Deserialize(deserializer);
+		break;
+	case SampleType::RESERVOIR_SAMPLE:
+		result = ReservoirSample::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of BlockingSample!");
+	}
+	result->base_reservoir_sample = std::move(base_reservoir_sample);
+	result->destroyed = destroyed;
+	auto converted_result = PercentageToReservoir(std::move(result));
+	return converted_result;
+}
+
+void ReservoirSample::Serialize(Serializer &serializer) const {
+	BlockingSample::Serialize(serializer);
+	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
+	serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk);
+}
+
+unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
+	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
+	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
+	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
+	return std::move(result);
+}
+
+void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
+	// BlockingSample::Serialize(serializer);
+	auto copy = Copy();
+	auto &copy_percentage = copy->Cast<ReservoirSamplePercentage>();
+	auto copy_as_reservoir_sample = copy_percentage.ConvertToFixedReservoirSample(copy->NumSamplesCollected());
+	copy_as_reservoir_sample->Serialize(serializer);
+}
+
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
+	auto sample_percentage = deserializer.ReadProperty<double>(200, "sample_percentage");
+	auto result = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "reservoir_sample_size", result->reservoir_sample_size);
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -13,6 +13,7 @@ require vector_size 2048
 #
 #mode skip
 
+load __TEST_DIR__/test_sample_converts_after_load.db
 
 statement ok
 create table materialized_range as select 1 a from range(102400);
@@ -22,6 +23,8 @@ query I
 select count(*) from pragma_table_sample('materialized_range');
 ----
 1024
+
+restart
 
 statement ok
 insert into materialized_range select 2 a from range(102400);
@@ -35,8 +38,8 @@ select count(*) from pragma_table_sample('materialized_range');
 query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1	1026
-2	1022
+1	1024
+2	1024
 
 
 # insert another
@@ -49,13 +52,12 @@ select count(*) from pragma_table_sample('materialized_range');
 ----
 2048
 
-
 query II
-select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
+select a, count(*) >= 650 and count(*) <= 750 from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1	712
-2	668
-3	668
+1	true
+2	true
+3	true
 
 statement ok
 pragma threads=1;

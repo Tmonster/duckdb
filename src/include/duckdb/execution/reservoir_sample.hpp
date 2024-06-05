@@ -87,9 +87,11 @@ public:
 
 	virtual void Merge(unique_ptr<BlockingSample> other) = 0;
 
-	virtual unique_ptr<BlockingSample> Copy() = 0;
+	virtual unique_ptr<BlockingSample> Copy() const = 0;
 
 	virtual void Finalize() = 0;
+
+	static unique_ptr<BlockingSample> PercentageToReservoir(unique_ptr<BlockingSample> sample);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
 	//! querying from a live sample and not a table collected sample.
@@ -133,7 +135,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
 
-	unique_ptr<ReservoirChunk> Copy();
+	unique_ptr<ReservoirChunk> Copy() const;
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
@@ -157,7 +159,7 @@ public:
 	//! reservoir samples while simultaneously updating their positions.
 	void CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples);
 
-	unique_ptr<BlockingSample> Copy() override;
+	unique_ptr<BlockingSample> Copy() const override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -211,7 +213,7 @@ public:
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
-	unique_ptr<BlockingSample> Copy() override;
+	unique_ptr<BlockingSample> Copy() const override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -219,6 +221,7 @@ public:
 	//! Fetches a chunk from the sample. This method is not destructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
+	void FromReservoirSample(unique_ptr<ReservoirSample> other);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
