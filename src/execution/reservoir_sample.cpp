@@ -765,9 +765,11 @@ unique_ptr<BlockingSample> BlockingSample::PercentageToReservoir(unique_ptr<Bloc
 		return std::move(sample);
 	}
 	auto reservoir_sample = unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(sample));
-	if (reservoir_sample->NumSamplesCollected() <= STANDARD_VECTOR_SIZE && reservoir_sample->GetPriorityQueueSize() == 0) {
+	auto top_weight = reservoir_sample->base_reservoir_sample->reservoir_weights.top();
+	if (top_weight.second != NumericLimits<idx_t>::Maximum()) {
 		return std::move(reservoir_sample);
 	}
+	reservoir_sample->base_reservoir_sample->reservoir_weights.pop();
 	// if we have less than a standard vector size and there are no weights, this was almost certainly a serialized percentage sample.
 	// the only time we deserialize reservoir samples is because they are an actual sample.
 	// because of a dumb mistake I (Tom Ebergen) made, we serialize smaller percentage samples as normal reservoir samples
@@ -817,10 +819,13 @@ unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializ
 }
 
 void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
-	// BlockingSample::Serialize(serializer);
 	auto copy = Copy();
 	auto &copy_percentage = copy->Cast<ReservoirSamplePercentage>();
 	auto copy_as_reservoir_sample = copy_percentage.ConvertToFixedReservoirSample(copy->NumSamplesCollected());
+	copy_as_reservoir_sample->base_reservoir_sample->reservoir_weights.emplace(std::make_pair(NumericLimits<double>::Maximum(), NumericLimits<idx_t>::Maximum()));
+	copy_as_reservoir_sample->base_reservoir_sample->reservoir_weights.emplace(std::make_pair(NumericLimits<double>::Minimum(), NumericLimits<idx_t>::Minimum()));
+	auto top_weight = base_reservoir_sample->reservoir_weights.top();
+
 	copy_as_reservoir_sample->Serialize(serializer);
 }
 
