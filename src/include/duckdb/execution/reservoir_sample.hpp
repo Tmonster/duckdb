@@ -15,6 +15,9 @@
 
 #include "duckdb/common/queue.hpp"
 
+#define FIXED_SAMPLE_SIZE      STANDARD_VECTOR_SIZE
+#define PERCENTAGE_SAMPLE_SIZE 1
+
 namespace duckdb {
 
 enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };

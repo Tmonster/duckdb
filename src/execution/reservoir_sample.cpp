@@ -416,17 +416,17 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 		return nullptr;
 	}
 	auto ret = make_uniq<DataChunk>();
-	idx_t ret_chunk_size = STANDARD_VECTOR_SIZE;
-	if (offset + STANDARD_VECTOR_SIZE > Chunk().size()) {
+	idx_t ret_chunk_size = FIXED_SAMPLE_SIZE;
+	if (offset + FIXED_SAMPLE_SIZE > Chunk().size()) {
 		ret_chunk_size = Chunk().size() - offset;
 	}
 	auto reservoir_types = Chunk().GetTypes();
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	SelectionVector sel(FIXED_SAMPLE_SIZE);
 	for (idx_t i = offset; i < offset + ret_chunk_size; i++) {
 		sel.set_index(i - offset, i);
 	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
-	ret->Slice(Chunk(), sel, STANDARD_VECTOR_SIZE);
+	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), FIXED_SAMPLE_SIZE);
+	ret->Slice(Chunk(), sel, FIXED_SAMPLE_SIZE);
 	ret->SetCardinality(ret_chunk_size);
 	return ret;
 }
@@ -435,18 +435,18 @@ unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 	if (!reservoir_chunk || Chunk().size() == 0 || destroyed) {
 		return nullptr;
 	}
-	if (Chunk().size() > STANDARD_VECTOR_SIZE) {
+	if (Chunk().size() > FIXED_SAMPLE_SIZE) {
 		// get from the back
 		auto ret = make_uniq<DataChunk>();
-		auto samples_remaining = Chunk().size() - STANDARD_VECTOR_SIZE;
+		auto samples_remaining = Chunk().size() - FIXED_SAMPLE_SIZE;
 		auto reservoir_types = Chunk().GetTypes();
-		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		SelectionVector sel(FIXED_SAMPLE_SIZE);
 		for (idx_t i = samples_remaining; i < Chunk().size(); i++) {
 			sel.set_index(i - samples_remaining, i);
 		}
-		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
-		ret->Slice(Chunk(), sel, STANDARD_VECTOR_SIZE);
-		ret->SetCardinality(STANDARD_VECTOR_SIZE);
+		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), FIXED_SAMPLE_SIZE);
+		ret->Slice(Chunk(), sel, FIXED_SAMPLE_SIZE);
+		ret->SetCardinality(FIXED_SAMPLE_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		Chunk().SetCardinality(samples_remaining);
 		return ret;
@@ -532,7 +532,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	}
 	// we still need to process a part of the chunk
 	// create a selection vector of the remaining elements
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	SelectionVector sel(FIXED_SAMPLE_SIZE);
 	for (idx_t i = required_count; i < chunk_count; i++) {
 		sel.set_index(i - required_count, i);
 	}
@@ -657,7 +657,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	if (!is_finalized) {
 		Finalize();
 	}
-	if (NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+	if (NumSamplesCollected() > FIXED_SAMPLE_SIZE) {
 		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
 	}
 	idx_t finished_sample_index = 0;
@@ -726,16 +726,6 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	// if there is a single finished_sample with the same sample count, just merge all finished samples into the sample
 	// count
 	idx_t finished_sample_index = 0;
-	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
-		if (finished_samples.at(finished_sample_index)->sample_count == sample_count) {
-			reservoir_sample = std::move(finished_samples.at(finished_sample_index));
-			for (idx_t i = 0; i < finished_sample_index; i++) {
-				reservoir_sample->Merge(std::move(finished_samples.at(i)));
-			}
-			return reservoir_sample;
-		}
-	}
-
 	// if the sample counts of our finished samples and our desired Reservoir Sample do not line up
 	// then we need to make sure we can convert them properly
 	vector<unique_ptr<ReservoirSample>> mini_small_samples;
