@@ -91,7 +91,11 @@ public:
 
 	virtual void Finalize() = 0;
 
-	static unique_ptr<BlockingSample> PercentageToReservoir(unique_ptr<BlockingSample> sample);
+	//! Used to convert regular samples to reservoir percentage samples.
+	//! This is used during deserialization. Percentage reservoir samples
+	//! are serialized as reservoir samples when a table has less than 204800 rows
+	//! When deserialization happens, we want to deserialize back to a percentage sample.
+	static unique_ptr<BlockingSample> MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSample> sample);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
 	//! querying from a live sample and not a table collected sample.
@@ -154,9 +158,10 @@ public:
 	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Special Merge.
-	//! Here you have multiple reservoir samples with small smaple counts and you want
-	//! one large reservoir sample while maintaining the weights of all of the smaller
-	//! reservoir samples while simultaneously updating their positions.
+	//! Here you have multiple reservoir samples (small_samples) with smaple counts smaller than this.sample_count
+	//! and you want one large reservoir sample while only maintaining the highest this.sample_count weights
+	//! This is used when converting a ReservoirPercentageSample into a ReservoirSample
+	//! and the ReservoirPercentageSample has more samples than this.sample_count.
 	void CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples);
 
 	unique_ptr<BlockingSample> Copy() const override;
@@ -209,6 +214,7 @@ public:
 
 	//! create a new reservoir sample that has a fixes sample size of "sample_count"
 	//! dump all samples into the new reservoir sample and return.
+	//! This is used to serialize the Sample.
 	unique_ptr<ReservoirSample> ConvertToFixedReservoirSample(idx_t sample_count);
 
 	void Merge(unique_ptr<BlockingSample> other) override;

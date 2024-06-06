@@ -24,8 +24,10 @@ struct PragmaTableSampleFunctionData : public TableFunctionData {
 
 struct PragmaTableSampleOperatorData : public GlobalTableFunctionState {
 	PragmaTableSampleOperatorData() : sample_offset(0) {
+		sample = nullptr;
 	}
 	idx_t sample_offset;
+	unique_ptr<BlockingSample> sample;
 };
 
 static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
@@ -61,18 +63,20 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
                                    TableCatalogEntry &table, DataChunk &output) {
 	// if table has statistics.
 	// copy the sample of statistics into the output chunk
-	auto sample = table.GetSample();
-	if (sample) {
-		if (sample->type == SampleType::RESERVOIR_SAMPLE) {
-			auto &reservoir_sample = sample->Cast<ReservoirSample>();
+	if (!data.sample) {
+		data.sample = table.GetSample();
+	}
+	if (data.sample) {
+		if (data.sample->type == SampleType::RESERVOIR_SAMPLE) {
+			auto &reservoir_sample = data.sample->Cast<ReservoirSample>();
 			auto sample_chunk = reservoir_sample.GetChunk(data.sample_offset);
 			if (sample_chunk) {
 				sample_chunk->Copy(output, 0);
 				data.sample_offset += sample_chunk->size();
 			}
 		}
-		if (sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE) {
-			auto &percentage_sample = sample->Cast<ReservoirSamplePercentage>();
+		if (data.sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE) {
+			auto &percentage_sample = data.sample->Cast<ReservoirSamplePercentage>();
 			auto sample_chunk = percentage_sample.GetChunk(data.sample_offset);
 			if (sample_chunk) {
 				sample_chunk->Copy(output, 0);
