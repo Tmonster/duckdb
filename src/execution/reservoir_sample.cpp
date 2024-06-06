@@ -209,12 +209,6 @@ struct ReplacementHelper {
 
 void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples) {
 	D_ASSERT(!small_samples.empty());
-#ifdef DEBUG
-	// All small_samples need to have a smaller sample_count
-	for (const auto &small_sample : small_samples) {
-		D_ASSERT(small_sample->sample_count < sample_count);
-	}
-#endif
 	D_ASSERT(!reservoir_chunk);
 	CreateReservoirChunk(small_samples.at(0)->GetChunk()->GetTypes());
 
@@ -267,9 +261,17 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 				highest_ind = i;
 			}
 		}
-		// pop the candidate with the highest weight
-		small_samples.at(highest_ind)->PopFromWeightQueue();
-		remaining_sample_weights -= 1;
+
+		// replace lowest_weighted_samples pop the candidate with the highest weight
+		if (small_samples.at(highest_ind)->GetPriorityQueueSize() != 0) {
+			const auto candidate = small_samples.at(highest_ind)->PopFromWeightQueue();
+			const ReplacementHelper help {true, candidate};
+			lowest_weighted_samples.at(highest_ind) = help;
+			remaining_sample_weights -= 1;
+		} else {
+			const ReplacementHelper help {false, make_pair(0, 0)};
+			lowest_weighted_samples.at(highest_ind) = help;
+		}
 	}
 #ifdef DEBUG
 	idx_t weights_left = 0;
@@ -707,20 +709,18 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 }
 
 unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSample(idx_t sample_count) {
-	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
-
-	reservoir_sample->destroyed = destroyed;
-	if (reservoir_sample->destroyed || sample_count == 0) {
-		return reservoir_sample;
-	}
-
 	if (!is_finalized) {
 		Finalize();
 	}
 
 	// This function should never be called if the number of samples collected is smaller than the sample count
 	D_ASSERT(NumSamplesCollected() >= sample_count);
-
+	// Make sure that the reservoir sample percentage more than sample count samples.
+	auto reservoir_sample = make_uniq<ReservoirSample>(allocator, sample_count, 1);
+	// insert the first chunk from the percentage sample as if these are all first time
+	if (reservoir_sample->destroyed || sample_count == 0) {
+		return reservoir_sample;
+	}
 	// if there is a single finished_sample with the same sample count, just merge all finished samples into the sample
 	// count
 	idx_t finished_sample_index = 0;
@@ -743,10 +743,6 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
 		if (!mini_samples_merged) {
 			auto &finished_sample = finished_samples.at(finished_sample_index);
-			if (!(finished_sample->sample_count <= sample_count)) {
-				auto break_here = 0;
-			}
-			D_ASSERT(finished_sample->sample_count <= sample_count);
 			if (finished_sample->sample_count != sample_count) {
 				auto num_samples_collected = finished_sample->NumSamplesCollected();
 				if (num_samples_collected == 0) {
@@ -861,9 +857,6 @@ void BlockingSample::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample",
 	                                                                       base_reservoir_sample);
 	serializer.WriteProperty<SampleType>(101, "type", type);
-	if (destroyed) {
-		auto hello = 0;
-	}
 	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
 }
 
@@ -885,9 +878,6 @@ unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserialize
 	}
 	result->base_reservoir_sample = std::move(base_reservoir_sample);
 	result->destroyed = destroyed;
-	if (result->destroyed) {
-		auto cool = 0;
-	}
 	auto converted_result = MaybeConvertReservoirToPercentageResevoir(std::move(result));
 	return converted_result;
 }
@@ -908,9 +898,6 @@ unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializ
 void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	auto copy = Copy();
 	auto &copy_percentage = copy->Cast<ReservoirSamplePercentage>();
-	if (copy->NumSamplesCollected() == 11) {
-		auto break_here = 0;
-	}
 	auto copy_as_reservoir_sample = copy_percentage.ConvertToFixedReservoirSample(copy->NumSamplesCollected());
 	copy_as_reservoir_sample->base_reservoir_sample->reservoir_weights.emplace(
 	    std::make_pair(NumericLimits<double>::Maximum(), idx_t(copy_percentage.sample_percentage * 100)));

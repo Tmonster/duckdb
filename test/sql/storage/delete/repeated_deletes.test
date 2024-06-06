@@ -26,8 +26,6 @@ SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
 statement ok
 INSERT INTO test SELECT * FROM generate_series(1000, 1099);
 
-mode skip
-
 query IIII
 SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
 ----
