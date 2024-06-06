@@ -678,7 +678,9 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 }
 
 idx_t ReservoirSamplePercentage::NumSamplesCollected() {
-	D_ASSERT(!destroyed);
+	if (destroyed) {
+		return 0;
+	}
 	idx_t samples_collected = 0;
 	for (auto &finished_sample : finished_samples) {
 		samples_collected += finished_sample->NumSamplesCollected();

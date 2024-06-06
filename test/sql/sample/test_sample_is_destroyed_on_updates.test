@@ -16,6 +16,7 @@ select count(*) from pragma_table_sample('integers_1') order by all;
 statement ok
 delete from integers_1 where a = 3;
 
+# sample no longer exists
 query I
 select count(*) from pragma_table_sample('integers_1') order by all;
 ----
