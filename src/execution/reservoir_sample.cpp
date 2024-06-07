@@ -1,5 +1,7 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <fmt/format.h>
 
@@ -269,7 +271,7 @@ void ReservoirSample::CombineMerge(vector<unique_ptr<ReservoirSample>> small_sam
 			lowest_weighted_samples.at(highest_ind) = help;
 			remaining_sample_weights -= 1;
 		} else {
-			const ReplacementHelper help {false, make_pair(0, 0)};
+			const ReplacementHelper help {false, std::make_pair(0, 0)};
 			lowest_weighted_samples.at(highest_ind) = help;
 		}
 	}
@@ -731,33 +733,31 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 	vector<unique_ptr<ReservoirSample>> mini_small_samples;
 	idx_t finished_samples_count = 0;
 	finished_sample_index = 0;
-	bool mini_samples_merged = false;
 	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
-		if (!mini_samples_merged) {
-			auto &finished_sample = finished_samples.at(finished_sample_index);
-			if (finished_sample->sample_count != sample_count) {
-				auto num_samples_collected = finished_sample->NumSamplesCollected();
-				if (num_samples_collected == 0) {
-					continue;
-				}
-				if (num_samples_collected < finished_sample->sample_count) {
-					// finished sample has not yet assigned weights.
-					finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected,
-					                                                                   num_samples_collected);
-				}
-				finished_samples_count += num_samples_collected;
-				mini_small_samples.push_back(std::move(finished_samples.at(finished_sample_index)));
+		auto &finished_sample = finished_samples.at(finished_sample_index);
+		if (finished_sample->sample_count != sample_count) {
+			auto num_samples_collected = finished_sample->NumSamplesCollected();
+			if (num_samples_collected == 0) {
+				continue;
 			}
-			// you have enough of the smaller finished samples. Now you can combine them
-			// and merge into a larger blocking sample.
-			if (finished_samples_count >= sample_count) {
-				reservoir_sample->CombineMerge(std::move(mini_small_samples));
-				mini_samples_merged = true;
+			if (num_samples_collected < finished_sample->sample_count) {
+				// finished sample has not yet assigned weights.
+				finished_sample->base_reservoir_sample->InitializeReservoirWeights(num_samples_collected,
+				                                                                   num_samples_collected);
 			}
-		} else {
-			// if the smaller samples have been merged, you can just merge the other finished samples now
-			reservoir_sample->Merge(std::move(finished_samples.at(finished_sample_index)));
+			finished_samples_count += num_samples_collected;
+			mini_small_samples.push_back(std::move(finished_samples.at(finished_sample_index)));
 		}
+		// you have enough of the smaller finished samples. Now you can combine them
+		// and merge into a larger blocking sample.
+		if (finished_samples_count >= sample_count) {
+			reservoir_sample->CombineMerge(std::move(mini_small_samples));
+			break;
+		}
+	}
+	// if the smaller samples have been merged, you can just merge the other finished samples now
+	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
+		reservoir_sample->Merge(std::move(finished_samples.at(finished_sample_index)));
 	}
 
 	return reservoir_sample;
