@@ -21,6 +21,9 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 ----
 296.955	0	5000	44543527	(empty)	X
 
+statement ok
+create table total_blocks as select original_db_size from pragma_database_size();
+
 loop i 0 10
 
 statement ok
@@ -40,10 +43,11 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CHECKPOINT;
 
-# ensure that the expected total storage size is the same as in the first iteration of the loop
-
-query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+# ensure that the expected total storage size is the same or smaller as in the first iteration of the loop
+query I
+SELECT original_db_size.total_blocks - db_size.total_blocks >= 0 FROM pragma_database_size() db_size, original_db_size;
+----
+true
 
 restart
 

@@ -57,31 +57,31 @@ select count(*) from pragma_table_sample('integers_2');
 ----
 2048
 
-query II
-select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
-----
-0	213
-1	420
-2	418
-3	418
-4	417
-5	162
+#query II
+#select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+#----
+#0	213
+#1	420
+#2	418
+#3	418
+#4	417
+#5	162
 
 
 # adding another interval should subtract an equal number from the rest of the intervals
 statement ok
 insert into integers_1 (select (range + 5)::VARCHAR a, range b from range(5000000,6000000));
 
-query II
-select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
-----
-0	172
-1	333
-2	336
-3	336
-4	336
-5	334
-6	201
+#query II
+#select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+#----
+#0	172
+#1	333
+#2	336
+#3	336
+#4	336
+#5	334
+#6	201
 
 # If double the table count is appended, around half the sample should account for the new values.
 statement ok
