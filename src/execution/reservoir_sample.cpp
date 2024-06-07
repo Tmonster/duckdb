@@ -755,6 +755,7 @@ unique_ptr<ReservoirSample> ReservoirSamplePercentage::ConvertToFixedReservoirSa
 			break;
 		}
 	}
+	finished_sample_index++;
 	// if the smaller samples have been merged, you can just merge the other finished samples now
 	for (; finished_sample_index < finished_samples.size(); finished_sample_index++) {
 		reservoir_sample->Merge(std::move(finished_samples.at(finished_sample_index)));
