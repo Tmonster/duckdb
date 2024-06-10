@@ -12,7 +12,6 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"

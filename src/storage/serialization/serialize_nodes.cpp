@@ -35,13 +35,6 @@
 
 namespace duckdb {
 
-void BlockingSample::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
-	serializer.WriteProperty<SampleType>(101, "type", type);
-	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
-}
-
-
 void BaseReservoirSampling::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
 	serializer.WriteProperty<double>(101, "min_weight_threshold", min_weight_threshold);
