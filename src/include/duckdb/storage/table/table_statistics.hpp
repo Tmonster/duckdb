@@ -59,6 +59,7 @@ public:
 	//! The table sample
 	//! Sample for table
 	unique_ptr<BlockingSample> table_sample;
+	vector<unique_ptr<BlockingSample>> other_samples;
 
 private:
 	//! The statistics lock

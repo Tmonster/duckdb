@@ -378,10 +378,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	auto stats_lock = stats.GetLock();
 	if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
 		if (!stats.Empty()) {
-			auto copy_for_sample = make_uniq<DataChunk>();
-			copy_for_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-			chunk.Copy(*copy_for_sample);
-			stats.table_sample->AddToReservoir(*copy_for_sample);
+			stats.table_sample->AddToReservoir(chunk);
 		}
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
@@ -1197,6 +1194,10 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	if (stats.table_sample && !stats.table_sample->destroyed) {
+		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE && stats.table_sample->NumSamplesCollected() >= FIXED_SAMPLE_SIZE) {
+			auto &p_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
+			stats.table_sample = p_sample.ConvertToFixedReservoirSample(FIXED_SAMPLE_SIZE);
+		}
 		return stats.table_sample->Copy();
 	}
 	return nullptr;

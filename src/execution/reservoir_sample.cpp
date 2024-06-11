@@ -820,6 +820,10 @@ BlockingSample::MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSam
 		return std::move(sample);
 	}
 	auto reservoir_sample = unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(sample));
+	if (reservoir_sample->GetPriorityQueueSize() == 0) {
+		// TODO: what has happened here?
+		return std::move(sample);
+	}
 	auto top_weight = reservoir_sample->base_reservoir_sample->reservoir_weights.top();
 	if (top_weight.first != NumericLimits<double>::Maximum()) {
 		D_ASSERT(top_weight.first < 0);
