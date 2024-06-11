@@ -8,9 +8,16 @@ namespace duckdb {
 
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
 	stats_lock = make_shared_ptr<mutex>();
 	column_stats = std::move(data.table_stats.column_stats);
+	if (data.table_stats.table_sample) {
+		table_sample = std::move(data.table_stats.table_sample);
+	} else {
+		// table_sample = make_uniq<ReservoirSamplePercentage>(PERCENTAGE_SAMPLE_SIZE, 1);
+		table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE, 1);
+	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -18,7 +25,10 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 
 void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
+	// table_sample = make_uniq<ReservoirSamplePercentage>(PERCENTAGE_SAMPLE_SIZE, 1);
+	table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE, 1);
 	stats_lock = make_shared_ptr<mutex>();
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
@@ -35,6 +45,13 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 		column_stats.push_back(parent.column_stats[i]);
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
+	// TODO: add new chunk with one type so that sample does not need to be destroyed
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
+	}
 }
 
 void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column) {
@@ -47,6 +64,13 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]);
 		}
+	}
+	// TODO: split the sample chunk and fuse it back together without the deleted column
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -62,6 +86,12 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 		} else {
 			column_stats.push_back(parent.column_stats[i]);
 		}
+	}
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -79,6 +109,46 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
+	// if the sample has been nullified, no need to merge.
+	if (table_sample) {
+		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the
+		// blocking sample.
+		if (!other.table_sample || other.table_sample->NumSamplesCollected() == 0) {
+			// for (auto &other_sample : other.other_samples) {
+			// 	other_samples.push_back(std::move(other_sample));
+			// }
+			// continue, whatever
+		} else if (!table_sample || table_sample->NumSamplesCollected() == 0) {
+			// other.other_samples.push_back(std::move(table_sample));
+			table_sample = std::move(other.table_sample);
+			// for (auto &other_sample : other.other_samples) {
+			// 	other_samples.push_back(std::move(other_sample));
+			// }
+		}
+		else {
+			if (other.table_sample->type != table_sample->type) {
+				throw InternalException("merging table samples of different types");
+			}
+			table_sample->Merge(std::move(other.table_sample));
+		}
+		// if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		//     other.table_sample->type == SampleType::RESERVOIR_SAMPLE && table_sample->NumSamplesCollected() == 0) {
+		// 	table_sample = std::move(other.table_sample);
+		// } else if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		//            other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
+		// 	other.table_sample->Merge(std::move(table_sample));
+		// 	table_sample = std::move(other.table_sample);
+		// } else if (other.table_sample) {
+		// 	table_sample->Merge(std::move(other.table_sample));
+		// }
+		// if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		//     table_sample->NumSamplesCollected() > FIXED_SAMPLE_SIZE) {
+		// 	auto &t_percentage_sample = table_sample->Cast<ReservoirSamplePercentage>();
+		// 	table_sample = t_percentage_sample.ConvertToFixedReservoirSample(FIXED_SAMPLE_SIZE);
+		// }
+	} else {
+		table_sample = std::move(other.table_sample);
+	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {
 			D_ASSERT(other.column_stats[i]);
@@ -119,6 +189,9 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 	other.stats_lock = make_shared_ptr<mutex>();
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
+	}
+	if (table_sample) {
+		other.table_sample = table_sample->Copy();
 	}
 }
 

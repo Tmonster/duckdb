@@ -56,14 +56,16 @@ public:
 	void Serialize(Serializer &serializer) const;
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
+	//! The table sample
+	//! Sample for table
+	unique_ptr<BlockingSample> table_sample;
+	vector<unique_ptr<BlockingSample>> other_samples;
+
 private:
 	//! The statistics lock
 	shared_ptr<mutex> stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
-	//! The table sample
-	//! Sample for table
-	unique_ptr<BlockingSample> table_sample;
 };
 
 } // namespace duckdb
