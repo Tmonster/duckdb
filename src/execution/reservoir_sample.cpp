@@ -471,8 +471,15 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		Chunk().SetValue(col_idx, base_reservoir_sample->min_weighted_entry_index,
-		                 input.GetValue(col_idx, index_in_chunk));
+		SelectionVector sel(1);
+		sel.set_index(0, index_in_chunk);
+		VectorOperations::Copy(input.data[col_idx],
+			Chunk().data[col_idx],
+			sel,
+			1,
+			0, base_reservoir_sample->min_weighted_entry_index);
+		// Chunk().SetValue(col_idx, base_reservoir_sample->min_weighted_entry_index,
+		//                  input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample->ReplaceElement(with_weight);
 }
