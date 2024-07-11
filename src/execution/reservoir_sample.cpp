@@ -176,16 +176,22 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
+	vector<idx_t> input_indexes_to_copy;
+	idx_t replacement_indexes = 0;
 	while (true) {
 		idx_t offset =
 		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
+
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
 		// in this chunk! replace the element
 		ReplaceElement(input, base_offset + offset);
+		input_indexes_to_copy.push_back(base_offset + offset);
+		// ReplaceElement(input, base_offset + offset);
+		replacement_indexes+=1;
 		// shift the chunk forward
 		remaining -= offset;
 		base_offset += offset;
@@ -470,9 +476,9 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	// If index_in_self_chunk is provided, then the
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
+	SelectionVector sel(1);
+	sel.set_index(0, index_in_chunk);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		SelectionVector sel(1);
-		sel.set_index(0, index_in_chunk);
 		VectorOperations::Copy(input.data[col_idx],
 			Chunk().data[col_idx],
 			sel,
@@ -484,6 +490,35 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	base_reservoir_sample->ReplaceElement(with_weight);
 }
 
+// void ReservoirSample::ReplaceElements(DataChunk &input,
+// 	vector<idx_t> reservoir_indexes_to_replace,
+// 	vector<idx_t> input_indexes_used_in_sample,
+// 	vector<double> weights){
+//
+// 	idx_t samples_to_replace = reservoir_indexes_to_replace.size();
+// 	D_ASSERT(reservoir_indexes_to_replace.size() == input_indexes_used_in_sample.size());
+//
+// 	SelectionVector input_sel(samples_to_replace);
+// 	SelectionVector reservoir_chunk_sel(samples_to_replace);
+//
+// 	for (idx_t sel_index = 0; sel_index < reservoir_indexes_to_replace.size(); sel_index++) {
+// 		input_sel.set_index(sel_index, input_indexes_used_in_sample[sel_index]);
+// 		reservoir_chunk_sel.set_index(sel_index, reservoir_indexes_to_replace[sel_index]);
+// 	}
+//
+//
+// 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+// 		VectorOperations::Copy(input.data[col_idx],
+// 			Chunk().data[col_idx],
+// 			sel, weights.size(),
+// 			0, 0);
+// 	}
+// 	for (idx_t i = 0; i < weights.size(); i++) {
+// 		base_reservoir_sample->ReplaceElementWithIndex(reservoir_chunk_index, weights.at(i));
+// 	}
+// }
+
+
 void ReservoirSample::ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk,
                                      double with_weight) {
 	// replace the entry in the reservoir with Input[index_in_chunk]
@@ -491,7 +526,14 @@ void ReservoirSample::ReplaceElement(idx_t reservoir_chunk_index, DataChunk &inp
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		Chunk().SetValue(col_idx, reservoir_chunk_index, input.GetValue(col_idx, index_in_input_chunk));
+		SelectionVector sel(1);
+		sel.set_index(0, index_in_input_chunk);
+		VectorOperations::Copy(input.data[col_idx],
+			Chunk().data[col_idx],
+			sel,
+			1,
+			0, reservoir_chunk_index);
+		// Chunk().SetValue(col_idx, reservoir_chunk_index, input.GetValue(col_idx, index_in_input_chunk));
 	}
 	base_reservoir_sample->ReplaceElementWithIndex(reservoir_chunk_index, with_weight);
 }
