@@ -378,10 +378,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	auto stats_lock = stats.GetLock();
 	if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
 		if (!stats.Empty()) {
-			auto copy_for_sample = make_uniq<DataChunk>();
-			copy_for_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-			chunk.Copy(*copy_for_sample);
-			stats.table_sample->AddToReservoir(*copy_for_sample);
+			stats.table_sample->AddToReservoir(chunk);
 		}
 		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
 		    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
