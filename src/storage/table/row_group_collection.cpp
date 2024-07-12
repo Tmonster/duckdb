@@ -376,14 +376,23 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
-	if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
-		if (!stats.Empty()) {
-			stats.table_sample->AddToReservoir(chunk);
-		}
-		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-		    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-			auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
-			stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+	if (stats.table_sample != nullptr && !stats.table_sample->destroyed && !chunk.GetTypes().empty()) {
+		// only collect a sample using 10% of the chunk
+		auto to_sample = make_uniq<DataChunk>();
+		auto sample_chunk_size = idx_t(chunk.size() * 0.10);
+		if (sample_chunk_size > 0) {
+			SelectionVector sel(0, sample_chunk_size);
+			to_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+			to_sample->Slice(chunk, sel, sample_chunk_size);
+
+			if (!stats.Empty()) {
+				stats.table_sample->AddToReservoir(*to_sample);
+			}
+			if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+			    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+				auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
+				stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+			}
 		}
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
