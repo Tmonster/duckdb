@@ -127,6 +127,9 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	for (idx_t i = 0; i < set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
 		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
+		if (card_helper.cardinality_before_filters == 5000000) {
+			auto break_here = 0;
+		}
 		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 	}
 	return numerator;
