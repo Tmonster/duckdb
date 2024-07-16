@@ -320,24 +320,22 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
-	double new_card = -1;
-	for (auto &g_set : aggr.grouping_sets) {
-		for (auto &ind : g_set) {
-			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
-			auto col_index = bound_col->binding.column_index;
-			if (col_index >= child_stats.column_distinct_count.size()) {
-				// it is possible the column index of the grouping_set is not in the child stats.
-				// this can happen when delim joins are present, since delim scans are not currently
-				// reorderable. Meaning they don't add a relation or column_ids that could potentially
-				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
-				continue;
-			}
-			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
-				new_card = child_stats.column_distinct_count[col_index].distinct_count;
-			}
+	double new_card = 1;
+	for (auto &group : aggr.groups) {
+		if (group->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &bound_col = group->Cast<BoundColumnRefExpression>();
+		auto col_index = bound_col.binding.column_index;
+		if (col_index >= child_stats.column_distinct_count.size()) {
+			// it is possible the column index of the grouping_set is not in the child stats.
+			// this can happen when delim joins are present, since delim scans are not currently
+			// reorderable. Meaning they don't add a relation or column_ids that could potentially
+			// be grouped by. Hopefully this can be fixed with duckdb-internal#606
+			continue;
+		}
+		if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
+			new_card *= child_stats.column_distinct_count[col_index].distinct_count;
 		}
 	}
 	if (new_card < 0 || new_card >= child_stats.cardinality) {
