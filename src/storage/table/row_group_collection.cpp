@@ -376,16 +376,21 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
-	if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
-		if (!stats.Empty()) {
-			stats.table_sample->AddToReservoir(chunk);
-		}
-		if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-		    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-			auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
-			stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
-		}
+	if (stats.ingestion_sample) {
+		// if (stats.ingestion_sample->GetReplacementCount(chunk.size()) > IngestionSample::NEW_CHUNK_THRESHOLD) {
+		stats.ingestion_sample->AddAndAppend(chunk);
+		// }
 	}
+	// if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
+	// 	if (!stats.Empty()) {
+	// 		stats.table_sample->AddToReservoir(chunk);
+	// 	}
+	// 	if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+	// 	    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
+	// 		auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
+	// 		stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
+	// 	}
+	// }
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}

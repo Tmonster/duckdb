@@ -20,7 +20,12 @@
 
 namespace duckdb {
 
-enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
+enum class SampleType : uint8_t {
+	BLOCKING_SAMPLE = 0,
+	RESERVOIR_SAMPLE = 1,
+	RESERVOIR_PERCENTAGE_SAMPLE = 2,
+	INGESTION_SAMPLE = 3
+};
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 class BaseReservoirSampling {
@@ -253,6 +258,23 @@ private:
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to
 	//! GetChunkAndShrink();
 	bool is_finalized;
+};
+
+class IngestionSample {
+public:
+	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
+
+	vector<unique_ptr<DataChunk>> sample_chunks;
+	BaseReservoirSampling sampling_info;
+
+	// TODO: this will need more infot to initiliaze the correct sample type
+	unique_ptr<BlockingSample> ConvertToReservoirSample(SampleType type);
+
+	void AddAndAppend(DataChunk &chunk);
+
+	//! given the first chunk, create the first chunk
+	void CreateFirstChunk(DataChunk &chunk);
+	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
 };
 
 } // namespace duckdb

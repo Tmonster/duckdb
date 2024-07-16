@@ -846,6 +846,116 @@ BlockingSample::MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSam
 	return std::move(percentage_sample);
 }
 
+unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample(SampleType type) {
+	auto ret = make_uniq<ReservoirSample>(STANDARD_VECTOR_SIZE);
+	return ret;
+}
+
+void IngestionSample::CreateFirstChunk(DataChunk &chunk) {
+	// create a new sample chunk to store new samples
+	auto new_sample_chunk = make_uniq<DataChunk>();
+	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes(), chunk.size());
+	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(chunk.size());
+	}
+	new_sample_chunk->SetCardinality(chunk.size());
+	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+		VectorOperations::Copy(chunk.data[col_idx], new_sample_chunk->data[col_idx], chunk.size(), 0, 0);
+	}
+	sample_chunks.push_back(std::move(new_sample_chunk));
+}
+
+idx_t IngestionSample::GetReplacementCount(idx_t theoretical_chunk_length) {
+	idx_t base_offset = 0;
+	idx_t remaining = theoretical_chunk_length;
+	idx_t ret = 0;
+
+	idx_t next_index_to_sample_copy = sampling_info.next_index_to_sample;
+	idx_t num_entried_to_skip_b4_next_sample_copy = sampling_info.num_entries_to_skip_b4_next_sample;
+
+	while (true) {
+		idx_t offset = next_index_to_sample_copy - num_entried_to_skip_b4_next_sample_copy;
+		if (offset >= remaining) {
+			// not in this chunk! increment current count and go to the next chunk
+			return ret;
+		}
+		// in this chunk! replace the element
+		ret += 1;
+		// shift the chunk forward
+		remaining -= offset;
+		base_offset += offset;
+	}
+}
+
+void IngestionSample::AddAndAppend(DataChunk &chunk) {
+	sampling_info.num_entries_seen_total += chunk.size();
+	if (sample_chunks.empty() || sampling_info.num_entries_seen_total < FIXED_SAMPLE_SIZE) {
+		// TODO: right now FIXED_SAMPLE_SIZE and STANDARD_VECTOR_SIZE are the same so this
+		// will just copy the whole chunk. If these two values change this code will need to
+		// change as well
+		CreateFirstChunk(chunk);
+		D_ASSERT(sample_chunks.size() == 1);
+		return;
+	}
+	// make sure we have sampling weights
+	if (sampling_info.reservoir_weights.empty()) {
+		sampling_info.InitializeReservoirWeights(sample_chunks[0]->size(), sample_chunks[0]->size());
+	}
+	idx_t remaining = chunk.size();
+	idx_t base_offset = 0;
+	vector<idx_t> indexes_to_copy;
+	while (true) {
+		idx_t offset = sampling_info.next_index_to_sample - sampling_info.num_entries_to_skip_b4_next_sample;
+		if (offset >= remaining) {
+			// not in this chunk! increment current count and go to the next chunk
+			sampling_info.num_entries_to_skip_b4_next_sample += remaining;
+			break;
+		}
+		// in this chunk! replace the element
+		indexes_to_copy.push_back(base_offset + offset);
+		sampling_info.SetNextEntry();
+		// shift the chunk forward
+		remaining -= offset;
+		base_offset += offset;
+	}
+	// create a new sample chunk to store new samples
+	auto new_sample_chunk = make_uniq<DataChunk>();
+	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes(), indexes_to_copy.size());
+	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(indexes_to_copy.size());
+	}
+
+	new_sample_chunk->SetCardinality(indexes_to_copy.size());
+	SelectionVector sel(indexes_to_copy.size());
+	for (idx_t i = 0; i < indexes_to_copy.size(); i++) {
+		sel.set_index(i, indexes_to_copy[i]);
+	}
+	const SelectionVector const_sel(sel);
+
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+		VectorOperations::Copy(chunk.data[col_idx], new_sample_chunk->data[col_idx], const_sel, indexes_to_copy.size(),
+		                       0, 0);
+	}
+
+	// using vector operations copy into it only the desired values
+	idx_t offset_in_ingestion_sample = 0;
+	for (auto &sample_chunk : sample_chunks) {
+		offset_in_ingestion_sample += sample_chunk->size();
+	}
+	idx_t new_index = offset_in_ingestion_sample;
+	// I actually don't care about what indexes I'm copying. I've already copied data from the
+	// source/ingested chunk to my new sample chunk. I need to record the indexes of the new samples
+	// in the sampling info
+	for (auto &copied_index : indexes_to_copy) {
+		auto new_weight = sampling_info.random.NextRandom(sampling_info.min_weight_threshold, 1);
+		// careful here
+		sampling_info.ReplaceElementWithIndex(new_index, new_weight);
+		new_index += 1;
+	}
+
+	sample_chunks.push_back(std::move(new_sample_chunk));
+}
+
 void BlockingSample::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample",
 	                                                                       base_reservoir_sample);

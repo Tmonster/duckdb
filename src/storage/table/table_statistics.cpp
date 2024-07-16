@@ -12,6 +12,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 
 	stats_lock = make_shared_ptr<mutex>();
 	column_stats = std::move(data.table_stats.column_stats);
+	ingestion_sample = make_uniq<IngestionSample>();
 	if (data.table_stats.table_sample) {
 		table_sample = std::move(data.table_stats.table_sample);
 	} else {
@@ -27,6 +28,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(!table_sample);
 
 	table_sample = make_uniq<ReservoirSamplePercentage>(PERCENTAGE_SAMPLE_SIZE, 1);
+	ingestion_sample = make_uniq<IngestionSample>();
 	stats_lock = make_shared_ptr<mutex>();
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
