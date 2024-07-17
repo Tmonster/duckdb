@@ -263,18 +263,21 @@ private:
 class IngestionSample {
 public:
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
+	IngestionSample();
+	// TODO: this will need more info to initiliaze the correct sample type
+	unique_ptr<BlockingSample> ConvertToReservoirSample(SampleType type);
+
+	idx_t GetTuplesSeen();
+	void AddAndAppend(DataChunk &chunk);
+	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
+
+private:
+	//! given the first chunk, create the first chunk
+	idx_t CreateFirstChunk(DataChunk &chunk);
 
 	vector<unique_ptr<DataChunk>> sample_chunks;
 	BaseReservoirSampling sampling_info;
-
-	// TODO: this will need more infot to initiliaze the correct sample type
-	unique_ptr<BlockingSample> ConvertToReservoirSample(SampleType type);
-
-	void AddAndAppend(DataChunk &chunk);
-
-	//! given the first chunk, create the first chunk
-	void CreateFirstChunk(DataChunk &chunk);
-	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
+	idx_t tuples_seen;
 };
 
 } // namespace duckdb

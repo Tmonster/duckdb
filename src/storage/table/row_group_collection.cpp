@@ -376,21 +376,26 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	}
 	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
+	// ingestion sample handles ingestion until the replacement rate is < 200 tuples per standard block size are added
+	// to the sample then it is converted into a table sample.
 	if (stats.ingestion_sample) {
-		// if (stats.ingestion_sample->GetReplacementCount(chunk.size()) > IngestionSample::NEW_CHUNK_THRESHOLD) {
-		stats.ingestion_sample->AddAndAppend(chunk);
-		// }
+		if (stats.ingestion_sample->GetTuplesSeen() < (FIXED_SAMPLE_SIZE * 100)) {
+			stats.ingestion_sample->AddAndAppend(chunk);
+		} else {
+			auto reservoir_sample = stats.ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE);
+			if (stats.table_sample) {
+				stats.table_sample->Merge(std::move(reservoir_sample));
+			} else {
+				stats.table_sample = std::move(reservoir_sample);
+			}
+			stats.ingestion_sample = nullptr;
+		}
 	}
-	// if (stats.table_sample != nullptr && !stats.table_sample->destroyed) {
-	// 	if (!stats.Empty()) {
-	// 		stats.table_sample->AddToReservoir(chunk);
-	// 	}
-	// 	if (stats.table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
-	// 	    stats.table_sample->NumSamplesCollected() > STANDARD_VECTOR_SIZE) {
-	// 		auto &t_percentage_sample = stats.table_sample->Cast<ReservoirSamplePercentage>();
-	// 		stats.table_sample = t_percentage_sample.ConvertToFixedReservoirSample(STANDARD_VECTOR_SIZE);
-	// 	}
-	// }
+	if (stats.table_sample && !stats.ingestion_sample) {
+		// add sample to table sample.s
+		stats.table_sample->AddToReservoir(chunk);
+	}
+
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
