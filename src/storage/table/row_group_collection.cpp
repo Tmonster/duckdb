@@ -1,20 +1,23 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
+
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/parallel/task_executor.hpp"
-#include "duckdb/execution/task_error_manager.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
+
+#include <fmt/format.h>
 
 namespace duckdb {
 
@@ -509,6 +512,9 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 	auto stats_guard = stats.GetLock();
 	if (stats.table_sample) {
 		stats.table_sample->Destroy();
+	}
+	if (stats.ingestion_sample) {
+		stats.ingestion_sample->Destroy();
 	}
 	return delete_count;
 }
@@ -1118,6 +1124,12 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 }
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	if (stats.ingestion_sample && !stats.table_sample) {
+		auto ingestion_sample = stats.ingestion_sample->Copy();
+		auto table_sample = stats.table_sample->Copy();
+		table_sample->Merge(ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE));
+		return table_sample;
+	}
 	if (stats.table_sample && !stats.table_sample->destroyed) {
 		return stats.table_sample->Copy();
 	}

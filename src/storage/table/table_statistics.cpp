@@ -1,8 +1,9 @@
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 
@@ -109,6 +110,12 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
+	if (other.ingestion_sample) {
+		auto reservoir_sample = other.ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE);
+		if (table_sample && !table_sample->destroyed) {
+			table_sample->Merge(std::move(reservoir_sample));
+		}
+	}
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
 		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the
@@ -172,13 +179,37 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
+	// how to handle ingestion sample and tample sample?
+	// options
+	// 1. convert the ingestion sample into a reservoir sample (WITHOUT destroying the ingestion sample). Merge the existing table sample with the converted reservoir
+	//    sample, and assign that to the table and the copy
+	//    then set the ingestion sample to empty again.
+	//      - questions, what happens if sampling continues? everything just goes to the regular sample?
+	// 2. copy the ingestion sample and the table sample,
+	// 3. Compact the ingestion sample, merge the compact one into the table sample that will be serialized
+	//    store the table sample. Assign the compact ingestion sample to the in-memory table_sample.
+	//
+	if (ingestion_sample) {
+		// this may shrink the ingestion sample. we don't mind
+		other.ingestion_sample = ingestion_sample->Copy();
+	}
 	if (table_sample) {
 		other.table_sample = table_sample->Copy();
+		if (other.ingestion_sample) {
+			other.table_sample->Merge(other.ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE));
+		}
 	}
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
+	if (ingestion_sample) {
+		auto reservoir_sample = ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE);
+		if (table_sample) {
+			table_sample->Merge(std::move(reservoir_sample));
+			ingestion_sample->Destroy();
+		}
+	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", table_sample, nullptr);
 }
 

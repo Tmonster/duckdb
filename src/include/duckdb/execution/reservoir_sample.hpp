@@ -43,6 +43,7 @@ public:
 	void IncreaseNumEntriesSeenTotal(idx_t count);
 
 	unique_ptr<BaseReservoirSampling> Copy();
+	// BaseReservoirSampling Copy2();
 	//! The random generator
 	RandomEngine random;
 
@@ -266,8 +267,13 @@ public:
 	IngestionSample();
 	// TODO: this will need more info to initiliaze the correct sample type
 	unique_ptr<BlockingSample> ConvertToReservoirSample(SampleType type);
+	void Shrink();
+	unique_ptr<IngestionSample> Copy();
 
 	idx_t GetTuplesSeen();
+	idx_t GetSamplesCollected();
+	void Destroy();
+	void Clear();
 	void AddAndAppend(DataChunk &chunk);
 	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
 
@@ -276,8 +282,9 @@ private:
 	idx_t CreateFirstChunk(DataChunk &chunk);
 
 	vector<unique_ptr<DataChunk>> sample_chunks;
-	BaseReservoirSampling sampling_info;
+	unique_ptr<BaseReservoirSampling> sampling_info;
 	idx_t tuples_seen;
+	bool destroyed;
 };
 
 } // namespace duckdb
