@@ -158,7 +158,6 @@ void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatist
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
 	return *column_stats[i];
 }
-
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(*stats_lock);
 	auto result = column_stats[i]->Statistics().Copy();

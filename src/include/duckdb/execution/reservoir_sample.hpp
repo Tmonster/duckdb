@@ -261,6 +261,12 @@ private:
 	bool is_finalized;
 };
 
+// Ingestion sample needs to inherit from blocking sample.
+// this way it can be serialized (Maybe? Need to figure that out)
+
+
+// Sample and copy while it is cheap, 
+
 class IngestionSample {
 public:
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
