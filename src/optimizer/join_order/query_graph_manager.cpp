@@ -53,6 +53,16 @@ void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
 }
 
+
+void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
+	left_set = left_set_new;
+}
+
+void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
+	right_set = right_set_new;
+}
+
+
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
 	return filters_and_bindings;
 }
@@ -89,8 +99,12 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
-				filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				if (!filter_info->left_set) {
+					filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
+				}
+				if (!filter_info->right_set) {
+					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				}
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
