@@ -55,6 +55,9 @@ public:
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+
+	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
+	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
