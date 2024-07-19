@@ -5,7 +5,7 @@
 statement ok
 create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
 
-statement ok
+statement error
 SELECT NULL
 FROM   all_types
        	INNER JOIN (SELECT NULL)
@@ -21,4 +21,5 @@ FROM   all_types
            FROM   all_types AS ref_10
            WHERE  0
            ));
-
+----
+<REGEX>:.*Conversion Error:.*
