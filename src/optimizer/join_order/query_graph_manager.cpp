@@ -226,14 +226,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				// we need to figure out which side is which by looking at the relations available to us
 				// left/right (build side/probe side) optimizations happen later.
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
-
+				// If the left and right set are inverted AND it is a semi or anti join
+				// swap left and right children back.
 				if (invert && (f->join_type == JoinType::SEMI || f->join_type == JoinType::ANTI)) {
 					std::swap(join->children[0], join->children[1]);
 					std::swap(left, right);
 					invert = false;
 				}
-				// If the left and right set are inverted AND it is a semi or anti join
-				// swap left and right children back.
+
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
 				cond.comparison = condition->type;
