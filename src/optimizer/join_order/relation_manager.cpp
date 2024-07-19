@@ -10,6 +10,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include <fmt/format.h>
+
 namespace duckdb {
 
 const vector<RelationStats> RelationManager::GetRelationStats() {
@@ -238,6 +240,12 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = op->Cast<LogicalComparisonJoin>();
+			if (join.join_type == JoinType::SEMI) {
+				auto break_here = 0;
+			}
+		}
 		// Adding relations to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
@@ -396,18 +404,108 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
+
 			D_ASSERT(join.expressions.empty());
-			for (auto &cond : join.conditions) {
-				auto comparison =
-				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-				if (filter_set.find(*comparison) == filter_set.end()) {
-					filter_set.insert(*comparison);
-					unordered_set<idx_t> bindings;
-					ExtractBindings(*comparison, bindings);
-					auto &set = set_manager.GetJoinRelation(bindings);
-					auto filter_info =
-					    make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
-					filters_and_bindings.push_back(std::move(filter_info));
+			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+				// build a dict
+				// for every comparison
+				// make the right bindings the key, and the left bindings the value
+				// merge right binding keys if they are subsets
+
+				unordered_map<JoinRelationSet*, JoinRelationSet*> reverse_right_to_left_bindings;
+				vector<unique_ptr<BoundComparisonExpression>> comparisons;
+
+				for (auto &cond : join.conditions) {
+					auto comparison =
+						make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+					// for every condition in the semi or anti join, all relations on the left side will be needed to execute the join,
+					// so our filter_info needs a complete set for the left side.
+					unordered_set<idx_t> left_bindings;
+					unordered_set<idx_t> right_bindings;
+					ExtractBindings(*comparison->left, left_bindings);
+					ExtractBindings(*comparison->right, right_bindings);
+
+					// extract the relations
+					optional_ptr<JoinRelationSet> left_set = set_manager.GetJoinRelation(left_bindings);
+					optional_ptr<JoinRelationSet> right_set= set_manager.GetJoinRelation(right_bindings);
+
+					// temporary variables to keep track of our reverse map of right_relations -> left_relations
+					optional_ptr<JoinRelationSet> key_to_delete = nullptr;
+					optional_ptr<JoinRelationSet> new_val_ptr = nullptr;
+					optional_ptr<JoinRelationSet> key_to_update = nullptr;
+					bool delete_new_key = false;
+					bool found_key_to_update = false;
+					for (auto &dependency : reverse_right_to_left_bindings) {
+						delete_new_key = false;
+						auto key = dependency.first;
+						key_to_update = key;
+
+						auto val = dependency.second;
+
+						// the new value (if used) is the left relation set union the value
+						// basically means all relations in the value are required to be present when executing
+						// the semi/anti join with relations in the right side (key).
+						auto &new_val = set_manager.Union(*left_set, *val);
+						new_val_ptr = new_val;
+
+
+						if (JoinRelationSet::IsSubset(*key, *right_set)) {
+							found_key_to_update = true;
+							// key is super set, you can break and update the val outside the loop
+							break;
+						}
+						else if (JoinRelationSet::IsSubset(*right_set, *key)) {
+							found_key_to_update = true;
+							delete_new_key = true;
+							key_to_delete = key;
+							key_to_update = right_set;
+							break;
+							// need to delete the old key
+							// and update with new_val_ptr;
+						}
+					}
+
+					if (!found_key_to_update) {
+						reverse_right_to_left_bindings[right_set.get()] = left_set.get();
+					} else {
+						if (!delete_new_key) {
+							reverse_right_to_left_bindings[key_to_update.get()] = new_val_ptr.get();
+						} else {
+							// means we need to delete the key
+							auto erase_me = reverse_right_to_left_bindings.find(key_to_delete.get());
+							reverse_right_to_left_bindings.erase(erase_me);
+							reverse_right_to_left_bindings[key_to_update.get()] = new_val_ptr.get();
+						}
+					}
+				}
+
+				// auto &left_relation_set = set_manager.GetJoinRelation(left_relations);
+				optional_ptr<JoinRelationSet> left_relations_2 = left_relation_set;
+				for (auto &comp : comparisons) {
+					if (filter_set.find(*comp) == filter_set.end()) {
+						filter_set.insert(*comp);
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*comp->left, bindings);
+						auto &set = set_manager.GetJoinRelation(bindings);
+						auto filter_info =
+								make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						filter_info->SetLeftSet(left_relations_2);
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
+				}
+			} else {
+				for (auto &cond : join.conditions) {
+					auto comparison =
+						make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+					if (filter_set.find(*comparison) == filter_set.end()) {
+						filter_set.insert(*comparison);
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*comparison, bindings);
+						auto &set = set_manager.GetJoinRelation(bindings);
+						auto filter_info =
+							make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
 				}
 			}
 			join.conditions.clear();
