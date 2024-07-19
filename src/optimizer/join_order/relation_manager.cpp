@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
+#include "../../../third_party/catch/catch.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -240,12 +241,6 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = op->Cast<LogicalComparisonJoin>();
-			if (join.join_type == JoinType::SEMI) {
-				auto break_here = 0;
-			}
-		}
 		// Adding relations to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
@@ -392,6 +387,17 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 	return can_reorder;
 }
 
+JoinRelationSet &get_key(unordered_map<JoinRelationSet *, JoinRelationSet *> &reverse_right_to_left_bindings,
+                         JoinRelationSet &maybe_subset) {
+	for (auto &dependency : reverse_right_to_left_bindings) {
+		auto key = dependency.first;
+		if (JoinRelationSet::IsSubset(*key, maybe_subset)) {
+			return *key;
+		}
+	}
+	throw InternalException("there should be a key");
+}
+
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
                                                              JoinRelationSetManager &set_manager) {
@@ -412,14 +418,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// make the right bindings the key, and the left bindings the value
 				// merge right binding keys if they are subsets
 
-				unordered_map<JoinRelationSet*, JoinRelationSet*> reverse_right_to_left_bindings;
+				unordered_map<JoinRelationSet *, JoinRelationSet *> reverse_right_to_left_bindings;
 				vector<unique_ptr<BoundComparisonExpression>> comparisons;
 
 				for (auto &cond : join.conditions) {
-					auto comparison =
-						make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-					// for every condition in the semi or anti join, all relations on the left side will be needed to execute the join,
-					// so our filter_info needs a complete set for the left side.
+					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
+					                                                       std::move(cond.right));
+					// for every condition in the semi or anti join, all relations on the left side will be needed to
+					// execute the join, so our filter_info needs a complete set for the left side.
 					unordered_set<idx_t> left_bindings;
 					unordered_set<idx_t> right_bindings;
 					ExtractBindings(*comparison->left, left_bindings);
@@ -427,83 +433,89 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 					// extract the relations
 					optional_ptr<JoinRelationSet> left_set = set_manager.GetJoinRelation(left_bindings);
-					optional_ptr<JoinRelationSet> right_set= set_manager.GetJoinRelation(right_bindings);
+					optional_ptr<JoinRelationSet> right_set = set_manager.GetJoinRelation(right_bindings);
 
 					// temporary variables to keep track of our reverse map of right_relations -> left_relations
-					optional_ptr<JoinRelationSet> key_to_delete = nullptr;
-					optional_ptr<JoinRelationSet> new_val_ptr = nullptr;
-					optional_ptr<JoinRelationSet> key_to_update = nullptr;
+					optional_ptr<JoinRelationSet> outdated_key = nullptr;
+					optional_ptr<JoinRelationSet> new_value = nullptr;
+					optional_ptr<JoinRelationSet> new_key = nullptr;
 					bool delete_new_key = false;
 					bool found_key_to_update = false;
-					for (auto &dependency : reverse_right_to_left_bindings) {
-						delete_new_key = false;
-						auto key = dependency.first;
-						key_to_update = key;
 
+					for (auto &dependency : reverse_right_to_left_bindings) {
+						auto key = dependency.first;
 						auto val = dependency.second;
+
+						new_key = key;
+						delete_new_key = false;
 
 						// the new value (if used) is the left relation set union the value
 						// basically means all relations in the value are required to be present when executing
 						// the semi/anti join with relations in the right side (key).
-						auto &new_val = set_manager.Union(*left_set, *val);
-						new_val_ptr = new_val;
-
+						new_value = set_manager.Union(*left_set, *val);
 
 						if (JoinRelationSet::IsSubset(*key, *right_set)) {
 							found_key_to_update = true;
 							// key is super set, you can break and update the val outside the loop
 							break;
-						}
-						else if (JoinRelationSet::IsSubset(*right_set, *key)) {
+						} else if (JoinRelationSet::IsSubset(*right_set, *key)) {
 							found_key_to_update = true;
 							delete_new_key = true;
-							key_to_delete = key;
-							key_to_update = right_set;
+							outdated_key = key;
+							new_key = right_set;
 							break;
 							// need to delete the old key
 							// and update with new_val_ptr;
 						}
 					}
-
 					if (!found_key_to_update) {
 						reverse_right_to_left_bindings[right_set.get()] = left_set.get();
 					} else {
 						if (!delete_new_key) {
-							reverse_right_to_left_bindings[key_to_update.get()] = new_val_ptr.get();
+							reverse_right_to_left_bindings[new_key.get()] = new_value.get();
 						} else {
 							// means we need to delete the key
-							auto erase_me = reverse_right_to_left_bindings.find(key_to_delete.get());
+							auto erase_me = reverse_right_to_left_bindings.find(outdated_key.get());
 							reverse_right_to_left_bindings.erase(erase_me);
-							reverse_right_to_left_bindings[key_to_update.get()] = new_val_ptr.get();
+							reverse_right_to_left_bindings[new_key.get()] = new_value.get();
 						}
 					}
+					comparisons.push_back(std::move(comparison));
+					auto whatever = 0;
 				}
 
 				// auto &left_relation_set = set_manager.GetJoinRelation(left_relations);
-				optional_ptr<JoinRelationSet> left_relations_2 = left_relation_set;
+				// optional_ptr<JoinRelationSet> left_relations_2 = left_relation_set;
 				for (auto &comp : comparisons) {
 					if (filter_set.find(*comp) == filter_set.end()) {
 						filter_set.insert(*comp);
+						unordered_set<idx_t> right_bindings;
 						unordered_set<idx_t> bindings;
-						ExtractBindings(*comp->left, bindings);
+						ExtractBindings(*comp->right, right_bindings);
+						ExtractBindings(*comp, bindings);
+						auto &right_set_maybe_sub = set_manager.GetJoinRelation(right_bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
+						optional_ptr<JoinRelationSet> key =
+						    get_key(reverse_right_to_left_bindings, right_set_maybe_sub);
+						auto &left_set = reverse_right_to_left_bindings[key.get()];
 						auto filter_info =
-								make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
-						filter_info->SetLeftSet(left_relations_2);
+						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						filter_info->SetLeftSet(left_set);
+						filter_info->SetRightSet(key);
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
 			} else {
 				for (auto &cond : join.conditions) {
-					auto comparison =
-						make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
+					                                                       std::move(cond.right));
 					if (filter_set.find(*comparison) == filter_set.end()) {
 						filter_set.insert(*comparison);
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*comparison, bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
-						auto filter_info =
-							make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
+						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
+						                                         filters_and_bindings.size(), join.join_type);
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
