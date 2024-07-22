@@ -10,6 +10,8 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include <arm_neon.h>
+
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise
@@ -93,14 +95,13 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			relation_manager.ExtractBindings(*comparison.left, left_bindings);
 			relation_manager.ExtractBindings(*comparison.right, right_bindings);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			if (!filter_info->right_set) {
-				GetColumnBinding(*comparison.right, filter_info->right_binding);
-			}
+			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
+				auto new_left_set = &set_manager.GetJoinRelation(left_bindings);
 				if (!filter_info->left_set) {
-					filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
+					filter_info->left_set = new_left_set;
 				}
 				if (!filter_info->right_set) {
 					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
@@ -112,8 +113,6 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 						// they are disjoint, we only need to create one set of edges in the join graph
 						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
 						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
-					} else {
-						continue;
 					}
 					continue;
 				}

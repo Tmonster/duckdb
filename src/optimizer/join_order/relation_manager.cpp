@@ -240,6 +240,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op->Cast<LogicalComparisonJoin>();
+		// Adding relations of the left side to the current join order optimizer
+		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = true;
 		// for semi and anti joins, you can only reorder relations that do
 		// not reference the relations on the right side. So we combine relations on the
 		// right side into one relation. Then during filter extraction, we create a hyper-edge
@@ -250,10 +253,14 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			auto child_optimizer = optimizer.CreateChildOptimizer();
 			op->children[1] = child_optimizer.Optimize(std::move(op->children[1]), &child_stats);
 			AddRelation(*op->children[1], op, child_stats);
+			auto right_child_bindings = op->children[1]->GetColumnBindings();
+			for (auto &bindings : right_child_bindings) {
+				relation_mapping[bindings.table_index] = relations.size() - 1;
+			}
+		} else {
+			can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		}
-		// Adding relations to the current join order optimizer
-		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
-		return can_reorder_left;
+		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
@@ -428,11 +435,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 			D_ASSERT(join.expressions.empty());
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-				// build a dict
-				// for every comparison
-				// make the right bindings the key, and the left bindings the value
-				// merge right binding keys if they are subsets
 
+				// build reverse dependency graph.
 				unordered_map<JoinRelationSet *, JoinRelationSet *> reverse_right_to_left_bindings;
 				vector<unique_ptr<BoundComparisonExpression>> comparisons;
 
@@ -515,6 +519,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
 						filter_info->SetLeftSet(left_set);
 						filter_info->SetRightSet(key);
+
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
