@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
-#include "../../../third_party/catch/catch.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
@@ -9,8 +8,6 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-
-#include <fmt/format.h>
 
 namespace duckdb {
 
