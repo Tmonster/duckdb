@@ -200,8 +200,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
 		if (!datasource_filters.empty()) {
-			combined_stats.cardinality =
-			    static_cast<idx_t>(MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1));
+			combined_stats.cardinality = static_cast<idx_t>(
+			    MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1));
 		}
 		AddRelation(input_op, parent, combined_stats);
 		return true;
@@ -403,7 +403,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 }
 
 JoinRelationSet &GetKey(unordered_map<JoinRelationSet *, JoinRelationSet *> &reverse_right_to_left_bindings,
-                         JoinRelationSet &maybe_subset) {
+                        JoinRelationSet &maybe_subset) {
 	for (auto &dependency : reverse_right_to_left_bindings) {
 		auto key = dependency.first;
 		if (JoinRelationSet::IsSubset(*key, maybe_subset)) {
@@ -509,8 +509,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						ExtractBindings(*comp, bindings);
 						auto &right_set_maybe_sub = set_manager.GetJoinRelation(right_bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
-						optional_ptr<JoinRelationSet> key =
-						    GetKey(reverse_right_to_left_bindings, right_set_maybe_sub);
+						optional_ptr<JoinRelationSet> key = GetKey(reverse_right_to_left_bindings, right_set_maybe_sub);
 						auto &left_set = reverse_right_to_left_bindings[key.get()];
 						auto filter_info =
 						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
