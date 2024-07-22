@@ -65,11 +65,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			relation_mapping[reference] = relation_id;
 		}
 	} else {
-		// Relations should never return more than 1 table index
-		D_ASSERT(table_indexes.size() == 1);
-		idx_t table_index = table_indexes.at(0);
-		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
-		relation_mapping[table_index] = relation_id;
+		// Relations can have more than 1 table index in the case that a semi
+		// or anti join has a query on the right side that joins other queries.
+		D_ASSERT(table_indexes.size() >= 1);
+		for (auto &index : table_indexes) {
+			D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
+			relation_mapping[index] = relation_id;
+		}
 	}
 	relations.push_back(std::move(relation));
 	op.estimated_cardinality = stats.cardinality;
