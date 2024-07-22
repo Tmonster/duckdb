@@ -452,7 +452,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					// extract the relations
 					optional_ptr<JoinRelationSet> left_set = set_manager.GetJoinRelation(left_bindings);
 					optional_ptr<JoinRelationSet> right_set = set_manager.GetJoinRelation(right_bindings);
-
 					// temporary variables to keep track of our reverse map of right_relations -> left_relations
 					optional_ptr<JoinRelationSet> outdated_key = nullptr;
 					optional_ptr<JoinRelationSet> new_value = nullptr;
@@ -516,6 +515,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						auto &left_set = reverse_right_to_left_bindings[key.get()];
 						auto filter_info =
 						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						if (left_set->count == 0) {
+							left_set = nullptr;
+						}
+						if (key->count == 0) {
+							key = nullptr;
+						}
 						filter_info->SetLeftSet(left_set);
 						filter_info->SetRightSet(key);
 
