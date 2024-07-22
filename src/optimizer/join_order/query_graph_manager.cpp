@@ -95,7 +95,9 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			relation_manager.ExtractBindings(*comparison.left, left_bindings);
 			relation_manager.ExtractBindings(*comparison.right, right_bindings);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			GetColumnBinding(*comparison.right, filter_info->right_binding);
+			if (!filter_info->right_set) {
+				GetColumnBinding(*comparison.right, filter_info->right_binding);
+			}
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
