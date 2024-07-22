@@ -2,7 +2,6 @@
 
 #include "../../../third_party/catch/catch.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -63,7 +62,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		// This should all table references, even if there are nested non-reorderable joins.
 		unordered_set<idx_t> table_references;
 		LogicalJoin::GetTableReferences(op, table_references);
-		D_ASSERT(table_references.size() > 0);
+		D_ASSERT(!table_references.empty());
 		for (auto &reference : table_references) {
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
@@ -201,8 +200,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
 		if (!datasource_filters.empty()) {
-			combined_stats.cardinality = (idx_t)MaxValue(
-			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			combined_stats.cardinality =
+			    static_cast<idx_t>(MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1));
 		}
 		AddRelation(input_op, parent, combined_stats);
 		return true;
@@ -239,7 +238,23 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		// for semi and anti joins, you can only reorder relations that do
+		// not reference the relations on the right side. So we combine relations on the
+		// right side into one relation. Then during filter extraction, we create a hyper-edge
+		// between all relations on the left side with the one relation on the rigth side.
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			RelationStats child_stats;
+			// optimize the child and copy the stats
+			auto child_optimizer = optimizer.CreateChildOptimizer();
+			op->children[1] = child_optimizer.Optimize(std::move(op->children[1]), &child_stats);
+			AddRelation(*op->children[1], op, child_stats);
+		}
+		// Adding relations to the current join order optimizer
+		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		return can_reorder_left;
+	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
@@ -387,7 +402,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 	return can_reorder;
 }
 
-JoinRelationSet &get_key(unordered_map<JoinRelationSet *, JoinRelationSet *> &reverse_right_to_left_bindings,
+JoinRelationSet &GetKey(unordered_map<JoinRelationSet *, JoinRelationSet *> &reverse_right_to_left_bindings,
                          JoinRelationSet &maybe_subset) {
 	for (auto &dependency : reverse_right_to_left_bindings) {
 		auto key = dependency.first;
@@ -481,7 +496,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						}
 					}
 					comparisons.push_back(std::move(comparison));
-					auto whatever = 0;
 				}
 
 				// auto &left_relation_set = set_manager.GetJoinRelation(left_relations);
@@ -496,7 +510,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						auto &right_set_maybe_sub = set_manager.GetJoinRelation(right_bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
 						optional_ptr<JoinRelationSet> key =
-						    get_key(reverse_right_to_left_bindings, right_set_maybe_sub);
+						    GetKey(reverse_right_to_left_bindings, right_set_maybe_sub);
 						auto &left_set = reverse_right_to_left_bindings[key.get()];
 						auto filter_info =
 						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
