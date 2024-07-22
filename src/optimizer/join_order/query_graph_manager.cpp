@@ -10,8 +10,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include <arm_neon.h>
-
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise
