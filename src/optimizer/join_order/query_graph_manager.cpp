@@ -53,7 +53,6 @@ void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
 }
 
-
 void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
 	left_set = left_set_new;
 }
@@ -61,7 +60,6 @@ void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
 void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
 	right_set = right_set_new;
 }
-
 
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
 	return filters_and_bindings;
