@@ -43,6 +43,9 @@ bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
 	if (EmptyFilter(filter_info)) {
 		return false;
 	}
+	if (filter_info.join_type == JoinType::SEMI || filter_info.join_type == JoinType::ANTI) {
+		return false;
+	}
 	return true;
 }
 
@@ -105,6 +108,11 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 			AddRelationTdom(*filter);
 			continue;
 		} else if (EmptyFilter(*filter)) {
+			continue;
+		} else if ((filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) && !filter->left_set) {
+			// the right side is from some dummy scan and the comparison is
+			// VALUE comparison_type (BINDING)
+			// TODO: Fix this
 			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
