@@ -11,6 +11,7 @@ NEW_DB_NAME = "new.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"
 
 ENABLE_PROFILING = "PRAGMA enable_profiling=json"
+DISABLE_JOIN_FILTER_PUSHDOWN = "PRAGMA disabled_optimizers='join_filter_pushdown'"
 PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
@@ -42,12 +43,13 @@ def parse_args():
 
 
 def init_db(cli, dbname, benchmark_dir):
-    print(f"INITIALIZING {dbname} ...")
-    subprocess.run(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
-    )
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
-    print("INITIALIZATION DONE")
+    pass
+    # print(f"INITIALIZING {dbname} ...")
+    # subprocess.run(
+    #     f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    # )
+    # subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    # print("INITIALIZATION DONE")
 
 
 class PlanCost:
@@ -113,7 +115,7 @@ def op_inspect(op) -> PlanCost:
 def query_plan_cost(cli, dbname, query):
     try:
         subprocess.run(
-            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
+            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{DISABLE_JOIN_FILTER_PUSHDOWN};{PROFILE_OUTPUT};{query}\"",
             shell=True,
             check=True,
             capture_output=True,
@@ -165,6 +167,7 @@ def main():
 
     improvements = []
     regressions = []
+    all = []
 
     files = glob.glob(f"{benchmark_dir}/queries/*.sql")
     files.sort()
@@ -180,10 +183,14 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
+        if f.find('78') >= 0:
+            import pdb
+            pdb.set_trace()
         if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
         elif new_cost > old_cost:
             regressions.append((query_name, old_cost, new_cost))
+        all.append((query_name, old_cost, new_cost))
 
     exit_code = 0
     if improvements:
@@ -195,10 +202,12 @@ def main():
         print_diffs(regressions)
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
+    print_banner("ALL DIFFS")
+    print_diffs(all)
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
-    os.remove(PROFILE_FILENAME)
+    # os.remove(OLD_DB_NAME)
+    # os.remove(NEW_DB_NAME)
+    # os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
 
