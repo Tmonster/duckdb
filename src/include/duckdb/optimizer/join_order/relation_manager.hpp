@@ -66,11 +66,12 @@ public:
 	unordered_map<idx_t, idx_t> relation_mapping;
 
 	void PrintRelationStats();
-
+	unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join;
 private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
+
 };
 
 } // namespace duckdb

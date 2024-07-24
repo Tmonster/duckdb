@@ -1,0 +1,12 @@
+# name: benchmark/micro/join/left_joins_can_be_pushed_down.benchmark
+# description: we can reorder around left joins
+# group: [join]
+
+name join limit
+group join
+
+load
+
+
+run
+select * from t_left, (select * from t_right limit 10000) where a = b;

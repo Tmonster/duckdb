@@ -32,7 +32,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	// Create the query_graph hyper edges
-	CreateHyperGraphEdges();
+	CreateHyperGraphEdges(relation_manager.left_join_right_child_relation_required_relations_for_join);
 	return true;
 }
 
@@ -66,7 +66,7 @@ const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() con
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
-	// push an expression into a filter
+	// push an expression into a filterr
 	// first check if we have any filter to push it into
 	if (node->type != LogicalOperatorType::LOGICAL_FILTER) {
 		// we don't, we need to create one
@@ -81,7 +81,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-void QueryGraphManager::CreateHyperGraphEdges() {
+void QueryGraphManager::CreateHyperGraphEdges(unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join) {
 	// create potential edges from the comparisons
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
@@ -103,6 +103,17 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				}
 				if (!filter_info->right_set) {
 					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				}
+				for (auto &left_join_relation_thing : left_join_right_child_relation_required_relations_for_join) {
+					auto &ljrs = set_manager.GetJoinRelation(left_join_relation_thing.first);
+					if (filter_info->left_set && JoinRelationSet::IsSubset(*filter_info->left_set, ljrs)) {
+						auto &boop = set_manager.GetJoinRelation(left_join_relation_thing.second);
+						filter_info->left_set = set_manager.Union(*filter_info->left_set, boop);
+					}
+					else if (filter_info->right_set && JoinRelationSet::IsSubset(*filter_info->right_set, ljrs)) {
+						auto &boop = set_manager.GetJoinRelation(left_join_relation_thing.second);
+						filter_info->left_set = set_manager.Union(*filter_info->left_set, boop);
+					}
 				}
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
