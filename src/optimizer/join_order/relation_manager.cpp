@@ -303,7 +303,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// table scan, apply another selectivity.
 		if (!datasource_filters.empty()) {
 			stats.cardinality =
-			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		ModifyStatsIfLimit(limit_op.get(), stats);
 		AddRelation(input_op, parent, stats);
