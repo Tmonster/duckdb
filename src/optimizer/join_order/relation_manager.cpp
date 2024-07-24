@@ -161,7 +161,6 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
 			}
-			auto &filter = op->Cast<LogicalFilter>();
 			filter_operators.push_back(*op);
 		}
 		if (op->type == LogicalOperatorType::LOGICAL_LIMIT) {
