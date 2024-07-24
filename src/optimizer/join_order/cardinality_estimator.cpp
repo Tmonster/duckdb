@@ -226,7 +226,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	}
 	case JoinType::LEFT: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-			JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
 			new_denom = left.denom * 0.2;
 			return new_denom;
 		}
