@@ -81,10 +81,24 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-void QueryGraphManager::CreateHyperGraphEdges(unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join) {
+void QueryGraphManager::CreateHyperGraphEdges(
+    unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join) {
 	// create potential edges from the comparisons
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
+
+		// for single filters.
+		// if this is a filter on the right side of a left join, then it is happening out of the
+		// "contained" child. We don't want the filter to be pushed into the child, so we make sure all
+		// relations involved in the left join are already joined before the filter can be applied again.
+		for (auto &left_join_relation_thing : left_join_right_child_relation_required_relations_for_join) {
+			auto &ljrs = set_manager.GetJoinRelation(left_join_relation_thing.first);
+			auto &boop = set_manager.GetJoinRelation(left_join_relation_thing.second);
+			if (filter_info->set && JoinRelationSet::IsSubset(*filter_info->set, ljrs)) {
+				filter_info->set = set_manager.Union(*filter_info->set, boop);
+			}
+		}
+
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
@@ -110,8 +124,7 @@ void QueryGraphManager::CreateHyperGraphEdges(unordered_map<idx_t, unordered_set
 					if (filter_info->left_set && JoinRelationSet::IsSubset(*filter_info->left_set, ljrs)) {
 						filter_info->right_set = set_manager.Union(*filter_info->right_set, boop);
 						filter_info->set = set_manager.Union(*filter_info->set, boop);
-					}
-					else if (filter_info->right_set && JoinRelationSet::IsSubset(*filter_info->right_set, ljrs)) {
+					} else if (filter_info->right_set && JoinRelationSet::IsSubset(*filter_info->right_set, ljrs)) {
 						filter_info->left_set = set_manager.Union(*filter_info->left_set, boop);
 						filter_info->set = set_manager.Union(*filter_info->set, boop);
 					}
@@ -300,6 +313,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	for (auto &filter_info : filters_and_bindings) {
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
+
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down

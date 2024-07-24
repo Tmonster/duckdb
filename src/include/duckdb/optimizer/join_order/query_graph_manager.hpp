@@ -108,7 +108,8 @@ private:
 
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
-	void CreateHyperGraphEdges(unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join);
+	void CreateHyperGraphEdges(
+	    unordered_map<idx_t, unordered_set<idx_t>> left_join_right_child_relation_required_relations_for_join);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 };

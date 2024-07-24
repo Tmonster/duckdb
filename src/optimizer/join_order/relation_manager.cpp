@@ -161,6 +161,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
 			}
+			auto &filter = op->Cast<LogicalFilter>();
 			filter_operators.push_back(*op);
 		}
 		if (op->type == LogicalOperatorType::LOGICAL_LIMIT) {
@@ -430,7 +431,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-			f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 
 			D_ASSERT(join.expressions.empty());
@@ -442,7 +443,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 				for (auto &cond : join.conditions) {
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-																		   std::move(cond.right));
+					                                                       std::move(cond.right));
 					// for every condition in the semi or anti join, all relations on the left side will be needed to
 					// execute the join, so our filter_info needs a complete set for the left side.
 					unordered_set<idx_t> left_bindings;
@@ -515,7 +516,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						optional_ptr<JoinRelationSet> key = GetKey(reverse_right_to_left_bindings, right_set_maybe_sub);
 						auto &left_set = reverse_right_to_left_bindings[key.get()];
 						auto filter_info =
-							make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
 						if (left_set->count == 0) {
 							left_set = nullptr;
 						}
@@ -537,7 +538,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				unordered_map<idx_t, unordered_set<idx_t>> left_join_dependincy;
 				for (auto &cond : join.conditions) {
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-																		   std::move(cond.right));
+					                                                       std::move(cond.right));
 					// for every condition in the semi or anti join, all relations on the left side will be needed to
 					// execute the join, so our filter_info needs a complete set for the left side.
 					unordered_set<idx_t> left_bindings;
@@ -573,7 +574,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						ExtractBindings(*comp, bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
 
-
 						optional_ptr<JoinRelationSet> left_set;
 						optional_ptr<JoinRelationSet> right_set;
 						D_ASSERT(right_bindings.size() == 1);
@@ -587,7 +587,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						}
 
 						auto filter_info =
-							make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
 						if (left_set->count == 0) {
 							left_set = nullptr;
 						}
@@ -603,18 +603,17 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				for (auto &entry : left_join_dependincy) {
 					left_join_right_child_relation_required_relations_for_join[entry.first] = entry.second;
 				}
-			}
-			else {
+			} else {
 				for (auto &cond : join.conditions) {
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-																		   std::move(cond.right));
+					                                                       std::move(cond.right));
 					if (filter_set.find(*comparison) == filter_set.end()) {
 						filter_set.insert(*comparison);
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*comparison, bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
 						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
-																 filters_and_bindings.size(), join.join_type);
+						                                         filters_and_bindings.size(), join.join_type);
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
