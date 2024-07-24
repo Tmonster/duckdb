@@ -67,7 +67,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	} else {
 		// Relations can have more than 1 table index in the case that a semi
 		// or anti join has a query on the right side that joins other queries.
-		D_ASSERT(table_indexes.size() >= 1);
+		D_ASSERT(!table_indexes.empty());
 		for (auto &index : table_indexes) {
 			D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
 			relation_mapping[index] = relation_id;
@@ -528,7 +528,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
-			} if (join.join_type == JoinType::LEFT) {
+			} else if (join.join_type == JoinType::LEFT) {
 				// build reverse dependency graph.
 				vector<unique_ptr<BoundComparisonExpression>> comparisons;
 
@@ -606,9 +606,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			}
 			else {
 				for (auto &cond : join.conditions) {
-					if (!cond.left || !cond.right) {
-						auto break_here = 0;
-					}
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
 																		   std::move(cond.right));
 					if (filter_set.find(*comparison) == filter_set.end()) {
