@@ -1,0 +1,104 @@
+# name: test/optimizer/joins/reorder_left_joins.test
+# description: Verify semi anti joins are pushed down
+# group: [joins]
+
+
+
+
+statement ok
+create table tbl1 as select range a from range(100_000);
+
+statement ok
+create table tbl2 as select range%1_000 b from range(50_000);
+
+statement ok
+create table tbl3 as select range c from range(1_000);
+
+query II
+explain select * from tbl1 left join tbl2 on a = b join tbl3 on a=c;
+----
+physical_opt	<REGEX>:.*RIGHT.*INNER.*
+
+
+
+#
+#statement ok
+#create or replace table tbl1 as select range a from range(10000);
+#
+#statement ok
+#create table tbl2 as select range b from range(1000);
+#
+#statement ok
+#create table tbl3 as select range c from range(100);
+#
+#
+#create or replace table tbl1 as select range a from range(100_000);
+#create table tbl2 as select range%1_000 b from range(50_000);
+#create table tbl3 as select range c from range(1_000);
+#
+#statement ok
+#explain select a, b, c from (select a, b from tbl1 left join tbl2 on a = b) join tbl3 on b=c;
+#
+#statement ok
+#explain select a, b, c from tbl1 left join (select * from tbl2 join tbl3 on b=c) on a =b ;
+#
+#
+#
+#statement ok
+#explain select count(*) from tbl1 left join tbl2 on a = b join tbl3 on a=c;
+#
+#statement ok
+#explain select count(*) from tbl1 join tbl3 on a = c left join tbl2 on a=b;
+#
+#statement ok
+#explain select a, b, c from tbl1 left join tbl2 on a = b join tbl3 on a=c order by all;
+#
+#statement ok
+#explain select a, b, c from tbl1 join tbl2 on a =  left join tbl2 on a=b order by all;
+#
+#
+#
+#statement ok
+#explain select count(*) from tbl1, tbl2 left join tbl3 on b=c where a = c;
+#
+#statement ok
+#explain select count(*) from tbl2 left join (select * from tbl1, tbl3 where a = c) on b=c;
+#
+#
+#statement ok
+#explain select a, b, c from tbl1, tbl2 left join tbl3 on b=c where a = b ;
+#
+#statement ok
+#explain select a, b, c from (select * from tbl1, tbl2 where a=b) left join tbl3  on b=c order by all;
+#
+#
+#statement ok
+#explain select count(*) from tbl1, tbl2 left join tbl3 on b=c where a is not distinct from c;
+#
+#statement ok
+#explain select count(*) from tbl2 left join (select * from tbl1, tbl3 where a is not distinct from c) on b=c;
+#
+#
+#statement ok
+#create view t2_left_t3 as select * from tbl2 left join tbl3 on b = c;
+#
+#statement ok
+#create view t1_inner_t3 as select * from tbl1 join tbl3 on a = c;
+#
+#statement ok
+#create view t2_left_t1_inner_t3 as select * from tbl2 left join t1_inner_t3 on b=c;
+#
+#statement ok
+#create view t1_inner_t2_left_t3 as select * from tbl1 join t2_left_t3 on a=c;
+#
+#statement ok
+#select count(*) from tbl2, t1_left_t3 where
+#
+#
+#query II
+#EXPLAIN select * from tbl1, tbl2 where b in (select * from tbl3) and tbl1.a = tbl2.b;
+#----
+#physical_plan	<REGEX>:.*INNER.*SEMI.*
+#
+#query II
+#EXPLAIN select * from tbl1, tbl2 LEFT JOIN tbl3 ON b=c where a = b;
