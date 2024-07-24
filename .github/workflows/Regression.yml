@@ -332,3 +332,9 @@ jobs:
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost
+        
+    - name: Regression Test TPCDS
+      if: always()
+      shell: bash
+      run: |
+        python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpcds_plan_cost
