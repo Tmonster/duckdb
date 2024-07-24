@@ -243,10 +243,23 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Adding relations of the left side to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
 		bool can_reorder_right = true;
-		// for semi and anti joins, you can only reorder relations that do
-		// not reference the relations on the right side. So we combine relations on the
-		// right side into one relation. Then during filter extraction, we create a hyper-edge
-		// between all relations on the left side with the one relation on the rigth side.
+		// for left, semi & anti joins, you can only reorder relations not on the right side of the join.
+		// So we treat the right side of left join as its own relation so no relations
+		// are pushed into the right side, or taken out of the right side.
+
+		// for all filters behind the LHS and RHS of the join we create hyper-edges that involve all relations involved
+		// in the join filter. For example, a join condition like LHS_T1.a = RHS.a AND LHS_T2.b = RHS.b translates to
+		// hyper edges [((LHS_T1,LHS_T2), (RHS)), ((LHS_T1, LHS_T2), (RHS))].
+		// This guarantees that all LHS relations of the join are present for the left/semi/anti join occurs
+		// Why? if we do not enforce the presence of LHS_T1 and LHS_T2 before the semi join, one possible
+		// join plans could look like (LHS_T2 join/semi_join (LHS_T1 semi_join RHS)). This would not work
+
+		// Also important for left joins because the left join will introduce NULLS.
+		// ????
+		// For Left joins, during edge extraction, all relations that join with the RHS of a left join
+		// can only be placed in Left/semi/anti join has also been placed.
+		// See CreateHyperGraphEdges()
+
 		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI || join.join_type == JoinType::LEFT) {
 			RelationStats child_stats;
 			// optimize the child and copy the stats
@@ -434,12 +447,13 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 
 			D_ASSERT(join.expressions.empty());
-			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-
-				// build reverse dependency graph.
-				unordered_map<JoinRelationSet *, JoinRelationSet *> reverse_right_to_left_bindings;
+			if (join.join_type == JoinType::LEFT || join.join_type == JoinType::SEMI ||
+			    join.join_type == JoinType::ANTI) {
 				vector<unique_ptr<BoundComparisonExpression>> comparisons;
 
+				// go through the comparisons and populate the relation_requirements with relations
+				// required to make the join.
+				unordered_map<idx_t, unordered_set<idx_t>> relation_requirements;
 				for (auto &cond : join.conditions) {
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
 					                                                       std::move(cond.right));
@@ -450,110 +464,13 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					ExtractBindings(*comparison->left, left_bindings);
 					ExtractBindings(*comparison->right, right_bindings);
 
-					// extract the relations
-					optional_ptr<JoinRelationSet> left_set = set_manager.GetJoinRelation(left_bindings);
-					optional_ptr<JoinRelationSet> right_set = set_manager.GetJoinRelation(right_bindings);
-					// temporary variables to keep track of our reverse map of right_relations -> left_relations
-					optional_ptr<JoinRelationSet> outdated_key = nullptr;
-					optional_ptr<JoinRelationSet> new_value = nullptr;
-					optional_ptr<JoinRelationSet> new_key = nullptr;
-					bool delete_new_key = false;
-					bool found_key_to_update = false;
-
-					for (auto &dependency : reverse_right_to_left_bindings) {
-						auto key = dependency.first;
-						auto val = dependency.second;
-
-						new_key = key;
-						delete_new_key = false;
-
-						// the new value (if used) is the left relation set union the value
-						// basically means all relations in the value are required to be present when executing
-						// the semi/anti join with relations in the right side (key).
-						new_value = set_manager.Union(*left_set, *val);
-
-						if (JoinRelationSet::IsSubset(*key, *right_set)) {
-							found_key_to_update = true;
-							// key is super set, you can break and update the val outside the loop
-							break;
-						} else if (JoinRelationSet::IsSubset(*right_set, *key)) {
-							found_key_to_update = true;
-							delete_new_key = true;
-							outdated_key = key;
-							new_key = right_set;
-							break;
-							// need to delete the old key
-							// and update with new_val_ptr;
-						}
-					}
-					if (!found_key_to_update) {
-						reverse_right_to_left_bindings[right_set.get()] = left_set.get();
-					} else {
-						if (!delete_new_key) {
-							reverse_right_to_left_bindings[new_key.get()] = new_value.get();
-						} else {
-							// means we need to delete the key
-							auto erase_me = reverse_right_to_left_bindings.find(outdated_key.get());
-							reverse_right_to_left_bindings.erase(erase_me);
-							reverse_right_to_left_bindings[new_key.get()] = new_value.get();
-						}
-					}
-					comparisons.push_back(std::move(comparison));
-				}
-
-				// auto &left_relation_set = set_manager.GetJoinRelation(left_relations);
-				// optional_ptr<JoinRelationSet> left_relations_2 = left_relation_set;
-				for (auto &comp : comparisons) {
-					if (filter_set.find(*comp) == filter_set.end()) {
-						filter_set.insert(*comp);
-						unordered_set<idx_t> right_bindings;
-						unordered_set<idx_t> bindings;
-						ExtractBindings(*comp->right, right_bindings);
-						ExtractBindings(*comp, bindings);
-						auto &right_set_maybe_sub = set_manager.GetJoinRelation(right_bindings);
-						auto &set = set_manager.GetJoinRelation(bindings);
-						optional_ptr<JoinRelationSet> key = GetKey(reverse_right_to_left_bindings, right_set_maybe_sub);
-						auto &left_set = reverse_right_to_left_bindings[key.get()];
-						auto filter_info =
-						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
-						if (left_set->count == 0) {
-							left_set = nullptr;
-						}
-						if (key->count == 0) {
-							key = nullptr;
-						}
-						filter_info->SetLeftSet(left_set);
-						filter_info->SetRightSet(key);
-
-						filters_and_bindings.push_back(std::move(filter_info));
-					}
-				}
-			} else if (join.join_type == JoinType::LEFT) {
-				// build reverse dependency graph.
-				vector<unique_ptr<BoundComparisonExpression>> comparisons;
-
-				// go through all the comparisons, and gather the relations that left join with the
-				// relations on the right
-				unordered_map<idx_t, unordered_set<idx_t>> left_join_dependincy;
-				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-					                                                       std::move(cond.right));
-					// for every condition in the semi or anti join, all relations on the left side will be needed to
-					// execute the join, so our filter_info needs a complete set for the left side.
-					unordered_set<idx_t> left_bindings;
-					unordered_set<idx_t> right_bindings;
-					ExtractBindings(*comparison->left, left_bindings);
-					ExtractBindings(*comparison->right, right_bindings);
-
-					// right side of a left join should always have size 1
-					// since we do not want to push relations in or take them out
 					D_ASSERT(right_bindings.size() == 1);
 					for (auto &r_binding : right_bindings) {
-						auto entry_it = left_join_dependincy.find(r_binding);
-						if (entry_it == left_join_dependincy.end()) {
-							D_ASSERT(left_join_dependincy.empty());
-							left_join_dependincy[r_binding] = unordered_set<idx_t>();
-							entry_it = left_join_dependincy.find(r_binding);
+						auto entry_it = relation_requirements.find(r_binding);
+						if (entry_it == relation_requirements.end()) {
+							D_ASSERT(relation_requirements.empty());
+							relation_requirements[r_binding] = unordered_set<idx_t>();
+							entry_it = relation_requirements.find(r_binding);
 						}
 						for (auto &l_binding : left_bindings) {
 							entry_it->second.emplace(l_binding);
@@ -577,7 +494,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						optional_ptr<JoinRelationSet> right_set;
 						D_ASSERT(right_bindings.size() == 1);
 						for (auto &r_binding : right_bindings) {
-							left_set = set_manager.GetJoinRelation(left_join_dependincy.at(r_binding));
+							left_set = set_manager.GetJoinRelation(relation_requirements.at(r_binding));
 							if (right_set) {
 								right_set = set_manager.Union(set_manager.GetJoinRelation(r_binding), *right_set);
 							} else {
@@ -599,8 +516,11 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
-				for (auto &entry : left_join_dependincy) {
-					left_join_right_child_relation_required_relations_for_join[entry.first] = entry.second;
+
+				if (join.join_type == JoinType::LEFT) {
+					for (auto &entry : relation_requirements) {
+						left_join_right_child_relation_required_relations_for_join[entry.first] = entry.second;
+					}
 				}
 			} else {
 				for (auto &cond : join.conditions) {
