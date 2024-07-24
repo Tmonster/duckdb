@@ -202,6 +202,7 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
                                                                 FilterInfoWithTotalDomains &filter) {
 	switch (filter.filter_info->join_type) {
 	case JoinType::SEMI:
+	case JoinType::LEFT:
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
 		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
@@ -221,6 +222,15 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
 		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+		return new_denom;
+	}
+	case JoinType::LEFT: {
+		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
+			JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+			new_denom = left.denom * 0.2;
+			return new_denom;
+		}
+		new_denom = right.denom * 0.2;
 		return new_denom;
 	}
 	case JoinType::SEMI:
