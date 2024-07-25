@@ -139,6 +139,8 @@ public:
 	}
 };
 
+class IngestionSample;
+
 class ReservoirChunk {
 public:
 	ReservoirChunk() {
@@ -172,6 +174,8 @@ public:
 	//! This is used when converting a ReservoirPercentageSample into a ReservoirSample
 	//! and the ReservoirPercentageSample has more samples than this.sample_count.
 	void CombineMerge(vector<unique_ptr<ReservoirSample>> small_samples);
+
+	unique_ptr<IngestionSample> ConvertToIngestionSample();
 
 	unique_ptr<BlockingSample> Copy() const override;
 
@@ -264,32 +268,51 @@ private:
 // Ingestion sample needs to inherit from blocking sample.
 // this way it can be serialized (Maybe? Need to figure that out)
 
-
-// Sample and copy while it is cheap, 
-
-class IngestionSample {
+// Special Sample type for ingestion
+class IngestionSample : public BlockingSample {
 public:
+	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
+
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
-	IngestionSample();
+
+	IngestionSample(Allocator &allocator, int64_t seed = 1);
+	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
+
 	// TODO: this will need more info to initiliaze the correct sample type
-	unique_ptr<BlockingSample> ConvertToReservoirSample(SampleType type);
+	unique_ptr<BlockingSample> ConvertToReservoirSample();
+	void ReservoirSampleToIngestionSample(unique_ptr<BlockingSample> reservoir_sample);
 	void Shrink();
-	unique_ptr<IngestionSample> Copy();
+
+	unique_ptr<BlockingSample> Copy() const override;
 
 	idx_t GetTuplesSeen();
-	idx_t GetSamplesCollected();
-	void Destroy();
+	idx_t NumSamplesCollected() override;
+	//! Add a chunk of data to the sample
+	void AddToReservoir(DataChunk &input) override;
+	void Merge(unique_ptr<BlockingSample> other) override;
+
+	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
+	//! sample is completely built.
+	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
+	void Destroy() override;
+	void Finalize() override;
+
+	// what is this?
 	void Clear();
-	void AddAndAppend(DataChunk &chunk);
+
+	// when adding a new chunk how many samples will we replace given the
+	// new chunk length?
 	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
 
 private:
+	idx_t sample_count;
+	Allocator &allocator;
 	//! given the first chunk, create the first chunk
+	//! called be AddToReservoir()
 	idx_t CreateFirstChunk(DataChunk &chunk);
 
 	vector<unique_ptr<DataChunk>> sample_chunks;
-	unique_ptr<BaseReservoirSampling> sampling_info;
-	idx_t tuples_seen;
 	bool destroyed;
 };
 

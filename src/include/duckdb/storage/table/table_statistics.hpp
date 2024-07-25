@@ -57,10 +57,7 @@ public:
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
 	//! The table sample
-	//! Sample for table
 	unique_ptr<BlockingSample> table_sample;
-	//! Sample used only for ingestion to help with Performance
-	unique_ptr<IngestionSample> ingestion_sample;
 
 private:
 	//! The statistics lock
