@@ -19,6 +19,10 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 	                          KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
 }
 
+string PragmaTableSample(ClientContext &context, const FunctionParameters &parameters) {
+	return StringUtil::Format("SELECT * FROM pragma_table_sample('%s');", parameters.values[0].ToString());
+}
+
 string PragmaShowTables() {
 	// clang-format off
 	return R"EOF(
@@ -203,6 +207,7 @@ string PragmaUserAgent(ClientContext &context, const FunctionParameters &paramet
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", PragmaTableInfo, {LogicalType::VARCHAR}));
+	set.AddFunction(PragmaFunction::PragmaCall("table_sample", PragmaTableSample, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaCall("metadata_info", PragmaMetadataInfo, {}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", PragmaShowTables));

@@ -6359,6 +6359,8 @@ const char* EnumUtil::ToChars<SampleType>(SampleType value) {
 		return "RESERVOIR_SAMPLE";
 	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
 		return "RESERVOIR_PERCENTAGE_SAMPLE";
+	case SampleType::INGESTION_SAMPLE:
+		return "INGESTION_SAMPLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6374,6 +6376,9 @@ SampleType EnumUtil::FromString<SampleType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "RESERVOIR_PERCENTAGE_SAMPLE")) {
 		return SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "INGESTION_SAMPLE")) {
+		return SampleType::INGESTION_SAMPLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

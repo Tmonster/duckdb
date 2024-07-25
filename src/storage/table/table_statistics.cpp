@@ -1,16 +1,24 @@
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
 	stats_lock = make_shared_ptr<mutex>();
 	column_stats = std::move(data.table_stats.column_stats);
+	ingestion_sample = make_uniq<IngestionSample>();
+	if (data.table_stats.table_sample) {
+		table_sample = std::move(data.table_stats.table_sample);
+	} else {
+		table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
+	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -18,7 +26,10 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 
 void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
 
+	table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
+	ingestion_sample = make_uniq<IngestionSample>();
 	stats_lock = make_shared_ptr<mutex>();
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
@@ -35,6 +46,13 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 		column_stats.push_back(parent.column_stats[i]);
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
+	// TODO: add new chunk with one type so that sample does not need to be destroyed
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
+	}
 }
 
 void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column) {
@@ -47,6 +65,13 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]);
 		}
+	}
+	// TODO: split the sample chunk and fuse it back together without the deleted column
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -62,6 +87,12 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 		} else {
 			column_stats.push_back(parent.column_stats[i]);
 		}
+	}
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
+	if (table_sample) {
+		table_sample->Destroy();
 	}
 }
 
@@ -79,6 +110,34 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
+	if (other.ingestion_sample) {
+		auto reservoir_sample = other.ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE);
+		if (table_sample && !table_sample->destroyed) {
+			table_sample->Merge(std::move(reservoir_sample));
+		}
+	}
+	// if the sample has been nullified, no need to merge.
+	if (table_sample) {
+		// if one of them is a reservoir sample and the other a percentage sample. merge the percentage sample into the
+		// blocking sample.
+		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		    other.table_sample->type == SampleType::RESERVOIR_SAMPLE && table_sample->NumSamplesCollected() == 0) {
+			table_sample = std::move(other.table_sample);
+		} else if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		           other.table_sample->type == SampleType::RESERVOIR_SAMPLE) {
+			other.table_sample->Merge(std::move(table_sample));
+			table_sample = std::move(other.table_sample);
+		} else if (other.table_sample) {
+			table_sample->Merge(std::move(other.table_sample));
+		}
+		if (table_sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE &&
+		    table_sample->NumSamplesCollected() > FIXED_SAMPLE_SIZE) {
+			auto &t_percentage_sample = table_sample->Cast<ReservoirSamplePercentage>();
+			table_sample = t_percentage_sample.ConvertToFixedReservoirSample(FIXED_SAMPLE_SIZE);
+		}
+	} else {
+		table_sample = std::move(other.table_sample);
+	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {
 			D_ASSERT(other.column_stats[i]);
@@ -99,7 +158,6 @@ void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatist
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
 	return *column_stats[i];
 }
-
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(*stats_lock);
 	auto result = column_stats[i]->Statistics().Copy();
@@ -120,10 +178,37 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
+	// how to handle ingestion sample and tample sample?
+	// options
+	// 1. convert the ingestion sample into a reservoir sample (WITHOUT destroying the ingestion sample). Merge the existing table sample with the converted reservoir
+	//    sample, and assign that to the table and the copy
+	//    then set the ingestion sample to empty again.
+	//      - questions, what happens if sampling continues? everything just goes to the regular sample?
+	// 2. copy the ingestion sample and the table sample,
+	// 3. Compact the ingestion sample, merge the compact one into the table sample that will be serialized
+	//    store the table sample. Assign the compact ingestion sample to the in-memory table_sample.
+	//
+	if (ingestion_sample) {
+		// this may shrink the ingestion sample. we don't mind
+		other.ingestion_sample = ingestion_sample->Copy();
+	}
+	if (table_sample) {
+		other.table_sample = table_sample->Copy();
+		if (other.ingestion_sample) {
+			other.table_sample->Merge(other.ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE));
+		}
+	}
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
+	if (ingestion_sample) {
+		auto reservoir_sample = ingestion_sample->ConvertToReservoirSample(SampleType::RESERVOIR_SAMPLE);
+		if (table_sample) {
+			table_sample->Merge(std::move(reservoir_sample));
+			ingestion_sample->Destroy();
+		}
+	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", table_sample, nullptr);
 }
 
