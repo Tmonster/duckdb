@@ -67,21 +67,11 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 		data.sample = table.GetSample();
 	}
 	if (data.sample) {
-		if (data.sample->type == SampleType::RESERVOIR_SAMPLE) {
-			auto &reservoir_sample = data.sample->Cast<ReservoirSample>();
-			auto sample_chunk = reservoir_sample.GetChunk(data.sample_offset);
-			if (sample_chunk) {
-				sample_chunk->Copy(output, 0);
-				data.sample_offset += sample_chunk->size();
-			}
-		}
-		if (data.sample->type == SampleType::RESERVOIR_PERCENTAGE_SAMPLE) {
-			auto &percentage_sample = data.sample->Cast<ReservoirSamplePercentage>();
-			auto sample_chunk = percentage_sample.GetChunk(data.sample_offset);
-			if (sample_chunk) {
-				sample_chunk->Copy(output, 0);
-				data.sample_offset += sample_chunk->size();
-			}
+		D_ASSERT(data.sample->type == SampleType::INGESTION_SAMPLE);
+		auto sample_chunk = data.sample->GetChunk();
+		if (sample_chunk) {
+			sample_chunk->Copy(output, 0);
+			data.sample_offset += sample_chunk->size();
 		}
 	}
 }
