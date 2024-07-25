@@ -43,13 +43,12 @@ def parse_args():
 
 
 def init_db(cli, dbname, benchmark_dir):
-    pass
-    # print(f"INITIALIZING {dbname} ...")
-    # subprocess.run(
-    #     f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
-    # )
-    # subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
-    # print("INITIALIZATION DONE")
+    print(f"INITIALIZING {dbname} ...")
+    subprocess.run(
+        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    )
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    print("INITIALIZATION DONE")
 
 
 class PlanCost:
@@ -205,9 +204,9 @@ def main():
     print_banner("ALL DIFFS")
     print_diffs(all)
 
-    # os.remove(OLD_DB_NAME)
-    # os.remove(NEW_DB_NAME)
-    # os.remove(PROFILE_FILENAME)
+    os.remove(OLD_DB_NAME)
+    os.remove(NEW_DB_NAME)
+    os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
 
