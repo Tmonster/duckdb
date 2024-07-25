@@ -104,7 +104,7 @@ public:
 
 	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 
-	//! cost model needs estimated cardinalities to the fraction since the formula captures
+	//! cost model needs estimated cardi}nalities to the fraction since the formula captures
 	//! distinct count selectivities and multiplicities. Hence the template
 	template <class T>
 	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
