@@ -33,7 +33,7 @@ public:
 	explicit BaseReservoirSampling(int64_t seed);
 	BaseReservoirSampling();
 
-	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size);
+	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size, idx_t index_offset = 0);
 
 	void SetNextEntry();
 
@@ -104,7 +104,7 @@ public:
 	//! This is used during deserialization. Percentage reservoir samples
 	//! are serialized as reservoir samples when a table has less than 204800 rows
 	//! When deserialization happens, we want to deserialize back to a percentage sample.
-	static unique_ptr<BlockingSample> MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSample> sample);
+	// static unique_ptr<BlockingSample> MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSample> sample);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
 	//! querying from a live sample and not a table collected sample.
@@ -271,7 +271,7 @@ private:
 // Special Sample type for ingestion
 class IngestionSample : public BlockingSample {
 public:
-	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
+	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
 
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
 
@@ -290,6 +290,10 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 	void Merge(unique_ptr<BlockingSample> other) override;
+
+	// A sample was cut if there are <2048 tuples in the sample, but there are reservoir weights.
+	// this means the tables&sample were serialized when the tuple count < 100 * fixed_sample_size
+	bool SampleWasCut();
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
