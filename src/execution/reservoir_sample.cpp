@@ -1,7 +1,8 @@
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 #include <fmt/format.h>
 
@@ -60,7 +61,7 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
 	return ret;
 }
 
-void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
+void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size, idx_t index_offset) {
 	//! 1: The first m items of V are inserted into R
 	//! first we need to check if the reservoir already has "m" elements
 	//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
@@ -71,8 +72,9 @@ void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sam
 		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
+			idx_t index = i + index_offset;
 			double k_i = random.NextRandom();
-			reservoir_weights.emplace(-k_i, i);
+			reservoir_weights.emplace(-k_i, index);
 		}
 		SetNextEntry();
 	}
@@ -559,11 +561,16 @@ void ReservoirSample::Finalize() {
 
 unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 	auto ingestion_sample = make_uniq<IngestionSample>(sample_count);
-	ingestion_sample->base_reservoir_sample = std::move(base_reservoir_sample);
+
+	// first add the chunks
 	auto chunk = GetChunkAndShrink();
 	while (chunk) {
 		ingestion_sample->AddToReservoir(*chunk);
+		chunk = GetChunkAndShrink();
 	}
+
+	// then assign the weights
+	ingestion_sample->base_reservoir_sample = std::move(base_reservoir_sample);
 	return ingestion_sample;
 }
 
@@ -824,40 +831,40 @@ void ReservoirSamplePercentage::Finalize() {
 
 // serialize/deserialize code.
 
-unique_ptr<BlockingSample>
-BlockingSample::MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSample> sample) {
-	if (sample->type != SampleType::RESERVOIR_SAMPLE) {
-		return std::move(sample);
-	}
-	auto reservoir_sample = unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(sample));
-	if (reservoir_sample->base_reservoir_sample->reservoir_weights.size() == 0) {
-		return make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
-	}
-	auto top_weight = reservoir_sample->base_reservoir_sample->reservoir_weights.top();
-	if (top_weight.first != NumericLimits<double>::Maximum()) {
-		D_ASSERT(top_weight.first < 0);
-		// the top weight is a valid weight, so this is a valid reservoir sample
-		return std::move(reservoir_sample);
-	}
-	// the top weight is a impossible weight value (weights are only negative), this tells us
-	// the sample was a percentage reservoir sample to start, so we pop the fake value and convert the
-	// sample to a percentage sample
-	auto sample_percentage = top_weight.second;
-	reservoir_sample->base_reservoir_sample->reservoir_weights.pop();
-	D_ASSERT(reservoir_sample->NumSamplesCollected() == reservoir_sample->GetPriorityQueueSize());
-	// if we have less than a standard vector size and there are no weights, this was almost certainly a serialized
-	// percentage sample. the only time we deserialize reservoir samples is because they are an actual sample. because
-	// of a dumb mistake I (Tom Ebergen) made, we serialize smaller percentage samples as normal reservoir samples we
-	// can recreate the percentage sample here
-	auto percentage_sample =
-	    duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
-	percentage_sample->FromReservoirSample(std::move(reservoir_sample));
-	// the base_reservoir_weights are deserialized during whatever the calling class is doing.
-	// We need these base_reservoir_weights before we create the percentage sample, because they
-	// are important. The deserializing/Conversion needs to move somewhere else that can check
-	// if the sample needs to be converted before it is appended to or read.
-	return std::move(percentage_sample);
-}
+// unique_ptr<BlockingSample>
+// BlockingSample::MaybeConvertReservoirToPercentageResevoir(unique_ptr<BlockingSample> sample) {
+// 	if (sample->type != SampleType::RESERVOIR_SAMPLE) {
+// 		return std::move(sample);
+// 	}
+// 	auto reservoir_sample = unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(sample));
+// 	if (reservoir_sample->base_reservoir_sample->reservoir_weights.size() == 0) {
+// 		return make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
+// 	}
+// 	auto top_weight = reservoir_sample->base_reservoir_sample->reservoir_weights.top();
+// 	if (top_weight.first != NumericLimits<double>::Maximum()) {
+// 		D_ASSERT(top_weight.first < 0);
+// 		// the top weight is a valid weight, so this is a valid reservoir sample
+// 		return std::move(reservoir_sample);
+// 	}
+// 	// the top weight is a impossible weight value (weights are only negative), this tells us
+// 	// the sample was a percentage reservoir sample to start, so we pop the fake value and convert the
+// 	// sample to a percentage sample
+// 	auto sample_percentage = top_weight.second;
+// 	reservoir_sample->base_reservoir_sample->reservoir_weights.pop();
+// 	D_ASSERT(reservoir_sample->NumSamplesCollected() == reservoir_sample->GetPriorityQueueSize());
+// 	// if we have less than a standard vector size and there are no weights, this was almost certainly a serialized
+// 	// percentage sample. the only time we deserialize reservoir samples is because they are an actual sample. because
+// 	// of a dumb mistake I (Tom Ebergen) made, we serialize smaller percentage samples as normal reservoir samples we
+// 	// can recreate the percentage sample here
+// 	auto percentage_sample =
+// 	    duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
+// 	percentage_sample->FromReservoirSample(std::move(reservoir_sample));
+// 	// the base_reservoir_weights are deserialized during whatever the calling class is doing.
+// 	// We need these base_reservoir_weights before we create the percentage sample, because they
+// 	// are important. The deserializing/Conversion needs to move somewhere else that can check
+// 	// if the sample needs to be converted before it is appended to or read.
+// 	return std::move(percentage_sample);
+// }
 
 idx_t IngestionSample::NumSamplesCollected() {
 	idx_t samples_collected = 0;
@@ -871,13 +878,16 @@ unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	Shrink();
 	D_ASSERT(sample_chunks.size() <= 1);
 	auto ret = make_uniq<DataChunk>();
-	if (sample_chunks.size() == 0) {
+	if (sample_chunks.size() == 0 || destroyed) {
 		return nullptr;
 	}
 	idx_t ret_chunk_size = FIXED_SAMPLE_SIZE;
 	auto &chunk_to_copy = sample_chunks.at(0);
 	if (offset + FIXED_SAMPLE_SIZE > chunk_to_copy->size()) {
 		ret_chunk_size = chunk_to_copy->size() - offset;
+	}
+	if (ret_chunk_size == 0) {
+		return nullptr;
 	}
 	auto reservoir_types = chunk_to_copy->GetTypes();
 	SelectionVector sel(FIXED_SAMPLE_SIZE);
@@ -987,12 +997,27 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
+	if (destroyed || other->destroyed) {
+		destroyed = true;
+		return;
+	}
 	D_ASSERT(other->type == SampleType::INGESTION_SAMPLE);
 	auto &other_ingest = other->Cast<IngestionSample>();
 	// shrink both samples so merging is easier
 	Shrink();
 	other_ingest.Shrink();
 
+	if (NumSamplesCollected() != FIXED_SAMPLE_SIZE) {
+		Printer::Print("num samples collected 1 "  + to_string(NumSamplesCollected()));
+		auto break_here = 0;
+	}
+	if (NumSamplesCollected() == 1228) {
+		auto break_here = 0;
+	}
+	if (other_ingest.NumSamplesCollected() != FIXED_SAMPLE_SIZE) {
+		Printer::Print("num samples collected 2 "  + to_string(other_ingest.NumSamplesCollected()));
+		auto break_here = 1;
+	}
 	auto this_as_reservoir = ConvertToReservoirSample();
 	auto other_as_reseroir = other_ingest.ConvertToReservoirSample();
 
@@ -1126,11 +1151,13 @@ idx_t IngestionSample::CreateFirstChunk(DataChunk &chunk) {
 IngestionSample::IngestionSample(idx_t sample_count, int64_t seed)
     : BlockingSample(seed), sample_count(sample_count), allocator(Allocator::DefaultAllocator()), destroyed(false) {
 	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
+	type = SampleType::INGESTION_SAMPLE;
 }
 
 IngestionSample::IngestionSample(Allocator &allocator, int64_t seed)
     : BlockingSample(seed), sample_count(FIXED_SAMPLE_SIZE), allocator(allocator), destroyed(false) {
 	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
+	type = SampleType::INGESTION_SAMPLE;
 }
 
 void IngestionSample::Destroy() {
@@ -1161,9 +1188,14 @@ void IngestionSample::Finalize() {
 	return;
 }
 
-void IngestionSample::AddToReservoir(DataChunk &chunk) {
+bool IngestionSample::SampleWasCut() {
+	return sample_chunks.size() == 1 && !base_reservoir_sample->reservoir_weights.empty() && sample_chunks.at(0)->size() < FIXED_SAMPLE_SIZE;
+}
 
-	if (sample_chunks.empty() || GetTuplesSeen() < FIXED_SAMPLE_SIZE) {
+
+void IngestionSample::AddToReservoir(DataChunk &chunk) {
+	// auto sample_was_cut = SampleWasCut();
+	if (sample_chunks.empty() || NumSamplesCollected() < FIXED_SAMPLE_SIZE) {
 
 		idx_t tuples_consumed = CreateFirstChunk(chunk);
 		base_reservoir_sample->num_entries_seen_total += tuples_consumed;
@@ -1192,9 +1224,14 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	base_reservoir_sample->num_entries_seen_total += chunk.size();
 
 	// make sure we have sampling weights
-	if (base_reservoir_sample->reservoir_weights.empty()) {
+	if (base_reservoir_sample->reservoir_weights.size() != FIXED_SAMPLE_SIZE) {
 		D_ASSERT(sample_chunks[0]->size() == FIXED_SAMPLE_SIZE);
-		base_reservoir_sample->InitializeReservoirWeights(sample_chunks[0]->size(), sample_chunks[0]->size());
+		auto num_weights_assigned = base_reservoir_sample->reservoir_weights.size();
+		auto remaining = FIXED_SAMPLE_SIZE - num_weights_assigned;
+		if (remaining != 2048) {
+			auto break_here = 0;
+		}
+		base_reservoir_sample->InitializeReservoirWeights(remaining, remaining, num_weights_assigned);
 	}
 
 	// run the logic to figure out which indexes in the sample will get booted.
@@ -1276,20 +1313,11 @@ unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserialize
 	auto type = deserializer.ReadProperty<SampleType>(101, "type");
 	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
 	unique_ptr<BlockingSample> result;
-	switch (type) {
-	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
-		result = ReservoirSamplePercentage::Deserialize(deserializer);
-		break;
-	case SampleType::RESERVOIR_SAMPLE:
-		result = ReservoirSample::Deserialize(deserializer);
-		break;
-	default:
-		throw SerializationException("Unsupported type for deserialization of BlockingSample!");
-	}
+	D_ASSERT(type == SampleType::RESERVOIR_SAMPLE);
+	result = ReservoirSample::Deserialize(deserializer);
 	result->base_reservoir_sample = std::move(base_reservoir_sample);
 	result->destroyed = destroyed;
-	auto converted_result = MaybeConvertReservoirToPercentageResevoir(std::move(result));
-	return converted_result;
+	return result;
 }
 
 void ReservoirSample::Serialize(Serializer &serializer) const {
