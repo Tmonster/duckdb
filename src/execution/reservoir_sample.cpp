@@ -735,7 +735,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	if (other_ingest.GetPriorityQueueSize() == 0 && other_ingest.NumSamplesCollected() > 0) {
 		// make sure both samples have weights
-		other_ingest.base_reservoir_sample->InitializeReservoirWeights(other_ingest.NumSamplesCollected(), other_ingest.NumSamplesCollected());
+		other_ingest.base_reservoir_sample->InitializeReservoirWeights(other_ingest.NumSamplesCollected(),
+		                                                               other_ingest.NumSamplesCollected());
 	}
 
 	// we know both ingestion samples have collected samples,
@@ -1022,6 +1023,12 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->num_entries_seen_total += tuples_consumed;
 		D_ASSERT(sample_chunks.size() == 1);
 
+		// if there are reservoir weights, and we've consumed tuples, then we need to give
+		// them weights
+		if (GetPriorityQueueSize() > 0 && tuples_consumed > 0) {
+			base_reservoir_sample->InitializeReservoirWeights(tuples_consumed, tuples_consumed, GetPriorityQueueSize());
+		}
+		Verify();
 		// the chunk filled the first FIXED_SAMPLE_SIZE chunk but still has tuples remaining
 		// slice the chunk and call AddToReservoir again.
 		if (tuples_consumed != chunk.size()) {
