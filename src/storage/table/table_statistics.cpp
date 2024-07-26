@@ -160,7 +160,7 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 		// this may shrink the ingestion sample. we don't mind
 		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingestion_sample = table_sample->Cast<IngestionSample>();
-		// first shrink the sample (if needed), then copy.
+		// first shrink the sample, then copy.
 		ingestion_sample.Shrink();
 		other.table_sample = table_sample->Copy();
 	}
@@ -172,7 +172,7 @@ void TableStatistics::Serialize(Serializer &serializer) const {
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingestion_sample = table_sample->Cast<IngestionSample>();
-		to_serialize = ingestion_sample.ConvertToReservoirSample();
+		to_serialize = ingestion_sample.ConvertToReservoirSampleToSerialize();
 	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", to_serialize, nullptr);
 }
@@ -193,9 +193,16 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 		deserializer.Unset<LogicalType>();
 	});
 	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", nullptr);
-	D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
-	auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
-	table_sample = reservoir_sample.ConvertToIngestionSample();
+	if (table_sample) {
+		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
+		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
+		table_sample = reservoir_sample.ConvertToIngestionSample();
+		auto &i_sample = table_sample->Cast<IngestionSample>();
+		i_sample.Verify();
+	} else {
+		table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+		table_sample->Destroy();
+	}
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

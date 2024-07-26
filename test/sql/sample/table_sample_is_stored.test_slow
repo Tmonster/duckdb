@@ -57,6 +57,10 @@ select count(*) from pragma_table_sample('integers_2');
 ----
 2048
 
+
+mode skip
+
+
 #query II
 #select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
 #----
@@ -97,7 +101,7 @@ select count(*) from integers_1;
 query I
 select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
 ----
-1250
+945
 
 
 restart

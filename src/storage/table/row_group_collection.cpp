@@ -1188,7 +1188,11 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	if (stats.table_sample && !stats.table_sample->destroyed) {
-		return stats.table_sample->Copy();
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Shrink();
+		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
+		return ingest_sample.ConvertToReservoirSampleToSerialize();
 	}
 	return nullptr;
 }
