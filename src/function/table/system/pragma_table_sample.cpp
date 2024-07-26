@@ -67,7 +67,6 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 		data.sample = table.GetSample();
 	}
 	if (data.sample) {
-		D_ASSERT(data.sample->type == SampleType::INGESTION_SAMPLE);
 		auto sample_chunk = data.sample->GetChunk(data.sample_offset);
 		if (sample_chunk) {
 			sample_chunk->Copy(output, 0);
