@@ -959,9 +959,7 @@ idx_t IngestionSample::CreateFirstChunk(DataChunk &chunk) {
 	new_sample_chunk->SetCardinality(first_chunk_cardinality);
 	sample_chunks.push_back(std::move(new_sample_chunk));
 
-	if (chunk.size() - required_count) {
-		return chunk.size();
-	}
+	// always return how many tuples were ingested
 	return required_count;
 }
 
