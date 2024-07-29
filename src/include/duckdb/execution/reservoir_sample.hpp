@@ -256,7 +256,7 @@ public:
 
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
 
-	IngestionSample(Allocator &allocator, int64_t seed = 1);
+	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
 
 	// TODO: this will need more info to initiliaze the correct sample type
