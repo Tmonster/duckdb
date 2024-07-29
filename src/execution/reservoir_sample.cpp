@@ -993,6 +993,24 @@ void IngestionSample::Finalize() {
 	return;
 }
 
+void IngestionSample::AddToReservoir(DataChunk &chunk, bool sample_less) {
+	auto to_sample = make_uniq<DataChunk>();
+	auto sample_chunk_size = idx_t(chunk.size() * 0.70);
+	if (sample_chunk_size > 0) {
+		SelectionVector sel(0, sample_chunk_size);
+		to_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+		to_sample->Slice(chunk, sel, sample_chunk_size);
+
+		AddToReservoir(*to_sample);
+	}
+	// update the base_reservoir_sample so that a request for a sample
+	// on a table with <204800 tuples is stil exactly 1%
+	if (chunk.size() > 0) {
+		idx_t samples_missed = chunk.size() - sample_chunk_size;
+		base_reservoir_sample->num_entries_seen_total += samples_missed;
+	}
+}
+
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (destroyed) {
 		return;
@@ -1143,8 +1161,8 @@ unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializ
 void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	auto copy = Copy();
 	auto &copy_percentage = copy->Cast<ReservoirSamplePercentage>();
-	base_reservoir_sample->reservoir_weights.emplace(
-	    NumericLimits<double>::Maximum(), idx_t(copy_percentage.sample_percentage * 100));
+	base_reservoir_sample->reservoir_weights.emplace(NumericLimits<double>::Maximum(),
+	                                                 idx_t(copy_percentage.sample_percentage * 100));
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
