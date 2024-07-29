@@ -195,15 +195,16 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<BlockingSample> ReservoirSample::Copy() const {
-	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
-	ret->base_reservoir_sample = base_reservoir_sample->Copy();
-	ret->reservoir_chunk = nullptr;
-	ret->destroyed = destroyed;
-	if (reservoir_chunk) {
-		ret->reservoir_chunk = reservoir_chunk->Copy();
-	}
-	unique_ptr<BlockingSample> base_ret = std::move(ret);
-	return base_ret;
+	throw InternalException("calling copy on reservoir sample");
+	// auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
+	// ret->base_reservoir_sample = base_reservoir_sample->Copy();
+	// ret->reservoir_chunk = nullptr;
+	// ret->destroyed = destroyed;
+	// if (reservoir_chunk) {
+	// 	ret->reservoir_chunk = reservoir_chunk->Copy();
+	// }
+	// unique_ptr<BlockingSample> base_ret = std::move(ret);
+	// return base_ret;
 }
 
 struct ReplacementHelper {
@@ -347,8 +348,9 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 }
 
 idx_t ReservoirSample::NumSamplesCollected() {
-	auto samples = GetPriorityQueueSize();
-	return samples == 0 && reservoir_chunk ? Chunk().size() : samples;
+	throw InternalException("calling num samples collected on reservoir sample");
+	// auto samples = GetPriorityQueueSize();
+	// return samples == 0 && reservoir_chunk ? Chunk().size() : samples;
 }
 
 DataChunk &ReservoirSample::Chunk() {
@@ -444,11 +446,11 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void ReservoirSamplePercentage::FromReservoirSample(unique_ptr<ReservoirSample> other) {
-	// we add tuples from the the reservoir sample
-	base_reservoir_sample = other->base_reservoir_sample->Copy();
-	finished_samples.push_back(std::move(other));
-}
+// void ReservoirSamplePercentage::FromReservoirSample(unique_ptr<ReservoirSample> other) {
+// 	// we add tuples from the the reservoir sample
+// 	base_reservoir_sample = other->base_reservoir_sample->Copy();
+// 	finished_samples.push_back(std::move(other));
+// }
 
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw InternalException("reservoir sample percentage merge called");
@@ -479,36 +481,24 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 }
 
 idx_t ReservoirSamplePercentage::NumSamplesCollected() {
-	if (destroyed) {
-		return 0;
-	}
-	idx_t samples_collected = 0;
-	for (auto &finished_sample : finished_samples) {
-		samples_collected += finished_sample->NumSamplesCollected();
-	}
-	if (!is_finalized && current_sample) {
-		// Sometimes a percentage sample can overcollect. When finalize is called the
-		// percentage becomes accurate, however.
-		samples_collected += idx_t(current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage);
-	}
-	return samples_collected;
+	throw InternalException("calling numsamples collected on reservoir sample percentage");
+	// if (destroyed) {
+	// 	return 0;
+	// }
+	// idx_t samples_collected = 0;
+	// for (auto &finished_sample : finished_samples) {
+	// 	samples_collected += finished_sample->NumSamplesCollected();
+	// }
+	// if (!is_finalized && current_sample) {
+	// 	// Sometimes a percentage sample can overcollect. When finalize is called the
+	// 	// percentage becomes accurate, however.
+	// 	samples_collected += idx_t(current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage);
+	// }
+	// return samples_collected;
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
-	auto ret = make_uniq<ReservoirSamplePercentage>(Allocator::DefaultAllocator(), (sample_percentage * 100), 1);
-	ret->base_reservoir_sample = base_reservoir_sample->Copy();
-	auto cur_sample_copy = current_sample->Copy();
-	D_ASSERT(current_sample->type == SampleType::RESERVOIR_SAMPLE);
-	ret->current_sample = duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(current_sample->Copy());
-
-	for (auto &finished_sample : finished_samples) {
-		ret->finished_samples.push_back(
-		    duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(finished_sample->Copy()));
-	}
-	ret->current_count = current_count;
-	ret->is_finalized = is_finalized;
-	ret->reservoir_sample_size = reservoir_sample_size;
-	return unique_ptr_cast<ReservoirSamplePercentage, BlockingSample>(std::move(ret));
+	throw InternalException("calling copy on reservoir sample percentage");
 }
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {
@@ -1001,11 +991,6 @@ idx_t IngestionSample::GetReplacementCount(idx_t theoretical_chunk_length) {
 
 void IngestionSample::Finalize() {
 	return;
-}
-
-bool IngestionSample::SampleWasCut() {
-	return sample_chunks.size() == 1 && !base_reservoir_sample->reservoir_weights.empty() &&
-	       sample_chunks.at(0)->size() < FIXED_SAMPLE_SIZE;
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
