@@ -99,7 +99,7 @@ void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, d
 
 	double r2 = with_weight;
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.emplace(std::make_pair(-r2, entry_index));
+	reservoir_weights.emplace(-r2, entry_index);
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }
@@ -571,7 +571,7 @@ unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	Shrink();
 	D_ASSERT(sample_chunks.size() <= 1);
 	auto ret = make_uniq<DataChunk>();
-	if (sample_chunks.size() == 0 || destroyed) {
+	if (sample_chunks.empty() || destroyed) {
 		return nullptr;
 	}
 	idx_t ret_chunk_size = FIXED_SAMPLE_SIZE;
@@ -856,7 +856,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	if (sample_chunks.empty() || destroyed) {
 		auto ret = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
 		ret->Destroy();
-		return ret;
+		return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 	}
 
 	// since this is for serialization, we really need to make sure keep a
@@ -920,7 +920,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 		                       num_samples_to_keep, 0, 0);
 	}
 	D_ASSERT(ret->GetPriorityQueueSize() == ret->reservoir_chunk->chunk.size());
-	return ret;
+	return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 }
 
 idx_t IngestionSample::CreateFirstChunk(DataChunk &chunk) {
@@ -1075,7 +1075,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_offset += offset;
 	}
 
-	if (indexes_to_copy.size() == 0) {
+	if (indexes_to_copy.empty()) {
 		Verify();
 		// we don't need to sample anymore
 		return;
@@ -1106,7 +1106,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		offset_in_ingestion_sample += sample_chunk->size();
 	}
 	idx_t new_index = offset_in_ingestion_sample;
-	// I actually don't care about what indexes I'm copying. I've already copied data from the
+	// It doesn't matter what indexes are being copied. I've already copied data from the
 	// source/ingested chunk to my new sample chunk. I need to record the indexes of the new samples
 	// in the sampling info
 	for (idx_t i = 0; i < indexes_to_copy.size(); i++) {
@@ -1159,7 +1159,7 @@ void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	auto copy = Copy();
 	auto &copy_percentage = copy->Cast<ReservoirSamplePercentage>();
 	base_reservoir_sample->reservoir_weights.emplace(
-	    std::make_pair(NumericLimits<double>::Maximum(), idx_t(copy_percentage.sample_percentage * 100)));
+	    NumericLimits<double>::Maximum(), idx_t(copy_percentage.sample_percentage * 100));
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
