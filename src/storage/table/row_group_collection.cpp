@@ -392,7 +392,16 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	auto stats_lock = stats.GetLock();
 	// all performance related to ingestion samping happens in the table same code
 	if (stats.table_sample) {
-		stats.table_sample->AddToReservoir(chunk);
+		// collect 70% of the chunk
+		auto to_sample = make_uniq<DataChunk>();
+		auto sample_chunk_size = idx_t(chunk.size() * 0.70);
+		if (sample_chunk_size > 0) {
+			SelectionVector sel(0, sample_chunk_size);
+			to_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+			to_sample->Slice(chunk, sel, sample_chunk_size);
+
+			stats.table_sample->AddToReservoir(*to_sample);
+		}
 	}
 
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
