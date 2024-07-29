@@ -221,7 +221,7 @@ public:
 	//! Fetches a chunk from the sample. This method is not destructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
-	void FromReservoirSample(unique_ptr<ReservoirSample> other);
+	// void FromReservoirSample(unique_ptr<ReservoirSample> other);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -271,10 +271,6 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 	void Merge(unique_ptr<BlockingSample> other) override;
-
-	// A sample was cut if there are <2048 tuples in the sample, but there are reservoir weights.
-	// this means the tables&sample were serialized when the tuple count < 100 * fixed_sample_size
-	bool SampleWasCut();
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
