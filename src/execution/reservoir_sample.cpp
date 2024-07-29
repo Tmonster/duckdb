@@ -668,8 +668,8 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->destroyed = destroyed;
-	if (sample_chunks.size() == 0 || destroyed) {
-		return ret;
+	if (sample_chunks.empty() || destroyed) {
+		return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 	}
 	// create one large chunk from the collected chunk samples.
 	// before calling copy(), shrink() must be called.
@@ -693,7 +693,7 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	D_ASSERT(sample_chunks.size() == 1);
 
 	ret->Verify();
-	return ret;
+	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 }
 
 void IngestionSample::Verify() {
@@ -750,9 +750,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	idx_t num_samples_to_keep = MinValue<idx_t>(FIXED_SAMPLE_SIZE, total_samples);
 
 	Verify();
-	if (total_samples == 2049) {
-		auto break_here = 0;
-	}
 	// if there are more than FIXED_SAMPLE_SIZE samples, we want to keep only the
 	// highest weighted FIXED_SAMPLE_SIZE samples
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
@@ -1114,7 +1111,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	// I actually don't care about what indexes I'm copying. I've already copied data from the
 	// source/ingested chunk to my new sample chunk. I need to record the indexes of the new samples
 	// in the sampling info
-	for (auto &copied_index : indexes_to_copy) {
+	for (idx_t i = 0; i < indexes_to_copy.size(); i++) {
 		auto sample_to_replace = base_reservoir_sample->reservoir_weights.top();
 		base_reservoir_sample->reservoir_weights.pop();
 		auto new_weight = -sample_to_replace.first;
