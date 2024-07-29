@@ -270,6 +270,7 @@ public:
 	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
+	void AddToReservoir(DataChunk &input, bool sample_less);
 	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
