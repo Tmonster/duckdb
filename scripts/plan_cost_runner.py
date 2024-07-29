@@ -72,7 +72,7 @@ class PlanCost:
         # was not greatly affected
         total_card_increased = self.total > other.total
         build_card_increased = self.build_side > other.build_side
-        if total_card_increased and build_card_increased:
+        if total_card_increased or build_card_increased:
             return True
         # we know the total cardinality is either the same or higher and the build side has not increased
         # in this case fall back to the timing. It's possible that even if the probe side is higher
