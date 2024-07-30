@@ -914,7 +914,6 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 idx_t IngestionSample::CreateFirstChunk(DataChunk &chunk) {
 	unique_ptr<DataChunk> new_sample_chunk;
 	idx_t offset = 0;
-	idx_t source_count = chunk.size();
 	idx_t required_count = FIXED_SAMPLE_SIZE;
 	idx_t first_chunk_cardinality = chunk.size();
 	if (sample_chunks.empty()) {
@@ -933,8 +932,7 @@ idx_t IngestionSample::CreateFirstChunk(DataChunk &chunk) {
 		new_sample_chunk = std::move(sample_chunks[0]);
 		required_count = MinValue(FIXED_SAMPLE_SIZE - new_sample_chunk->size(), chunk.size());
 		if (chunk.size() > required_count) {
-			source_count = required_count;
-			D_ASSERT(new_sample_chunk->size() + source_count == FIXED_SAMPLE_SIZE);
+			D_ASSERT(new_sample_chunk->size() + required_count == FIXED_SAMPLE_SIZE);
 		}
 		offset = new_sample_chunk->size();
 		sample_chunks.clear();
@@ -1133,7 +1131,7 @@ void BlockingSample::Serialize(Serializer &serializer) const {
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
 	auto base_reservoir_sample =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
-	auto type = deserializer.ReadProperty<SampleType>(101, "type");
+	auto type = deserializer.ReadProperty<SampleType>(101, "type"); // NOLINT
 	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
 	unique_ptr<BlockingSample> result;
 	D_ASSERT(type == SampleType::RESERVOIR_SAMPLE);
