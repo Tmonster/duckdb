@@ -34,13 +34,15 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
-	void TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
+	void TryFlipJoinChildren(LogicalOperator &op);
 
 	BuildSize GetBuildSizes(LogicalOperator &op);
 
 private:
 	ClientContext &context;
 	vector<ColumnBinding> preferred_on_probe_side;
+
+	idx_t ChildHasJoins(LogicalOperator &op);
 };
 
 } // namespace duckdb
