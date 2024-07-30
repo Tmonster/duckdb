@@ -196,6 +196,7 @@ def main():
 
         if f.find('78') >= 0:
             import pdb
+
             pdb.set_trace()
         if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
