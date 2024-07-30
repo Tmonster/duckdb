@@ -295,7 +295,7 @@ private:
 	//! called be AddToReservoir()
 	idx_t CreateFirstChunk(DataChunk &chunk);
 
-	vector<unique_ptr<DataChunk>> sample_chunks;
+	unique_ptr<DataChunk> sample_chunk;
 	bool destroyed;
 };
 
