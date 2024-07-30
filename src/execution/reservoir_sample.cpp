@@ -991,7 +991,7 @@ void IngestionSample::Finalize() {
 
 void IngestionSample::AddToReservoir(DataChunk &chunk, bool sample_less) {
 	auto to_sample = make_uniq<DataChunk>();
-	auto sample_chunk_size = idx_t(chunk.size() * 0.70);
+	auto sample_chunk_size = idx_t(chunk.size() * 0.50);
 	if (sample_chunk_size > 0) {
 		SelectionVector sel(0, sample_chunk_size);
 		to_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());

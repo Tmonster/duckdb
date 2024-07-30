@@ -32,8 +32,8 @@ select count(*) from pragma_table_sample('materialized_range');
 query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1	1024
-2	1024
+1	1023
+2	1025
 
 
 # insert another
