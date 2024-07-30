@@ -20,7 +20,6 @@ explain select * from tbl1 left join tbl2 on a = b join tbl3 on a=c;
 ----
 physical_plan	<REGEX>:.*LEFT.*INNER.*
 
-
 #statement ok
 #explain select a, b, c from (select a, b from tbl1 left join tbl2 on a = b) join tbl3 on b=c;
 #
