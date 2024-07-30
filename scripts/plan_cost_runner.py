@@ -11,7 +11,6 @@ NEW_DB_NAME = "new.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"
 
 ENABLE_PROFILING = "PRAGMA enable_profiling=json"
-DISABLE_JOIN_FILTER_PUSHDOWN = "PRAGMA disabled_optimizers='join_filter_pushdown'"
 PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
@@ -78,7 +77,7 @@ class PlanCost:
         # we know the total cardinality is either the same or higher and the build side has not increased
         # in this case fall back to the timing. It's possible that even if the probe side is higher
         # since the tuples are in flight, the plan executes faster
-        return self.time > other.time * 1.03
+        return self.time > other.time
 
     def __lt__(self, other):
         if self == other:
@@ -115,7 +114,7 @@ def op_inspect(op) -> PlanCost:
 def query_plan_cost(cli, dbname, query):
     try:
         subprocess.run(
-            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{DISABLE_JOIN_FILTER_PUSHDOWN};{PROFILE_OUTPUT};{query}\"",
+            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
             shell=True,
             check=True,
             capture_output=True,
