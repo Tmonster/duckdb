@@ -17,8 +17,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
-#include <fmt/format.h>
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
