@@ -264,6 +264,10 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		new_denom *= extra_ratio;
 		return new_denom;
 	}
+	case JoinType::LEFT: {
+		// cardinality is 2x for left joins
+		return new_denom * 0.5;
+	}
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
