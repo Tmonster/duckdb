@@ -1168,10 +1168,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->GetValue(0, 2).ToString() == "test_table_depth");
 		string expected = R"([
 			{
-				'db_schema_name': information_schema,
-				'db_schema_tables': NULL
-			},
-			{
 				'db_schema_name': main,
 				'db_schema_tables': [
 					{
@@ -1181,6 +1177,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 						'table_constraints': []
 					}
 				]
+			},
+			{
+				'db_schema_name': information_schema,
+				'db_schema_tables': NULL
 			},
 			{
 				'db_schema_name': pg_catalog,
