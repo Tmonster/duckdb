@@ -103,11 +103,10 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 
 idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			return 1 + ChildHasJoins(*op.children[0]) + ChildHasJoins(*op.children[1]);
-		}
+		return 1 + ChildHasJoins(*op.children[0]) + ChildHasJoins(*op.children[1]);
+	}
 	return 0;
 }
-
 
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto &left_child = op.children[0];
