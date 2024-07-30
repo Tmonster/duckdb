@@ -4,8 +4,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
-#include <fmt/format.h>
-
 namespace duckdb {
 
 void ReservoirChunk::Serialize(Serializer &serializer) const {
