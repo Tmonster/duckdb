@@ -365,9 +365,16 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 
 	// first add the chunks
 	auto chunk = GetChunkAndShrink();
+	D_ASSERT(chunk->size() <= FIXED_SAMPLE_SIZE);
+	idx_t num_chunks_added = 0;
 	while (chunk) {
+		num_chunks_added += 1;
 		ingestion_sample->AddToReservoir(*chunk);
 		chunk = GetChunkAndShrink();
+	}
+
+	if (num_chunks_added > 1) {
+		throw InternalException("bruh, i dunno what happened");
 	}
 
 	// then assign the weights
@@ -648,6 +655,10 @@ void IngestionSample::Shrink() {
 }
 
 unique_ptr<BlockingSample> IngestionSample::Copy() const {
+	return Copy(false);
+}
+
+unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	auto ret = make_uniq<IngestionSample>(sample_count);
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
@@ -663,18 +674,30 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 
 	// create a new sample chunk to store new samples
 	auto new_sample_chunk = make_uniq<DataChunk>();
-	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(), sample_chunk->size());
+	D_ASSERT(sample_chunk->size() <= FIXED_SAMPLE_SIZE);
+	idx_t new_sample_chunk_size = for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
+	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(), new_sample_chunk_size);
 	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
 		// TODO: should the validity mask be the capacity or the size?
-		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(FIXED_SAMPLE_SIZE);
+		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
 	}
 	// copy chunk to copy into new sample chunk
+	Printer::Print("new_sample_chunk_size is " + to_string(new_sample_chunk_size));
+	Printer::Print("old sample size is " + to_string(sample_chunk->size()));
+	if (sample_chunk->size() == 25) {
+		sample_chunk->Print();
+	}
 	sample_chunk->Copy(*new_sample_chunk);
+
 	new_sample_chunk->SetCardinality(sample_chunk->size());
 
+	Printer::Print("here too");
 	ret->sample_chunk = std::move(new_sample_chunk);
+	Printer::Print("here three");
+
 
 	ret->Verify();
+	Printer::Print("returning");
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 }
 
@@ -687,6 +710,7 @@ void IngestionSample::Verify() {
 	} else if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE && GetPriorityQueueSize() > 0) {
 		D_ASSERT(NumSamplesCollected() == GetPriorityQueueSize());
 	}
+	sample_chunk->Verify();
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
