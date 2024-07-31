@@ -553,7 +553,7 @@ idx_t IngestionSample::NumSamplesCollected() {
 
 unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	Shrink();
-	D_ASSERT(sample_chunks.size() <= 1);
+	D_ASSERT(sample_chunk.size() <= 1);
 	auto ret = make_uniq<DataChunk>();
 	if (!sample_chunk || destroyed) {
 		return nullptr;
@@ -604,7 +604,7 @@ void IngestionSample::Shrink() {
 	}
 
 	// create one large chunk from the collected chunk samples.
-	D_ASSERT(!sample_chunks.empty());
+	D_ASSERT(sample_chunk.size() > 0);
 	auto &chunk_to_copy = sample_chunk;
 
 	// create a new sample chunk to store new samples
@@ -643,7 +643,7 @@ void IngestionSample::Shrink() {
 	Printer::Print("shrink is done, there are " + to_string(sample_chunk->size()) + " sample chunks now");
 	Verify();
 	// We should only have one sample chunk now.
-	D_ASSERT(sample_chunks.size() == 1);
+	D_ASSERT(sample_chunk.size() > 0);
 }
 
 unique_ptr<BlockingSample> IngestionSample::Copy() const {
