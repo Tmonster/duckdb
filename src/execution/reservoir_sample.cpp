@@ -548,6 +548,9 @@ void ReservoirSamplePercentage::Finalize() {
 }
 
 idx_t IngestionSample::NumSamplesCollected() {
+	if (!sample_chunk) {
+		return 0;
+	}
 	return sample_chunk->size();
 }
 
