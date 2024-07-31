@@ -916,7 +916,6 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 	idx_t offset = 0;
 	idx_t ingested_count = 0;
-	idx_t first_chunk_cardinality = chunk.size();
 	if (!sample_chunk) {
 		if (chunk.size() > FIXED_SAMPLE_SIZE) {
 			throw InternalException("Creating sample with DataChunk that is larger than the fixed sample size");
@@ -939,9 +938,6 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 			VectorOperations::Copy(chunk.data[col_idx], sample_chunk->data[col_idx], ingested_count, 0, offset);
 		}
 		sample_chunk->SetCardinality(new_cardinality);
-	}
-	if (ingested_count != 0) {
-		auto break_here = 0;
 	}
 	// always return how many tuples were ingested
 	return ingested_count;
@@ -1058,7 +1054,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	// assign weight to first FIXED SAMPLE SIZE
 	idx_t assigned_weights = 0;
 	if (GetPriorityQueueSize() == 0 && sample_chunk->size() >= FIXED_SAMPLE_SIZE) {
-		auto num_weights_assigned = 0;
+		idx_t num_weights_assigned = 0;
 		assigned_weights = FIXED_SAMPLE_SIZE - num_weights_assigned;
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
