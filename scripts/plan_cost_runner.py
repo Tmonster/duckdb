@@ -193,10 +193,6 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
-        if f.find('78') >= 0:
-            import pdb
-
-            pdb.set_trace()
         if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
         elif new_cost > old_cost:
