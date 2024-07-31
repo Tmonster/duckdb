@@ -266,6 +266,7 @@ public:
 	void Shrink();
 
 	unique_ptr<BlockingSample> Copy() const override;
+	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 
 	idx_t GetTuplesSeen();
 	idx_t NumSamplesCollected() override;
