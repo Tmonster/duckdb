@@ -255,6 +255,7 @@ public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
 
 	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
+	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
 
 	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
@@ -270,7 +271,7 @@ public:
 	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
-	void AddToReservoir(DataChunk &input, bool sample_less);
+	// void AddToReservoir(DataChunk &input, bool sample_less);
 	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
@@ -293,7 +294,7 @@ private:
 	Allocator &allocator;
 	//! given the first chunk, create the first chunk
 	//! called be AddToReservoir()
-	idx_t CreateFirstChunk(DataChunk &chunk);
+	idx_t FillReservoir(DataChunk &chunk);
 
 	unique_ptr<DataChunk> sample_chunk;
 	bool destroyed;
