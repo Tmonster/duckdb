@@ -655,10 +655,11 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	if (!sample_chunk || destroyed) {
 		return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 	}
+
 	// create one large chunk from the collected chunk samples.
 	// before calling copy(), shrink() must be called.
 	// Shrink() cannot be called within copy since copy is const.
-	D_ASSERT(sample_chunk->size() >= 0);
+	D_ASSERT(sample_chunk);
 
 	// create a new sample chunk to store new samples
 	auto new_sample_chunk = make_uniq<DataChunk>();
@@ -672,8 +673,6 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	new_sample_chunk->SetCardinality(sample_chunk->size());
 
 	ret->sample_chunk = std::move(new_sample_chunk);
-	// We should only have one sample chunk now.
-	D_ASSERT(sample_chunk->size() >= 0);
 
 	ret->Verify();
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
