@@ -350,40 +350,40 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 }
 
 void DataChunk::Verify() {
-	#ifdef DEBUG
-		D_ASSERT(size() <= capacity);
+#ifdef DEBUG
+	D_ASSERT(size() <= capacity);
 
-		// verify that all vectors in this chunk have the chunk selection vector
-		for (idx_t i = 0; i < ColumnCount(); i++) {
-			data[i].Verify(size());
-		}
+	// verify that all vectors in this chunk have the chunk selection vector
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		data[i].Verify(size());
+	}
 
-		if (!ColumnCount()) {
-			// don't try to round-trip dummy data chunks with no data
-			// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
-			// payload so the payload will be such an empty data chunk
-			return;
-		}
+	if (!ColumnCount()) {
+		// don't try to round-trip dummy data chunks with no data
+		// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
+		// payload so the payload will be such an empty data chunk
+		return;
+	}
 
-		// verify that we can round-trip chunk serialization
-		MemoryStream mem_stream;
-		BinarySerializer serializer(mem_stream);
+	// verify that we can round-trip chunk serialization
+	MemoryStream mem_stream;
+	BinarySerializer serializer(mem_stream);
 
-		serializer.Begin();
-		Serialize(serializer);
-		serializer.End();
+	serializer.Begin();
+	Serialize(serializer);
+	serializer.End();
 
-		mem_stream.Rewind();
+	mem_stream.Rewind();
 
-		BinaryDeserializer deserializer(mem_stream);
-		DataChunk new_chunk;
+	BinaryDeserializer deserializer(mem_stream);
+	DataChunk new_chunk;
 
-		deserializer.Begin();
-		new_chunk.Deserialize(deserializer);
-		deserializer.End();
+	deserializer.Begin();
+	new_chunk.Deserialize(deserializer);
+	deserializer.End();
 
-		D_ASSERT(size() == new_chunk.size());
-	#endif
+	D_ASSERT(size() == new_chunk.size());
+#endif
 }
 
 void DataChunk::Print() const {
