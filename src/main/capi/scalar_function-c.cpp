@@ -52,7 +52,8 @@ unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &, ScalarFunction 
 }
 
 void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &bind_info = state.expr.Cast<BoundFunctionExpression>().bind_info;
+	auto &function = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_info = function.bind_info;
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
 
 	auto all_const = input.AllConstant();
@@ -64,7 +65,7 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	if (!c_bind_info.info.success) {
 		throw InvalidInputException(c_bind_info.info.error);
 	}
-	if (all_const) {
+	if (all_const && (input.size() == 1 || function.function.stability != FunctionStability::VOLATILE)) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
@@ -111,6 +112,14 @@ void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+}
+
+void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
+	if (!function) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function.stability = duckdb::FunctionStability::VOLATILE;
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
