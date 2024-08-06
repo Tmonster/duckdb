@@ -89,6 +89,18 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
+def is_measured_join(op) -> bool:
+    if 'name' not in op:
+        return False
+    if op['name'] != 'HASH_JOIN':
+        return False
+    if 'Join Type' not in op['extra_info']:
+        return False
+    if op['extra_info']['Join Type'].startswith('MARK'):
+        return False
+    return True
+
+
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if 'Query' in op:
