@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/0_aggregate_directly_on_the_struct.benchmark
+# name: benchmark/RealNest/aggregate_directly_on_the_struct.benchmark
 # description: Aggregate (sum) directly on the struct, group by one parameter
 # group: [RealNest]
 
@@ -10,6 +10,10 @@ require json
 load
 CREATE OR REPLACE TABLE Run2012B_SingleMu AS SELECT * FROM read_json('duckdb_benchmark_data/hep-adl-ethz-Run2012B_SingleMu/data.jsonl');
 
+
+# this is accessing one element of the structure per row.
+# I like what we had in select_avg_from_unnested_structure.benchmark a little bit better because it
+# has to access every element of the list in the struct
 run
 SELECT PV.npvs, sum(PV.x) AS sum_x, sum(PV.y) AS sum_y, sum(PV.z) AS sum_z 
     FROM Run2012B_SingleMu

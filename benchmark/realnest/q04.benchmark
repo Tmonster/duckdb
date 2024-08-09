@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/4_filter_unnested_struct.benchmark
+# name: benchmark/RealNest/filter_unnested_struct.benchmark
 # description: Filter unnested struct Tau
 # group: [RealNest]
 
@@ -9,6 +9,8 @@ require json
 
 load
 CREATE TABLE Run2012B_SingleMu AS SELECT * FROM read_json('duckdb_benchmark_data/hep-adl-ethz-Run2012B_SingleMu/data.jsonl');
+
+# again this uses unnest, need to see if there might be a better way.
 
 run
 SELECT

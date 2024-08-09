@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/1_unnest_and_sum_one_json_struct.benchmark
+# name: benchmark/RealNest/unnest_and_sum_one_json_struct.benchmark
 # description: Agregate (sum) all each parameter of unnested struct, group by one parameter
 # group: [RealNest]
 

@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/2_create_table_combined_all_json_fields.benchmark
+# name: benchmark/RealNest/create_table_combined_all_json_fields.benchmark
 # description: Create a table combining all the fields from a JSON file, unnesting all structures
 # group: [RealNest]
 
@@ -6,6 +6,8 @@ name create_table_combined_all_json_fields
 group real_nest
 
 require json
+
+# I think the join keys could use a bit more thought. We might need a different dataset
 
 load
 CREATE TABLE Run2012B_SingleMu AS SELECT * FROM read_json('duckdb_benchmark_data/hep-adl-ethz-Run2012B_SingleMu/data.jsonl');

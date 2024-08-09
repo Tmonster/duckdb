@@ -1,0 +1,16 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [realnest]
+
+name Q${QUERY_NUMBER_PADDED}
+group realnest
+
+require httpfs
+
+require json
+
+cache realnest.duckdb
+
+load benchmark/micro/realnest/queries/load.sql
+
+run benchmark/micro/realnest/${QUERY_NUMBER_PADDED}.sql
