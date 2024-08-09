@@ -1,6 +1,6 @@
 create table twitter as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/twitter-stream-2023-01/data.jsonl');
 create table cord as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/cord-19-document_parses/data.jsonl');
-create table open_street_map as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/gharchive-CommitCommentEvent/data.jsonl');
+create table open_street_map as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/daylight-openstreetmap-osm_features/data.jsonl');
 create table run2012B_singleMu as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/hep-adl-ethz-Run2012B_SingleMu/data.jsonl')
 
 CREATE VIEW unnested_hlt AS (SELECT rowid, UNNEST(HLT) AS hlt FROM Run2012B_SingleMu);

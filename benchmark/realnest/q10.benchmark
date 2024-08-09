@@ -1,0 +1,10 @@
+# name: benchmark/RealNest/q10.benchmark
+# description: Multi layer from 6 layers deep unnest directly
+# group: [RealNest]
+
+name twitter_unnest_directly
+group real_nest
+
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=10
+QUERY_NUMBER_PADDED=10
