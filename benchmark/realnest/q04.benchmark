@@ -1,0 +1,10 @@
+# name: benchmark/RealNest/filter_unnested_struct.benchmark
+# description: Filter unnested struct Tau
+# group: [RealNest]
+
+name filter_unnested_struct
+group real_nest
+
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=4
+QUERY_NUMBER_PADDED=04

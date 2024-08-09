@@ -1,0 +1,10 @@
+# name: benchmark/RealNest/unnest_and_sum_one_json_struct.benchmark
+# description: Agregate (sum) all each parameter of unnested struct, group by one parameter
+# group: [RealNest]
+
+name unnest_and_sum_one_json_struct
+group real_nest
+
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=2
+QUERY_NUMBER_PADDED=02

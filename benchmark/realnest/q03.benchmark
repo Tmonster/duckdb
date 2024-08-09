@@ -1,0 +1,10 @@
+# name: benchmark/RealNest/create_table_combined_all_json_fields.benchmark
+# description: Create a table combining all the fields from a JSON file, unnesting all structures
+# group: [RealNest]
+
+name create_table_combined_all_json_fields
+group real_nest
+
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=3
+QUERY_NUMBER_PADDED=03
