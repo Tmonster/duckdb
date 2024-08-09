@@ -1,0 +1,1 @@
+SELECT urls.url FROM (SELECT UNNEST(users.entities.url.urls) AS urls FROM (SELECT UNNEST(includes.users) AS users FROM twitter));

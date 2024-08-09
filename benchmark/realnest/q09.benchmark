@@ -5,9 +5,6 @@
 name twitter_unnest_directly
 group real_nest
 
-require json
-
-run
-SELECT unnested_urls.url FROM (
-    SELECT unnest(unnested_users.entities.url.urls) AS unnested_urls FROM (
-        SELECT unnest(includes.users) AS unnested_users FROM read_json('duckdb_benchmark_data/twitter-stream-2023-01/data.jsonl')));
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=9
+QUERY_NUMBER_PADDED=09

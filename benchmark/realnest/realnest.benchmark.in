@@ -11,6 +11,6 @@ require json
 
 cache realnest.duckdb
 
-load benchmark/micro/realnest/queries/load.sql
+load benchmark/realnest/queries/load.sql
 
-run benchmark/micro/realnest/${QUERY_NUMBER_PADDED}.sql
+run benchmark/realnest/queries/q${QUERY_NUMBER_PADDED}.sql
