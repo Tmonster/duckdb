@@ -110,11 +110,21 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
 		if (other.table_sample) {
-			table_sample->Merge(std::move(other.table_sample));
+			D_ASSERT(other.table_sample->type == SampleType::INGESTION_SAMPLE);
+			auto &other_ingest = other.table_sample->Cast<IngestionSample>();
+			other_ingest.Shrink();
+			auto other_table_sample_copy = other_ingest.Copy();
+			table_sample->Merge(std::move(other_table_sample_copy));
+			D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
+			auto &this_sample_ingest = table_sample->Cast<IngestionSample>();
+			this_sample_ingest.sample_chunk->Print();
 		}
 		// if no other.table sample, do nothig
 	} else {
-		table_sample = std::move(other.table_sample);
+		if (other.table_sample) {
+			auto other_table_sample_copy = other.table_sample->Copy();
+			table_sample = std::move(other_table_sample_copy);
+		}
 	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {

@@ -291,7 +291,6 @@ public:
 	// new chunk length?
 	idx_t GetReplacementCount(idx_t theoretical_chunk_length);
 
-private:
 	idx_t sample_count;
 	Allocator &allocator;
 	//! given the first chunk, create the first chunk
