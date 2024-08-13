@@ -112,6 +112,7 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 		if (other.table_sample) {
 			table_sample->Merge(std::move(other.table_sample));
 		}
+		// if no other.table sample, do nothig
 	} else {
 		table_sample = std::move(other.table_sample);
 	}
