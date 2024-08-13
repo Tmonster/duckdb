@@ -171,6 +171,7 @@ public:
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Destroy() override;
 	void Finalize() override;
+	void Verify();
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
