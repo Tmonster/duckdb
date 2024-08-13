@@ -451,12 +451,6 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-// void ReservoirSamplePercentage::FromReservoirSample(unique_ptr<ReservoirSample> other) {
-// 	// we add tuples from the the reservoir sample
-// 	base_reservoir_sample = other->base_reservoir_sample->Copy();
-// 	finished_samples.push_back(std::move(other));
-// }
-
 void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw InternalException("reservoir sample percentage merge called");
 }
@@ -683,9 +677,6 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
 	}
 	// copy chunk to copy into new sample chunk
-	if (sample_chunk->size() == 25) {
-		sample_chunk->Print();
-	}
 	sample_chunk->Copy(*new_sample_chunk);
 
 	new_sample_chunk->SetCardinality(sample_chunk->size());
@@ -837,41 +828,40 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
 
-	double max_weight;
-	idx_t max_weight_index;
-	if (GetPriorityQueueSize() == 0) {
-		max_weight = other_ingest.base_reservoir_sample->reservoir_weights.top().first;
-		max_weight_index = other_ingest.base_reservoir_sample->reservoir_weights.top().second;
-	} else {
-		max_weight = base_reservoir_sample->reservoir_weights.top().first;
-		max_weight_index = base_reservoir_sample->reservoir_weights.top().second;
-	}
+	auto max_weight = base_reservoir_sample->min_weight_threshold;
+	auto max_weight_index = base_reservoir_sample->min_weighted_entry_index;
 
 	SelectionVector sel_other(other_ingest.GetPriorityQueueSize());
 
 	D_ASSERT(sample_count_this <= num_samples_to_keep);
 	idx_t chunk_offset = 0;
-	idx_t index_offset = NumSamplesCollected();
+	// now we are adding entries from the other base_reservoir_sampling object to this
+	// while also filling in the selection vector we wil use to copy values.
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
+		idx_t index_for_new_pair = chunk_offset + sample_chunk->size();
 		if (other_top.first > max_weight) {
 			max_weight = other_top.first;
-			max_weight_index = chunk_offset + sample_chunk->size();
+			max_weight_index = index_for_new_pair;
 		}
-		D_ASSERT(other_top.second < other_ingest.sample_chunk->size());
+
 		sel_other.set_index(chunk_offset, other_top.second);
 
 		// make sure that the sample indexes are (this.sample_chunk.size() + chunk_offfset)
-		other_top.second = index_offset + chunk_offset;
+		other_top.second = index_for_new_pair;
 		base_reservoir_sample->reservoir_weights.push(other_top);
 		chunk_offset += 1;
 	}
-	D_ASSERT(chunk_offset <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	base_reservoir_sample->min_weight_threshold = -max_weight;
+	base_reservoir_sample->min_weight_threshold = max_weight;
 	base_reservoir_sample->num_entries_seen_total =
 	    base_reservoir_sample->num_entries_seen_total + other_ingest.base_reservoir_sample->num_entries_seen_total;
+
+	if (GetPriorityQueueSize() > 0) {
+		Printer::Print("before copy");
+		sample_chunk->Print();
+	}
 
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
@@ -883,6 +873,11 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
+	if (GetPriorityQueueSize() > 0) {
+		Printer::Print("after copy");
+		sample_chunk->Print();
+	}
+
 	Verify();
 }
 
@@ -1034,25 +1029,6 @@ void IngestionSample::Finalize() {
 	return;
 }
 
-// void IngestionSample::AddToReservoir(DataChunk &chunk, bool sample_less) {
-// 	auto to_sample = make_uniq<DataChunk>();
-// 	AddToReservoir(chunk);
-// auto sample_chunk_size = idx_t(chunk.size());
-// if (sample_chunk_size > 0) {
-// 	SelectionVector sel(0, sample_chunk_size);
-// 	to_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-// 	to_sample->Slice(chunk, sel, sample_chunk_size);
-//
-// 	AddToReservoir(*to_sample);
-// }
-// // update the base_reservoir_sample so that a request for a sample
-// // on a table with <204800 tuples is stil exactly 1%
-// if (chunk.size() > 0) {
-// 	idx_t samples_missed = chunk.size() - sample_chunk_size;
-// 	base_reservoir_sample->num_entries_seen_total += samples_missed;
-// }
-// }
-
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (destroyed) {
 		return;
@@ -1094,8 +1070,6 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		return;
 	}
 
-	base_reservoir_sample->num_entries_seen_total += chunk.size();
-
 	// at this point our sample_chunk has at least FIXED SAMPLE SIZE samples.
 	D_ASSERT(sample_chunk->size() >= FIXED_SAMPLE_SIZE);
 
@@ -1107,6 +1081,8 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		assigned_weights = FIXED_SAMPLE_SIZE - num_weights_assigned;
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
+
+	base_reservoir_sample->num_entries_seen_total += chunk.size();
 
 	// run the logic to figure out which indexes in the sample will get booted.
 	idx_t remaining = chunk.size();
