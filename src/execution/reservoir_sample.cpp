@@ -675,30 +675,42 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	// create a new sample chunk to store new samples
 	auto new_sample_chunk = make_uniq<DataChunk>();
 	D_ASSERT(sample_chunk->size() <= FIXED_SAMPLE_SIZE);
-	idx_t new_sample_chunk_size = for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
+	idx_t new_sample_chunk_size =
+	    for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
 	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(), new_sample_chunk_size);
 	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
 		// TODO: should the validity mask be the capacity or the size?
 		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
 	}
 	// copy chunk to copy into new sample chunk
-	Printer::Print("new_sample_chunk_size is " + to_string(new_sample_chunk_size));
-	Printer::Print("old sample size is " + to_string(sample_chunk->size()));
 	if (sample_chunk->size() == 25) {
 		sample_chunk->Print();
 	}
 	sample_chunk->Copy(*new_sample_chunk);
 
 	new_sample_chunk->SetCardinality(sample_chunk->size());
-
-	Printer::Print("here too");
 	ret->sample_chunk = std::move(new_sample_chunk);
-	Printer::Print("here three");
-
 
 	ret->Verify();
-	Printer::Print("returning");
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
+}
+
+void ReservoirSample::Verify() {
+	if (destroyed) {
+		return;
+	}
+	D_ASSERT(GetPriorityQueueSize() <= FIXED_SAMPLE_SIZE);
+	auto base_reservoir_copy = base_reservoir_sample->Copy();
+	unordered_set<idx_t> indexes;
+	while (!base_reservoir_copy->reservoir_weights.empty()) {
+		auto &pair = base_reservoir_copy->reservoir_weights.top();
+		if (indexes.find(pair.second) == indexes.end()) {
+			indexes.insert(pair.second);
+			base_reservoir_copy->reservoir_weights.pop();
+		} else {
+			throw InternalException("found duplicate index when verifying sample");
+		}
+	}
 }
 
 void IngestionSample::Verify() {
@@ -710,7 +722,41 @@ void IngestionSample::Verify() {
 	} else if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE && GetPriorityQueueSize() > 0) {
 		D_ASSERT(NumSamplesCollected() == GetPriorityQueueSize());
 	}
+	auto base_reservoir_copy = base_reservoir_sample->Copy();
+	unordered_map<idx_t, idx_t> index_count;
+	bool break_here = false;
+	while (!base_reservoir_copy->reservoir_weights.empty()) {
+		auto &pair = base_reservoir_copy->reservoir_weights.top();
+		if (index_count.find(pair.second) == index_count.end()) {
+			index_count[pair.second] = 1;
+			base_reservoir_copy->reservoir_weights.pop();
+		} else {
+			break_here = true;
+			index_count[pair.second] += 1;
+			base_reservoir_copy->reservoir_weights.pop();
+			// throw InternalException("found duplicate index when verifying sample");
+		}
+	}
+	if (break_here) {
+		auto booo = true;
+	}
+
 	sample_chunk->Verify();
+}
+
+static unordered_map<idx_t, idx_t>
+GetIndexesInPriorityQueue(unique_ptr<BaseReservoirSampling> base_reservoir_sampling) {
+	unordered_map<idx_t, idx_t> ret;
+	while (!base_reservoir_sampling->reservoir_weights.empty()) {
+		auto &top = base_reservoir_sampling->reservoir_weights.top();
+		if (ret.find(top.second) == ret.end()) {
+			ret[top.second] = 1;
+		} else {
+			ret[top.second] += 1;
+		}
+		base_reservoir_sampling->reservoir_weights.pop();
+	}
+	return ret;
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
@@ -731,6 +777,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	if (!sample_chunk) {
 		base_reservoir_sample = std::move(other->base_reservoir_sample);
 		sample_chunk = std::move(other_ingest.sample_chunk);
+		Verify();
 		return;
 	}
 
@@ -787,33 +834,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	idx_t sample_count_other = other_ingest.GetPriorityQueueSize();
 	D_ASSERT(sample_count_this + sample_count_other == num_samples_to_keep);
 
-	// pop indexes and weights of both samples.
-	// bool this_has_weight = GetPriorityQueueSize() > 0;
-	// bool other_has_weights = other_ingest.GetPriorityQueueSize() > 0;
-	//
-	// auto entry_this = base_reservoir_sample->reservoir_weights.top();
-	// auto entry_other = other_ingest.base_reservoir_sample->reservoir_weights.top();
-
-	// while (GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize() > num_samples_to_keep) {
-	// 	if (GetPriorityQueueSize() > 0) {
-	// 		entry_this = base_reservoir_sample->reservoir_weights.top();
-	// 	} else {
-	// 		entry_this.first = -1;
-	// 	}
-	// 	if (other_ingest.GetPriorityQueueSize() > 0) {
-	// 		entry_other = other_ingest.base_reservoir_sample->reservoir_weights.top();
-	// 	}
-	// 	else {
-	// 		entry_other.first = -1;
-	// 	}
-	// 	if (entry_this.first < entry_other.first) {
-	// 		other_ingest.base_reservoir_sample->reservoir_weights.pop();
-	// 	} else {
-	// 		base_reservoir_sample->reservoir_weights.pop();
-	// 	}
-	// }
-	//
-
 	D_ASSERT(GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
 
@@ -831,6 +851,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	D_ASSERT(sample_count_this <= num_samples_to_keep);
 	idx_t chunk_offset = 0;
+	idx_t index_offset = NumSamplesCollected();
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
 		if (other_top.first > max_weight) {
@@ -839,6 +860,9 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		}
 		D_ASSERT(other_top.second < other_ingest.sample_chunk->size());
 		sel_other.set_index(chunk_offset, other_top.second);
+
+		// make sure that the sample indexes are (this.sample_chunk.size() + chunk_offfset)
+		other_top.second = index_offset + chunk_offset;
 		base_reservoir_sample->reservoir_weights.push(other_top);
 		chunk_offset += 1;
 	}
@@ -859,6 +883,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
+	Verify();
 }
 
 idx_t IngestionSample::GetTuplesSeen() {
@@ -924,6 +949,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 			max_weight_index = i;
 		}
 	}
+	ret->Verify();
 	ret->base_reservoir_sample->min_weighted_entry_index = max_weight_index;
 	ret->base_reservoir_sample->min_weight_threshold = -max_weight;
 
@@ -1152,6 +1178,10 @@ unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserialize
 	result = ReservoirSample::Deserialize(deserializer);
 	result->base_reservoir_sample = std::move(base_reservoir_sample);
 	result->destroyed = destroyed;
+	if (result->type == SampleType::RESERVOIR_SAMPLE) {
+		auto &wat = result->Cast<ReservoirSample>();
+		wat.Verify();
+	}
 	return result;
 }
 
