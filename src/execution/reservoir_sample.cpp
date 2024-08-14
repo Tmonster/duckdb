@@ -379,6 +379,7 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 
 	// then assign the weights
 	ingestion_sample->base_reservoir_sample = std::move(base_reservoir_sample);
+	ingestion_sample->Verify();
 	return ingestion_sample;
 }
 
@@ -586,6 +587,8 @@ unique_ptr<DataChunk> IngestionSample::GetChunkAndShrink() {
 }
 
 void IngestionSample::Shrink() {
+	Printer::Print("before shrink this");
+	sample_chunk->Print();
 	Verify();
 	if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE || !sample_chunk) {
 		// nothing to shrink, haven't collected enough samples.
@@ -644,6 +647,8 @@ void IngestionSample::Shrink() {
 
 	sample_chunk = std::move(new_sample_chunk);
 	Verify();
+	Printer::Print("after shrink");
+	sample_chunk->Print();
 	// We should only have one sample chunk now.
 	D_ASSERT(sample_chunk->size() > 0);
 }
@@ -653,6 +658,8 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 }
 
 unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
+	Printer::Print("before copy");
+	sample_chunk->Print();
 	auto ret = make_uniq<IngestionSample>(sample_count);
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
@@ -683,6 +690,8 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	ret->sample_chunk = std::move(new_sample_chunk);
 
 	ret->Verify();
+	Printer::Print("ret after copy");
+	ret->sample_chunk->Print();
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 }
 
@@ -728,6 +737,12 @@ void IngestionSample::Verify() {
 			// throw InternalException("found duplicate index when verifying sample");
 		}
 	}
+	if (base_reservoir_sample->num_entries_seen_total > 102400) {
+		Printer::Print("over 102400 seen, why?");
+		sample_chunk->Print();
+		throw InternalException("now over 102400 seen, that's weird");
+		auto break_here = 0;
+	}
 	if (break_here) {
 		auto booo = true;
 	}
@@ -771,6 +786,11 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		Verify();
 		return;
 	}
+
+	Printer::Print("before merge this");
+	sample_chunk->Print();
+	Printer::Print("before merge other");
+	other_ingest.sample_chunk->Print();
 
 	if (GetPriorityQueueSize() == 0 && NumSamplesCollected() > 0) {
 		// make sure both samples have weights
@@ -877,6 +897,9 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		Printer::Print("after copy");
 		sample_chunk->Print();
 	}
+
+	Printer::Print("after merge this");
+	sample_chunk->Print();
 
 	Verify();
 }
@@ -1032,6 +1055,15 @@ void IngestionSample::Finalize() {
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (destroyed) {
 		return;
+	}
+
+	if (!sample_chunk || sample_chunk->size() == 0) {
+		auto break_here = 0;
+	}
+
+	auto str_chnk = chunk.ToString();
+	if (str_chnk.find("1", 30) != str_chnk.npos) {
+		auto break_here = 0;
 	}
 
 	idx_t tuples_consumed = FillReservoir(chunk);

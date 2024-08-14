@@ -116,8 +116,6 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 			auto other_table_sample_copy = other_ingest.Copy();
 			table_sample->Merge(std::move(other_table_sample_copy));
 			D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
-			auto &this_sample_ingest = table_sample->Cast<IngestionSample>();
-			this_sample_ingest.sample_chunk->Print();
 		}
 		// if no other.table sample, do nothig
 	} else {

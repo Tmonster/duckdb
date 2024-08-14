@@ -1194,7 +1194,12 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
 		ingest_sample.Shrink();
 		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
-		return ingest_sample.ConvertToReservoirSampleToSerialize();
+		auto ret = ingest_sample.ConvertToReservoirSampleToSerialize();
+		if (ret->type == SampleType::RESERVOIR_SAMPLE) {
+			auto &wat = ret->Cast<ReservoirSample>();
+			wat.reservoir_chunk->chunk.Print();
+		}
+		return ret;
 	}
 	return nullptr;
 }
