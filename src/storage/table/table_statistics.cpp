@@ -110,12 +110,10 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
 		if (other.table_sample) {
-			D_ASSERT(other.table_sample->type == SampleType::INGESTION_SAMPLE);
-			auto &other_ingest = other.table_sample->Cast<IngestionSample>();
-			other_ingest.Shrink();
-			auto other_table_sample_copy = other_ingest.Copy();
-			table_sample->Merge(std::move(other_table_sample_copy));
 			D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
+			auto &this_ingest = table_sample->Cast<IngestionSample>();
+			D_ASSERT(other.table_sample->type == SampleType::INGESTION_SAMPLE);
+			this_ingest.Merge(std::move(other.table_sample));
 		}
 		// if no other.table sample, do nothig
 	} else {
@@ -206,8 +204,12 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
 		table_sample = reservoir_sample.ConvertToIngestionSample();
-		auto &i_sample = table_sample->Cast<IngestionSample>();
-		i_sample.Verify();
+#ifdef DEBUG
+		if (table_sample) {
+			auto &i_sample = table_sample->Cast<IngestionSample>();
+			i_sample.Verify();
+		}
+#endif
 	} else {
 		table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 		table_sample->Destroy();
