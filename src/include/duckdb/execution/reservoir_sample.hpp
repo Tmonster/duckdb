@@ -89,12 +89,8 @@ public:
 	virtual ~BlockingSample() {
 	}
 
-	virtual idx_t NumSamplesCollected() = 0;
-
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
-
-	virtual void Merge(unique_ptr<BlockingSample> other) = 0;
 
 	virtual unique_ptr<BlockingSample> Copy() const = 0;
 
@@ -155,11 +151,8 @@ public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
 	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
-	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
-
-	void Merge(unique_ptr<BlockingSample> other) override;
 
 	unique_ptr<IngestionSample> ConvertToIngestionSample();
 
@@ -208,11 +201,8 @@ public:
 	ReservoirSamplePercentage(double percentage, int64_t seed, idx_t reservoir_sample_size);
 	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
-	idx_t NumSamplesCollected() override;
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
-
-	void Merge(unique_ptr<BlockingSample> other) override;
 
 	unique_ptr<BlockingSample> Copy() const override;
 
@@ -268,13 +258,12 @@ public:
 
 	unique_ptr<BlockingSample> Copy() const override;
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
+	void Merge(unique_ptr<BlockingSample> other);
 
 	idx_t GetTuplesSeen();
-	idx_t NumSamplesCollected() override;
+	idx_t NumSamplesCollected();
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
-	// void AddToReservoir(DataChunk &input, bool sample_less);
-	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.

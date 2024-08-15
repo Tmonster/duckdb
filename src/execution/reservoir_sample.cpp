@@ -195,25 +195,12 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 
 unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 	throw InternalException("calling copy on reservoir sample");
-	// auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
-	// ret->base_reservoir_sample = base_reservoir_sample->Copy();
-	// ret->reservoir_chunk = nullptr;
-	// ret->destroyed = destroyed;
-	// if (reservoir_chunk) {
-	// 	ret->reservoir_chunk = reservoir_chunk->Copy();
-	// }
-	// unique_ptr<BlockingSample> base_ret = std::move(ret);
-	// return base_ret;
 }
 
 struct ReplacementHelper {
 	bool exists;
 	std::pair<double, idx_t> pair;
 };
-
-void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
-	throw InternalException("resevoir sample merge called");
-}
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 
@@ -346,12 +333,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	return input.size();
 }
 
-idx_t ReservoirSample::NumSamplesCollected() {
-	throw InternalException("calling num samples collected on reservoir sample");
-	// auto samples = GetPriorityQueueSize();
-	// return samples == 0 && reservoir_chunk ? Chunk().size() : samples;
-}
-
 DataChunk &ReservoirSample::Chunk() {
 	D_ASSERT(reservoir_chunk);
 	return reservoir_chunk->chunk;
@@ -366,6 +347,9 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 
 	// first add the chunks
 	auto chunk = GetChunkAndShrink();
+	if (!chunk) {
+		return nullptr;
+	}
 	D_ASSERT(chunk->size() <= FIXED_SAMPLE_SIZE);
 	idx_t num_chunks_added = 0;
 	while (chunk) {
@@ -453,21 +437,14 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
-	throw InternalException("reservoir sample percentage merge called");
-}
-
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	if (!is_finalized) {
 		Finalize();
 	}
-	if (NumSamplesCollected() > FIXED_SAMPLE_SIZE) {
-		throw InternalException("Calling GetChunk() on reservoir Sample with more than standard vector size samples");
-	}
 	idx_t finished_sample_index = 0;
 	bool can_skip_finished_sample = true;
 	while (can_skip_finished_sample && finished_sample_index < finished_samples.size()) {
-		auto finished_sample_count = finished_samples.at(finished_sample_index)->NumSamplesCollected();
+		auto finished_sample_count = finished_samples.at(finished_sample_index)->reservoir_chunk->chunk.size();
 		if (offset >= finished_sample_count) {
 			offset -= finished_sample_count;
 			finished_sample_index += 1;
@@ -479,23 +456,6 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 		return nullptr;
 	}
 	return finished_samples.at(finished_sample_index)->GetChunk(offset);
-}
-
-idx_t ReservoirSamplePercentage::NumSamplesCollected() {
-	throw InternalException("calling numsamples collected on reservoir sample percentage");
-	// if (destroyed) {
-	// 	return 0;
-	// }
-	// idx_t samples_collected = 0;
-	// for (auto &finished_sample : finished_samples) {
-	// 	samples_collected += finished_sample->NumSamplesCollected();
-	// }
-	// if (!is_finalized && current_sample) {
-	// 	// Sometimes a percentage sample can overcollect. When finalize is called the
-	// 	// percentage becomes accurate, however.
-	// 	samples_collected += idx_t(current_sample->base_reservoir_sample->num_entries_seen_total * sample_percentage);
-	// }
-	// return samples_collected;
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
@@ -728,7 +688,9 @@ void IngestionSample::Verify() {
 		}
 	}
 
-	sample_chunk->Verify();
+	if (sample_chunk) {
+		sample_chunk->Verify();
+	}
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
@@ -740,7 +702,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other->type == SampleType::INGESTION_SAMPLE);
 	auto &other_ingest = other->Cast<IngestionSample>();
 
-	// other has not collected samples
+	// other has not collected sample
 	if (!other_ingest.sample_chunk) {
 		return;
 	}
