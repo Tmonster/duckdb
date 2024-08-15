@@ -1192,14 +1192,9 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	if (stats.table_sample && !stats.table_sample->destroyed) {
 		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
-		ingest_sample.sample_chunk->Print();
 		ingest_sample.Shrink();
 		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
 		auto ret = ingest_sample.ConvertToReservoirSampleToSerialize();
-		if (ret->type == SampleType::RESERVOIR_SAMPLE) {
-			auto &wat = ret->Cast<ReservoirSample>();
-			wat.reservoir_chunk->chunk.Print();
-		}
 		return ret;
 	}
 	return nullptr;

@@ -95,6 +95,7 @@ void BaseReservoirSampling::SetNextEntry() {
 
 void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, double with_weight) {
 
+	reservoir_weights.pop();
 	double r2 = with_weight;
 	//! now we insert the new weight into the reservoir
 	reservoir_weights.emplace(-r2, entry_index);
@@ -587,8 +588,6 @@ unique_ptr<DataChunk> IngestionSample::GetChunkAndShrink() {
 }
 
 void IngestionSample::Shrink() {
-	// Printer::Print("before shrink this");
-	// sample_chunk->Print();
 	Verify();
 	if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE || !sample_chunk) {
 		// nothing to shrink, haven't collected enough samples.
@@ -647,8 +646,6 @@ void IngestionSample::Shrink() {
 
 	sample_chunk = std::move(new_sample_chunk);
 	Verify();
-	// Printer::Print("after shrink");
-	// sample_chunk->Print();
 	// We should only have one sample chunk now.
 	D_ASSERT(sample_chunk->size() > 0);
 }
@@ -658,8 +655,6 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 }
 
 unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
-	// Printer::Print("before copy");
-	// sample_chunk->Print();
 	auto ret = make_uniq<IngestionSample>(sample_count);
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
@@ -690,8 +685,6 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	ret->sample_chunk = std::move(new_sample_chunk);
 
 	ret->Verify();
-	// Printer::Print("ret after copy");
-	// ret->sample_chunk->Print();
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 }
 
@@ -724,49 +717,21 @@ void IngestionSample::Verify() {
 	}
 	auto base_reservoir_copy = base_reservoir_sample->Copy();
 	unordered_map<idx_t, idx_t> index_count;
-	bool break_here = false;
 	while (!base_reservoir_copy->reservoir_weights.empty()) {
 		auto &pair = base_reservoir_copy->reservoir_weights.top();
 		if (index_count.find(pair.second) == index_count.end()) {
 			index_count[pair.second] = 1;
 			base_reservoir_copy->reservoir_weights.pop();
 		} else {
-			break_here = true;
 			index_count[pair.second] += 1;
 			base_reservoir_copy->reservoir_weights.pop();
-			// throw InternalException("found duplicate index when verifying sample");
 		}
-	}
-	// if (base_reservoir_sample->num_entries_seen_total > 102400) {
-	// 	Printer::Print("over 102400 seen, why?");
-	// 	// sample_chunk->Print();
-	// 	// throw InternalException("now over 102400 seen, that's weird");
-	// 	auto break_here = 0;
-	// }
-	if (break_here) {
-		auto booo = true;
 	}
 
 	sample_chunk->Verify();
 }
 
-static unordered_map<idx_t, idx_t>
-GetIndexesInPriorityQueue(unique_ptr<BaseReservoirSampling> base_reservoir_sampling) {
-	unordered_map<idx_t, idx_t> ret;
-	while (!base_reservoir_sampling->reservoir_weights.empty()) {
-		auto &top = base_reservoir_sampling->reservoir_weights.top();
-		if (ret.find(top.second) == ret.end()) {
-			ret[top.second] = 1;
-		} else {
-			ret[top.second] += 1;
-		}
-		base_reservoir_sampling->reservoir_weights.pop();
-	}
-	return ret;
-}
-
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
-	Printer::Print("Merge called");
 	if (destroyed || other->destroyed) {
 		Destroy();
 		return;
@@ -787,11 +752,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		Verify();
 		return;
 	}
-
-	// Printer::Print("before merge this");
-	// sample_chunk->Print();
-	// Printer::Print("before merge other");
-	// other_ingest.sample_chunk->Print();
 
 	if (GetPriorityQueueSize() == 0 && NumSamplesCollected() > 0) {
 		// make sure both samples have weights
@@ -875,14 +835,10 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	base_reservoir_sample->min_weight_threshold = max_weight;
+	base_reservoir_sample->min_weight_threshold = -max_weight;
+	D_ASSERT(base_reservoir_sample->min_weight_threshold < 0);
 	base_reservoir_sample->num_entries_seen_total =
 	    base_reservoir_sample->num_entries_seen_total + other_ingest.base_reservoir_sample->num_entries_seen_total;
-
-	// if (GetPriorityQueueSize() > 0) {
-	// 	Printer::Print("before copy");
-	// 	sample_chunk->Print();
-	// }
 
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
@@ -894,13 +850,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
-	// if (GetPriorityQueueSize() > 0) {
-	// 	Printer::Print("after copy");
-	// 	sample_chunk->Print();
-	// }
-
-	// Printer::Print("after merge this");
-	// sample_chunk->Print();
 
 	Verify();
 }
@@ -970,7 +919,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	}
 	ret->Verify();
 	ret->base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	ret->base_reservoir_sample->min_weight_threshold = -max_weight;
+	ret->base_reservoir_sample->min_weight_threshold = max_weight;
 	D_ASSERT(ret->base_reservoir_sample->min_weight_threshold < 0);
 
 	// perform the copy
@@ -1003,6 +952,7 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 	if (sample_chunk->size() < FIXED_SAMPLE_SIZE) {
 		ingested_count = MinValue<idx_t>(FIXED_SAMPLE_SIZE - sample_chunk->size(), chunk.size());
 		idx_t new_cardinality = sample_chunk->size() + ingested_count;
+		offset = sample_chunk->size();
 		for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
 			VectorOperations::Copy(chunk.data[col_idx], sample_chunk->data[col_idx], ingested_count, 0, offset);
 		}
@@ -1030,23 +980,34 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
-idx_t IngestionSample::GetReplacementCount(idx_t theoretical_chunk_length) {
-	auto base_reservoir_sample_copy = base_reservoir_sample->Copy();
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
+                                                                   idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
-	idx_t ret = 0;
+	unordered_map<idx_t, idx_t> ret;
+	idx_t sample_chunk_index = 0;
+
+	idx_t base_offset = 0;
 
 	while (true) {
-		idx_t offset = base_reservoir_sample_copy->next_index_to_sample -
-		               base_reservoir_sample_copy->num_entries_to_skip_b4_next_sample;
+		idx_t offset =
+		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
+			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
 			return ret;
 		}
 		// in this chunk! replace the element
-		ret += 1;
-		base_reservoir_sample_copy->ReplaceElement();
+		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
+		ret[base_offset + offset] = sample_chunk_index;
+		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
+		// replace element in our max_hep
+		// sample_chunk_offset + sample_chunk_index
+		base_reservoir_sample->ReplaceElementWithIndex(sample_chunk_offset + sample_chunk_index, r2);
+
+		sample_chunk_index += 1;
 		// shift the chunk forward
 		remaining -= offset;
+		base_offset += offset;
 	}
 }
 
@@ -1057,10 +1018,6 @@ void IngestionSample::Finalize() {
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (destroyed) {
 		return;
-	}
-
-	if (!sample_chunk || sample_chunk->size() == 0) {
-		auto break_here = 0;
 	}
 
 	idx_t tuples_consumed = FillReservoir(chunk);
@@ -1111,55 +1068,26 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
 
-	base_reservoir_sample->num_entries_seen_total += chunk.size();
-
-	// run the logic to figure out which indexes in the sample will get booted.
-	idx_t remaining = chunk.size();
-	idx_t base_offset = 0;
-	vector<idx_t> indexes_to_copy;
-	while (true) {
-		idx_t offset =
-		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
-		if (offset >= remaining) {
-			// not in this chunk! increment current count and go to the next chunk
-			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
-			break;
-		}
-		// in this chunk! replace the element
-		indexes_to_copy.push_back(base_offset + offset);
-		base_reservoir_sample->ReplaceElement();
-		// shift the chunk forward
-		remaining -= offset;
-		base_offset += offset;
-	}
-
-	SelectionVector sel(indexes_to_copy.size());
-	for (idx_t i = 0; i < indexes_to_copy.size(); i++) {
-		sel.set_index(i, indexes_to_copy[i]);
+	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	idx_t size = sample_chunk_ind_to_data_chunk_index.size();
+	D_ASSERT(size < chunk.size());
+	SelectionVector sel(chunk.size());
+	for (auto &input_idx_res_idx : sample_chunk_ind_to_data_chunk_index) {
+		auto ind_in_input_chunk = input_idx_res_idx.first;
+		auto ind_in_sample_chunk = input_idx_res_idx.second;
+		sel.set_index(ind_in_sample_chunk, ind_in_input_chunk);
 	}
 	const SelectionVector const_sel(sel);
 
 	idx_t sample_chunk_size_before_ingestion = sample_chunk->size();
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		VectorOperations::Copy(chunk.data[col_idx], sample_chunk->data[col_idx], const_sel, indexes_to_copy.size(), 0,
-		                       sample_chunk_size_before_ingestion);
+		VectorOperations::Copy(chunk.data[col_idx], sample_chunk->data[col_idx], const_sel,
+		                       sample_chunk_ind_to_data_chunk_index.size(), 0, sample_chunk_size_before_ingestion);
 	}
 
-	// using vector operations copy into it only the desired values
-	idx_t new_index = sample_chunk_size_before_ingestion;
-	// It doesn't matter what indexes are being copied. I've already copied data from the
-	// source/ingested chunk to my new sample chunk. I need to record the indexes of the new samples
-	// in the sampling info
-	for (idx_t i = 0; i < indexes_to_copy.size(); i++) {
-		auto sample_to_replace = base_reservoir_sample->reservoir_weights.top();
-		base_reservoir_sample->reservoir_weights.pop();
-		auto new_weight = -sample_to_replace.first;
-		// careful here, only replace the element in sampling info.
-		base_reservoir_sample->ReplaceElementWithIndex(new_index, new_weight);
-		new_index += 1;
-	}
+	base_reservoir_sample->num_entries_seen_total += chunk.size();
 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() == FIXED_SAMPLE_SIZE);
-	sample_chunk->SetCardinality(sample_chunk_size_before_ingestion + indexes_to_copy.size());
+	sample_chunk->SetCardinality(sample_chunk_size_before_ingestion + sample_chunk_ind_to_data_chunk_index.size());
 	Verify();
 	if (sample_chunk->size() >= FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
 		Shrink();
