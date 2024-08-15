@@ -241,7 +241,6 @@ optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) 
 }
 
 LocalTableStorage &LocalTableManager::GetOrCreateStorage(ClientContext &context, DataTable &table) {
-	auto break_here = 0;
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
