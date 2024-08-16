@@ -135,6 +135,7 @@ std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
 	}
 	auto &min_key = base_reservoir_sample->reservoir_weights.top();
 	base_reservoir_sample->min_weight_threshold = -min_key.first;
+	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 	return ret;
 }
 
@@ -597,8 +598,8 @@ void IngestionSample::Shrink() {
 		}
 	}
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	base_reservoir_sample->min_weight_threshold = max_weight;
-	D_ASSERT(base_reservoir_sample->min_weight_threshold < 0);
+	base_reservoir_sample->min_weight_threshold = -max_weight;
+	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 
 	// perform the copy
 	for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
@@ -748,22 +749,22 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_ingest.base_reservoir_sample->min_weight_threshold;
-		// weights are stored as negative numbers
-		// so -0.99999 is a very HIGH weight, and -0.00001 is a very low weight
-		if (min_weight_this < min_weight_other) {
+		// min weight threshol is always positive
+		if (min_weight_this > min_weight_other) {
+			// pop from other
 			other_ingest.base_reservoir_sample->reservoir_weights.pop();
 			if (other_ingest.GetPriorityQueueSize() != 0) {
 				other_ingest.base_reservoir_sample->min_weight_threshold =
-				    other_ingest.base_reservoir_sample->reservoir_weights.top().first;
+				    -other_ingest.base_reservoir_sample->reservoir_weights.top().first;
 			} else {
-				other_ingest.base_reservoir_sample->min_weight_threshold = -1;
+				other_ingest.base_reservoir_sample->min_weight_threshold = 1;
 			}
 		} else {
 			base_reservoir_sample->reservoir_weights.pop();
 			if (GetPriorityQueueSize() != 0) {
-				base_reservoir_sample->min_weight_threshold = base_reservoir_sample->reservoir_weights.top().first;
+				base_reservoir_sample->min_weight_threshold = -base_reservoir_sample->reservoir_weights.top().first;
 			} else {
-				base_reservoir_sample->min_weight_threshold = -1;
+				base_reservoir_sample->min_weight_threshold = 1;
 			}
 		}
 	}
@@ -777,7 +778,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
 
-	auto max_weight = base_reservoir_sample->min_weight_threshold;
+	auto min_weight = base_reservoir_sample->min_weight_threshold;
 	auto max_weight_index = base_reservoir_sample->min_weighted_entry_index;
 
 	SelectionVector sel_other(other_ingest.GetPriorityQueueSize());
@@ -788,9 +789,10 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// while also filling in the selection vector we wil use to copy values.
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
+		auto other_min_weight = -other_top.first;
 		idx_t index_for_new_pair = chunk_offset + sample_chunk->size();
-		if (other_top.first > max_weight) {
-			max_weight = other_top.first;
+		if (other_min_weight > min_weight) {
+			min_weight = other_min_weight;
 			max_weight_index = index_for_new_pair;
 		}
 
@@ -803,8 +805,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	base_reservoir_sample->min_weight_threshold = max_weight;
-	D_ASSERT(base_reservoir_sample->min_weight_threshold < 0);
+	base_reservoir_sample->min_weight_threshold = min_weight;
+	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 	base_reservoir_sample->num_entries_seen_total =
 	    base_reservoir_sample->num_entries_seen_total + other_ingest.base_reservoir_sample->num_entries_seen_total;
 
@@ -887,8 +889,8 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	}
 	ret->Verify();
 	ret->base_reservoir_sample->min_weighted_entry_index = max_weight_index;
-	ret->base_reservoir_sample->min_weight_threshold = max_weight;
-	D_ASSERT(ret->base_reservoir_sample->min_weight_threshold < 0);
+	ret->base_reservoir_sample->min_weight_threshold = -max_weight;
+	D_ASSERT(ret->base_reservoir_sample->min_weight_threshold > 0);
 
 	// perform the copy
 	for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
@@ -1037,12 +1039,12 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	}
 
 	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
-	if (sample_chunk_ind_to_data_chunk_index.size() == 0) {
+	if (sample_chunk_ind_to_data_chunk_index.empty()) {
 		// not adding any samples
 		return;
 	}
 	idx_t size = sample_chunk_ind_to_data_chunk_index.size();
-	D_ASSERT(size < chunk.size());
+	D_ASSERT(size <= chunk.size());
 	SelectionVector sel(size);
 	for (auto &input_idx_res_idx : sample_chunk_ind_to_data_chunk_index) {
 		auto ind_in_input_chunk = input_idx_res_idx.first;
