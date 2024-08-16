@@ -291,7 +291,6 @@ public:
 	idx_t FillReservoir(DataChunk &chunk);
 
 	unique_ptr<DataChunk> sample_chunk;
-	bool destroyed;
 };
 
 } // namespace duckdb
