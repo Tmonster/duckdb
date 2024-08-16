@@ -739,16 +739,10 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other_ingest.sample_chunk->size() > 0 && sample_chunk->size() > 0);
 
 	idx_t total_samples = GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize();
-	if (NumSamplesCollected() + other_ingest.NumSamplesCollected() > FIXED_SAMPLE_SIZE * 2) {
-		auto break_here = 0;
-		auto wat = NumSamplesCollected();
-		auto wat_2 = other_ingest.NumSamplesCollected();
-	}
-	if (total_samples > FIXED_SAMPLE_SIZE * 2) {
-		auto break_here = 0;
-	}
 	idx_t num_samples_to_keep = MinValue<idx_t>(FIXED_SAMPLE_SIZE, total_samples);
-
+	// after shrink is called on both samples, we should not have more than FIXED_SAMPLE_SIZE
+	// samples for sample
+	D_ASSERT(total_samples <= FIXED_SAMPLE_SIZE * 2);
 	// if there are more than FIXED_SAMPLE_SIZE samples, we want to keep only the
 	// highest weighted FIXED_SAMPLE_SIZE samples
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
