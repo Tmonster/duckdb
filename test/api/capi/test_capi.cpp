@@ -561,7 +561,8 @@ TEST_CASE("Test C API config", "[capi]") {
 	}
 
 	// now we can connect
-	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBSuccess);
+	auto wat = duckdb_open_ext(dbdir.c_str(), &db, config, &error);
+	REQUIRE(wat == DuckDBSuccess);
 
 	// test unrecognized configuration
 	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBSuccess);

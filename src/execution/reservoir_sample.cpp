@@ -769,13 +769,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		}
 	}
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() <= FIXED_SAMPLE_SIZE);
-
-	// create the two selection vectors that we will use to vector copy from the ingestion samples
-	idx_t sample_count_this = GetPriorityQueueSize();
-	idx_t sample_count_other = other_ingest.GetPriorityQueueSize();
-	D_ASSERT(sample_count_this + sample_count_other == num_samples_to_keep);
-
-	D_ASSERT(GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize() == num_samples_to_keep);
+	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
 
 	auto min_weight = base_reservoir_sample->min_weight_threshold;
@@ -783,7 +777,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	SelectionVector sel_other(other_ingest.GetPriorityQueueSize());
 
-	D_ASSERT(sample_count_this <= num_samples_to_keep);
+	D_ASSERT(GetPriorityQueueSize() <= num_samples_to_keep);
 	idx_t chunk_offset = 0;
 	// now we are adding entries from the other base_reservoir_sampling object to this
 	// while also filling in the selection vector we wil use to copy values.
@@ -986,7 +980,7 @@ void IngestionSample::Finalize() {
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
-	if (destroyed) {
+	if (destroyed || chunk.size() == 0) {
 		return;
 	}
 
@@ -1078,11 +1072,12 @@ void BlockingSample::Serialize(Serializer &serializer) const {
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
 	auto base_reservoir_sample =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
-	auto type = deserializer.ReadProperty<SampleType>(101, "type"); // NOLINT
+	auto type = deserializer.ReadProperty<SampleType>(101, "type");
 	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
-	unique_ptr<BlockingSample> result;
 	D_ASSERT(type == SampleType::RESERVOIR_SAMPLE);
-	result = ReservoirSample::Deserialize(deserializer);
+	auto result = ReservoirSample::Deserialize(deserializer);
+	D_ASSERT(result->type == SampleType::RESERVOIR_SAMPLE);
+	result->type = type;
 	result->base_reservoir_sample = std::move(base_reservoir_sample);
 	result->destroyed = destroyed;
 	if (result->type == SampleType::RESERVOIR_SAMPLE) {
