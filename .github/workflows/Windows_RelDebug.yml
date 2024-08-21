@@ -28,7 +28,7 @@ on:
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Windows_Debug.yml'
 
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -38,7 +38,7 @@ on:
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Windows_Debug.yml'
 
 
 concurrency:
@@ -55,17 +55,10 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-<<<<<<< HEAD
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-=======
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - uses: actions/setup-python@v5
         with:
@@ -81,8 +74,8 @@ jobs:
         shell: bash
         run: |
           python scripts/windows_ci.py
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-          cmake --build . --config Debug --parallel
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+          cmake --build . --config RelWithDebInfo --parallel
 
       - name: Set DUCKDB_INSTALL_LIB for ADBC tests
         shell: pwsh
@@ -96,15 +89,15 @@ jobs:
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
-          test/Debug/unittest.exe
+          test/RelWithDebInfo/unittest.exe
 
       - name: Tools Test
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
           python -m pip install pytest
-          python -m pytest tools/shell/tests --shell-binary Debug/duckdb.exe
-          tools/sqlite3_api_wrapper/Debug/test_sqlite3_api_wrapper.exe
+          python -m pytest tools/shell/tests --shell-binary RelWithDebInfo/duckdb.exe
+          tools/sqlite3_api_wrapper/RelWithDebInfo/test_sqlite3_api_wrapper.exe
 
       - name: Deploy
         shell: bash
@@ -114,30 +107,21 @@ jobs:
         run: |
           python scripts/amalgamation.py
           choco install zip -y --force
-          zip -j duckdb_cli-windows-amd64.zip Debug/duckdb.exe
-          zip -j libduckdb-windows-amd64.zip src/Debug/duckdb.dll src/Debug/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          zip -j duckdb_cli-windows-amd64.zip RelWithDebInfo/duckdb.exe
+          zip -j libduckdb-windows-amd64.zip src/RelWithDebInfo/duckdb.dll src/RelWithDebInfo/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
           ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-<<<<<<< HEAD
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-windows-amd64
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-=======
       - uses: actions/upload-artifact@v3
         with:
           name: duckdb-binaries-windows
           path: |
             libduckdb-windows-amd64.zip
             duckdb_cli-windows-amd64.zip
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Duckdb.dll export symbols with C++ on Windows
         shell: bash
-        run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Debug/duckdb.lib
+        run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/RelWithDebInfo/duckdb.lib
 
   win-release-32:
     name: Windows (32 Bit)
@@ -146,17 +130,10 @@ jobs:
     needs: win-release-64
 
     steps:
-<<<<<<< HEAD
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-=======
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - uses: actions/setup-python@v5
         with:
@@ -198,17 +175,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-<<<<<<< HEAD
-   steps:
-     - uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-         ref: ${{ inputs.git_ref }}
-=======
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -241,34 +210,6 @@ jobs:
             libduckdb-windows-arm64.zip
             duckdb_cli-windows-arm64.zip
 
-<<<<<<< HEAD
-     - uses: actions/upload-artifact@v4
-       with:
-         name: duckdb-binaries-windows-arm64
-         path: |
-           libduckdb-windows-arm64.zip
-           duckdb_cli-windows-arm64.zip
-
- mingw:
-     name: MingW (64 Bit)
-     runs-on: windows-latest
-     if: ${{ inputs.skip_tests != 'true' }}
-     needs: win-release-64
-     steps:
-       - uses: actions/checkout@v4
-         with:
-           ref: ${{ inputs.git_ref }}
-       - uses: msys2/setup-msys2@v2
-         with:
-           msystem: MINGW64
-           update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
-       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-       - name: Put MSYS2_MinGW64 on PATH
-         # there is not yet an environment variable for this path from msys2/setup-msys2
-         shell: msys2 {0}
-         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
-=======
   mingw:
     name: MingW (64 Bit)
     runs-on: windows-latest
@@ -294,7 +235,6 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - name: Build
         shell: msys2 {0}
@@ -330,16 +270,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-<<<<<<< HEAD
-     - uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-         ref: ${{ inputs.git_ref }}
-=======
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
->>>>>>> 2691ccec9b (build debug for windows, see if failure is caught)
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -356,25 +289,3 @@ jobs:
           run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
           unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
 
- win-packaged-upload:
-   runs-on: windows-latest
-   needs:
-     - win-release-64
-     - win-release-arm64
-   steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-binaries-windows-arm64
-
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-binaries-windows-amd64
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          libduckdb-windows-arm64.zip
-          duckdb_cli-windows-arm64.zip
