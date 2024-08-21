@@ -28,7 +28,7 @@ on:
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Windows_Debug.yml'
 
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -38,7 +38,7 @@ on:
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Windows_Debug.yml'
 
 
 concurrency:
