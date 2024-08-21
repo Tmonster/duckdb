@@ -199,7 +199,7 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
-	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", nullptr);
+	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample");
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
