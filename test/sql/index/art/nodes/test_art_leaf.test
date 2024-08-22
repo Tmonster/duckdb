@@ -102,6 +102,10 @@ DROP TABLE integers
 
 # test insertion after matching prefixes
 
+<<<<<<< HEAD
+=======
+# load the DB from disk
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 load __TEST_DIR__/test_index.db
 
 statement ok

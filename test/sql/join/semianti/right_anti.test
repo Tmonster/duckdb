@@ -116,6 +116,7 @@ analyzed_plan	<!REGEX>:.*RIGHT_ANTI.*
 
 # correlated subqueries can flip
 query II
+<<<<<<< HEAD
 explain analyze SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
@@ -133,6 +134,8 @@ statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
 query II
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 explain analyze SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
@@ -146,4 +149,7 @@ explain analyze SELECT a as outer_a, (SELECT b FROM right_table where right_tabl
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

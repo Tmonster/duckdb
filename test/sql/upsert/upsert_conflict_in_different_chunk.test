@@ -1,9 +1,12 @@
 # name: test/sql/upsert/upsert_conflict_in_different_chunk.test
 # group: [upsert]
 
+<<<<<<< HEAD
 # breaks with constant verification
 require no_vector_verification
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 PRAGMA enable_verification;
 

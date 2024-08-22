@@ -9,7 +9,11 @@ statement ok
 CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1));
 
 statement error
+<<<<<<< HEAD
 INSERT INTO t2 VALUES (2), (2);
+=======
+INSERT INTO t2 SELECT * FROM (VALUES (2), (2))
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ----
 <REGEX>:Constraint Error.*duplicate key.*
 

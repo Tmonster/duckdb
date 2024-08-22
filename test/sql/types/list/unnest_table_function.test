@@ -71,6 +71,7 @@ SELECT i FROM UNNEST([]::INT[]) AS tbl(i);
 
 # unnest from a subquery
 # postgres returns an error here
+<<<<<<< HEAD
 statement error
 SELECT * FROM UNNEST((SELECT ARRAY[1,2,3] UNION ALL SELECT ARRAY[1,2,3]));
 ----
@@ -79,6 +80,8 @@ More than one row returned by a subquery used as an expression
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 SELECT * FROM UNNEST((SELECT ARRAY[1,2,3] UNION ALL SELECT ARRAY[1,2,3]));
 ----

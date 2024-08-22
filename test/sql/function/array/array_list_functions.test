@@ -69,7 +69,11 @@ SELECT list_position(array_value(1,2,3), 2);
 query I
 SELECT list_position(array_value(1,2,3), 4);
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query I
 SELECT list_contains(array_value(1,2,3), 2);

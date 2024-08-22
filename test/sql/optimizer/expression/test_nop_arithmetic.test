@@ -118,9 +118,12 @@ SELECT 0 / a FROM test
 NULL
 NULL
 
+<<<<<<< HEAD
 statement ok
 SET ieee_floating_point_ops=false;
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 SELECT 0 / rowid FROM test
 ----

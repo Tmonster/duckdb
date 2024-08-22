@@ -1,12 +1,23 @@
 # name: test/sql/index/art/storage/test_art_checkpoint.test
+<<<<<<< HEAD
 # description: Test checkpointing an ART.
 # group: [storage]
 
+=======
+# description: Test checkpointing an ART
+# group: [storage]
+
+# load the DB from disk
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 load __TEST_DIR__/test_index.db
 
 statement ok
 CREATE TABLE integers (i INTEGER PRIMARY KEY);
 
+<<<<<<< HEAD
+=======
+# insert values and create index
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (4), (5);
 
@@ -15,6 +26,7 @@ CHECKPOINT;
 
 restart
 
+<<<<<<< HEAD
 # Trigger a constraint violation.
 statement error
 INSERT INTO integers VALUES (1);
@@ -22,6 +34,14 @@ INSERT INTO integers VALUES (1);
 <REGEX>:Constraint Error.*violates primary key constraint.*If this is an unexpected constraint violation.*
 
 # Ensure partial blocks for serializing small ARTs.
+=======
+# insert values and create index
+statement error
+INSERT INTO integers VALUES (1);
+----
+
+# now we want to ensure that we use partial blocks for serializing small ARTs
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 DROP TABLE integers;
@@ -35,15 +55,23 @@ CREATE INDEX idx ON integers(i);
 statement ok
 CHECKPOINT;
 
+<<<<<<< HEAD
 # PREFIX, LEAF, NODE4, NODE256.
+=======
+# PREFIX, LEAF, NODE4, NODE256
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 INSERT INTO integers (SELECT range FROM range(512) UNION ALL SELECT 55);
 
 statement ok
 CHECKPOINT;
 
+<<<<<<< HEAD
 # We expect fewer than 4 additional blocks,
 # because we combine partial blocks.
+=======
+# we expect fewer than 4 additional blocks, because we combine partial blocks
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 SELECT total_blocks < 5 FROM pragma_database_size();
 ----

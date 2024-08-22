@@ -2,11 +2,20 @@
 # description: Test ART Node 4
 # group: [nodes]
 
+<<<<<<< HEAD
 load __TEST_DIR__/test_index.db
 
 statement ok
 PRAGMA enable_verification
 
+=======
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 CREATE TABLE integers(i integer)
 

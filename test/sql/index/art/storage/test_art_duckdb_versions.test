@@ -141,7 +141,11 @@ CREATE INDEX ART_index ON idx_tbl(i);
 statement error
 CREATE INDEX idx_1 ON idx_tbl(i);
 ----
+<<<<<<< HEAD
 <REGEX>:Catalog Error.*Index with name "idx_1" already exists.*
+=======
+already exists
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # now try to use it again
 

@@ -274,6 +274,7 @@ statement error
 SELECT * FROM read_csv_auto(NULL::VARCHAR[]) ORDER BY 1
 ----
 NULL
+<<<<<<< HEAD
 
 statement ok
 SET threads=1;
@@ -282,3 +283,5 @@ statement error
 FROM read_csv('data/csv/glob/*/*.csv');
 ----
 Schema mismatch between globbed files.
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

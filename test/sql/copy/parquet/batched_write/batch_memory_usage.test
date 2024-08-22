@@ -11,7 +11,11 @@ statement ok
 COPY (SELECT uuid()::VARCHAR as varchar, uuid() AS uuid FROM range(10000000) t(i)) TO '__TEST_DIR__/random_uuids.parquet'
 
 statement ok
+<<<<<<< HEAD
 SET memory_limit='750MB'
+=======
+SET memory_limit='500MB'
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 COPY '__TEST_DIR__/random_uuids.parquet' TO '__TEST_DIR__/random_uuids_copy.parquet';

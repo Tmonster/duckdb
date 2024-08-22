@@ -135,11 +135,21 @@ NULL
 NULL
 NULL
 
+<<<<<<< HEAD
 statement error
 SELECT contains(NULL,NULL) FROM strings
 ----
 Binder Error: Could not choose a best candidate function
 
+=======
+query T
+SELECT contains(NULL,NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # Test empty pattern
 query T

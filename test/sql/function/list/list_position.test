@@ -15,7 +15,11 @@ query T
 select list_position(i, j) from TEST2
 ----
 1
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 NULL
 
 statement ok
@@ -28,15 +32,25 @@ query TT
 SELECT i, list_position(i,1) from TEST;
 ----
 [2, 1, 3]	2
+<<<<<<< HEAD
 [2, 3, 4]	NULL
+=======
+[2, 3, 4]	0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 [1]	1
 
 query TT
 SELECT i, list_position(i,4.0) from TEST;
 ----
+<<<<<<< HEAD
 [2, 1, 3]	NULL
 [2, 3, 4]	3
 [1]	NULL
+=======
+[2, 1, 3]	0
+[2, 3, 4]	3
+[1]	0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 DROP table TEST;
@@ -52,24 +66,42 @@ SELECT i, list_position(i,'a') from STR_TEST;
 ----
 [a, b, c]	1
 [d, a, e]	2
+<<<<<<< HEAD
 [b]	NULL
 [aaaaaaaaaaaaaaaaaaaaaaaa]	NULL
+=======
+[b]	0
+[aaaaaaaaaaaaaaaaaaaaaaaa]	0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query TT
 SELECT i, list_position(i,'aaaaaaaaaaaaaaaaaaaaaaaa') from STR_TEST;
 ----
+<<<<<<< HEAD
 [a, b, c]	NULL
 [d, a, e]	NULL
 [b]	NULL
+=======
+[a, b, c]	0
+[d, a, e]	0
+[b]	0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 [aaaaaaaaaaaaaaaaaaaaaaaa]	1
 
 query TT
 SELECT i, list_position(i, '0') from STR_TEST;
 ----
+<<<<<<< HEAD
 [a, b, c]	NULL
 [d, a, e]	NULL
 [b]	NULL
 [aaaaaaaaaaaaaaaaaaaaaaaa]	NULL
+=======
+[a, b, c]	0
+[d, a, e]	0
+[b]	0
+[aaaaaaaaaaaaaaaaaaaaaaaa]	0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 
 query TT
@@ -94,7 +126,11 @@ SELECT list_position([7,2,5], 7)
 query T
 SELECT list_position([], 7)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # Mixed data types
 query T
@@ -110,12 +146,20 @@ SELECT list_position([1.0,2.0,3.0,4.0],1)
 query T
 SELECT list_position([1,2,3],4.0)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([1.0,2.0,3.0],4)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 
 statement error
@@ -126,7 +170,11 @@ an explicit cast is required
 query I
 SELECT list_position([1.0,2.0,3.0]::varchar[], 'a')
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # Not a list as input
 statement error
@@ -143,7 +191,11 @@ NULL
 query T
 SELECT list_position([7], 5)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([1,2,3,4],4)
@@ -153,12 +205,20 @@ SELECT list_position([1,2,3,4],4)
 query T
 SELECT list_position([1,2,3,4],5)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([1.0,2.0,3.0,4.0],5.0)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([1.0,2.0,3.0,4.0],4.0)
@@ -173,7 +233,11 @@ SELECT list_position([true, false],true)
 query T
 SELECT list_position([true, true],false)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position(['test', 'notest'],'notest')
@@ -183,7 +247,11 @@ SELECT list_position(['test', 'notest'],'notest')
 query T
 SELECT list_position(['test', 'notest'],'a')
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # Null types
 query T
@@ -215,7 +283,11 @@ SELECT list_position([NULL, 1],1)
 query T
 SELECT list_position([NULL, 0],1)
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([],NULL)
@@ -260,6 +332,7 @@ INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 
 query T
 SELECT list_position(i,1::${type}) from test0
 ----
+<<<<<<< HEAD
 NULL
 1
 1
@@ -267,6 +340,15 @@ NULL
 NULL
 NULL
 NULL
+=======
+0
+1
+1
+0
+0
+0
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 DROP TABLE test0
@@ -286,7 +368,11 @@ SELECT list_position([[1,2,3],[1]],[1])
 query T
 SELECT list_position([[1,2,3],[1]],[2])
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([[1,2,3],[1]],[1,2,3])
@@ -296,7 +382,11 @@ SELECT list_position([[1,2,3],[1]],[1,2,3])
 query T
 SELECT list_position([[1,3],[1]],[1,2,3])
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([[1,3],[1], [1,2,3]],[1,2,3])
@@ -321,7 +411,11 @@ SELECT list_position([[1,NULL],[1], [1,2,3]],[1,NULL])
 query T
 SELECT list_position([[1,NULL],[1], [1,2,3]],[0,NULL])
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # nested types
 query T
@@ -332,7 +426,11 @@ SELECT list_position([{a: 1}, {a: 2}], {a: 2})
 query T
 SELECT list_position([{a: 1}, {a: 2}], {a: 3})
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([{a: 1, b: 3}, {a: 2, b: 2}], {a: 2, b: 2})
@@ -342,7 +440,11 @@ SELECT list_position([{a: 1, b: 3}, {a: 2, b: 2}], {a: 2, b: 2})
 query T
 SELECT list_position([{a: 1, b: 3}, {a: 2, b: 2}], {a: 1, b: 2})
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT list_position([MAP([1], [2])], MAP([1], [2]))
@@ -352,7 +454,11 @@ SELECT list_position([MAP([1], [2])], MAP([1], [2]))
 query T
 SELECT list_position([MAP([1], [2])], MAP([1], [3]))
 ----
+<<<<<<< HEAD
 NULL
+=======
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 PRAGMA debug_force_external=true
@@ -371,6 +477,7 @@ INSERT INTO test0 VALUES ([2.0]), ([1.0]), ([1.0, 2.0]), ([]), ([2.0, 2.0]), ([N
 query T
 SELECT list_position(i,1.0) from test0
 ----
+<<<<<<< HEAD
 NULL
 1
 1
@@ -378,6 +485,15 @@ NULL
 NULL
 NULL
 NULL
+=======
+0
+1
+1
+0
+0
+0
+0
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 DROP TABLE test0

@@ -34,10 +34,17 @@ SELECT * FROM (VALUES
 	(NULL)
 ) tbl(i);
 
+<<<<<<< HEAD
 query II
 select min(i), max(i) from list_int;
 ----
 [1]	[NULL, NULL]
+=======
+query III
+select min(i), max(i), first(i) from list_int;
+----
+[1]	[NULL, NULL]	[1]
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query I
 select first([i]) from range(10) tbl(i);

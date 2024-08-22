@@ -7,16 +7,27 @@ PRAGMA enable_verification
 
 # issue 5984, number 21
 statement ok
+<<<<<<< HEAD
 CREATE TABLE t1 (c1 DECIMAL(4, 3));
 
 statement ok
 INSERT INTO t1(c1) VALUES (1), (-0.505);
+=======
+CREATE TABLE t1 (c1 DECIMAL(4,3));
+
+statement ok
+INSERT INTO t1(c1) VALUES (1),(-0.505);
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 CREATE INDEX i1 ON t1 (TRY_CAST(c1 AS USMALLINT));
 
 statement ok
+<<<<<<< HEAD
 INSERT INTO t1(c1) VALUES (2), (3);
+=======
+INSERT INTO t1(c1) VALUES (2),(3);
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # issue 5984, number 22
 statement ok
@@ -40,7 +51,11 @@ statement ok
 CREATE TABLE t3(c1 INT);
 
 statement ok
+<<<<<<< HEAD
 INSERT INTO t3 VALUES (0), (85491);
+=======
+INSERT INTO t3 VALUES (0),(85491);
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 CREATE INDEX i3 ON t3 (c1, (TRY_CAST(c1 AS USMALLINT)));
@@ -54,7 +69,11 @@ statement ok
 CREATE INDEX i4 ON t4 (c1);
 
 statement ok
+<<<<<<< HEAD
 INSERT INTO t4 VALUES (1), (0), (1), (1);
+=======
+INSERT INTO t4 VALUES (1),(0),(1),(1);
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 UPDATE t4 SET c1 = NULL;

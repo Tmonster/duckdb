@@ -291,6 +291,7 @@ statement ok
 insert into t0 values (1), (2), (3), (4), (5), (6), (7);
 
 # some complex expression in the offset clause
+<<<<<<< HEAD
 statement error
 SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 ----
@@ -299,6 +300,8 @@ More than one row returned by a subquery
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 ----

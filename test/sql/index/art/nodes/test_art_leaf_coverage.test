@@ -1,11 +1,19 @@
 # name: test/sql/index/art/nodes/test_art_leaf_coverage.test
+<<<<<<< HEAD
 # description: ART coverage tests for leaves.
+=======
+# description: ART coverage tests for leaf code coverage
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 # group: [nodes]
 
 statement ok
 PRAGMA enable_verification;
 
+<<<<<<< HEAD
 # Test the deserialization of leaves.
+=======
+# test deserialization of leaf segments
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 load __TEST_DIR__/art_vacuum.db
 

@@ -40,6 +40,7 @@ query TT
 Select * from read_csv('data/csv/custom_date.csv', header=true, timestampformat='%m/%d/%Y, %-I:%-M %p');
 ----
 123	2023-01-02 12:33:00
+<<<<<<< HEAD
 124	2023-12-02 11:57:00
 
 # Check that less than two numbers and @ separator does not become a date
@@ -57,3 +58,6 @@ query I
 select typeof(#1) FROM read_csv('data/csv/dates_special_format.csv', dateformat = '%b %-d, %Y') limit 1;
 ----
 DATE
+=======
+124	2023-12-02 11:57:00
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

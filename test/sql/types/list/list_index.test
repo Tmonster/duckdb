@@ -19,7 +19,17 @@ SELECT * FROM a WHERE id=1
 
 # now with null values at different levels
 statement ok
+<<<<<<< HEAD
 INSERT INTO a VALUES (2, NULL), (3, [NULL]), (4, [4, 5, NULL, 6]);
+=======
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, [NULL])
+
+statement ok
+INSERT INTO a VALUES (4, [4, 5, NULL, 6])
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query II
 SELECT * FROM a WHERE id=2
@@ -44,7 +54,20 @@ statement ok
 CREATE TABLE a(id INTEGER, c INT[]);
 
 statement ok
+<<<<<<< HEAD
 INSERT INTO a VALUES (1, [1, 2, 3]), (2, NULL), (3, [NULL]), (4, [4, 5, NULL, 6]);
+=======
+INSERT INTO a VALUES (1, [1, 2, 3])
+
+statement ok
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, [NULL])
+
+statement ok
+INSERT INTO a VALUES (4, [4, 5, NULL, 6])
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 CREATE INDEX a_index ON a(id);
@@ -71,7 +94,20 @@ SELECT * FROM a WHERE id=4
 
 # now try with multiple entries on the same index
 statement ok
+<<<<<<< HEAD
 INSERT INTO a VALUES (1, [4, 5, NULL]), (1, NULL), (1, [NULL]), (1, [7, 8, 9, 10, 11, 12, 13, 14, 15]);
+=======
+INSERT INTO a VALUES (1, [4, 5, NULL])
+
+statement ok
+INSERT INTO a VALUES (1, NULL)
+
+statement ok
+INSERT INTO a VALUES (1, [NULL])
+
+statement ok
+INSERT INTO a VALUES (1, [7, 8, 9, 10, 11, 12, 13, 14, 15])
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query II
 SELECT * FROM a WHERE id=1 ORDER BY c[1] NULLS FIRST

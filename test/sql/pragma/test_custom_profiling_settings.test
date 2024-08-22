@@ -26,12 +26,20 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.
 statement ok
 SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
+<<<<<<< HEAD
 query I
+=======
+query I rowsort
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
+<<<<<<< HEAD
 ) ORDER BY ALL
+=======
+)
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ----
 "BLOCKED_THREAD_TIME": "true"
 "CPU_TIME": "true"
@@ -43,16 +51,35 @@ SELECT unnest(res) from (
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
+<<<<<<< HEAD
 "RESULT_SET_SIZE": "true"
 
 # Turn off all settings
 statement ok
+=======
+
+# Turn off all settings
+statement ok
+PRAGMA custom_profiling_settings='{}'
+
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
+----
+(empty)
+
+statement ok
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = 'test/sql/pragma/output.json';
 
 statement ok
+<<<<<<< HEAD
 PRAGMA custom_profiling_settings='{}'
 
 statement ok
@@ -67,6 +94,10 @@ SELECT unnest(res) from (
 ----
 (empty)
 
+=======
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
@@ -98,12 +129,15 @@ Referenced column "cumulative_cardinality" not found in FROM clause!
 
 # change the cpu time to false and the rest to true and re-run the query
 statement ok
+<<<<<<< HEAD
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = 'test/sql/pragma/output.json';
 
 statement ok
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true"}'
 
 query I rowsort
@@ -118,6 +152,15 @@ SELECT unnest(res) from (
 "OPERATOR_TIMING": "true"
 
 statement ok
+<<<<<<< HEAD
+=======
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+statement ok
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
 
 statement ok
@@ -135,12 +178,20 @@ SELECT extra_info, operator_cardinality, operator_timing FROM metrics_output;
 statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
 
+<<<<<<< HEAD
 query I
+=======
+query I rowsort
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
+<<<<<<< HEAD
 ) ORDER BY ALL
+=======
+)
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ----
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
@@ -256,6 +307,7 @@ FROM metrics_output;
 ----
 true
 
+<<<<<<< HEAD
 ## Test Result_Set_Size
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -287,6 +339,8 @@ FROM metrics_output;
 true
 
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ## Create a large table to check that idle thread time is collected
 statement ok
 pragma threads=4;
@@ -308,12 +362,20 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
 # Check that idle thread time is collected
+<<<<<<< HEAD
 query I
+=======
+query I rowsort
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
+<<<<<<< HEAD
 ) ORDER BY ALL
+=======
+)
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ----
 "BLOCKED_THREAD_TIME": "true"
 
@@ -344,4 +406,7 @@ statement error
 PRAGMA custom_profiling_settings='{"INVALID_SETTING": "true"}'
 ----
 Invalid custom profiler settings: "INVALID_SETTING"
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

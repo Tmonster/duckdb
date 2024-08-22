@@ -34,6 +34,7 @@ SELECT * FROM (VALUES
 	(NULL)
 ) tbl(i);
 
+<<<<<<< HEAD
 query II
 select min(i), max(i), from struct_int;
 ----
@@ -43,6 +44,8 @@ select min(i), max(i), from struct_int;
 statement ok
 set threads=1
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query III
 select min(i), max(i), first(i) from struct_int;
 ----

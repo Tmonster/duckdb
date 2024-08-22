@@ -982,6 +982,7 @@ NULL
 NULL
 NULL
 
+<<<<<<< HEAD
 # Zero preceding
 query II
 SELECT 
@@ -1003,6 +1004,8 @@ FROM generate_series(1, 10) tbl(x);
 9	39
 10	45
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 #==========================================================================
 
 statement ok

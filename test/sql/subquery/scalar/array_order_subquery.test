@@ -92,11 +92,18 @@ SELECT ARRAY
 ----
 ORDER term out of range
 
+<<<<<<< HEAD
 statement error
+=======
+statement ok
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 SELECT ARRAY
   (SELECT 1 UNION ALL
    SELECT 2 UNION ALL
    SELECT 3
    ORDER by 'hello world') AS new_array;
+<<<<<<< HEAD
 ----
 ORDER BY non-integer literal has no effect
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

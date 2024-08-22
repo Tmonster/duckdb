@@ -53,6 +53,7 @@ ORDER BY 1
 2	3	/,-,+	3
 3	1	/	1
 4	3	NULL	3
+<<<<<<< HEAD
 
 statement error
 SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
@@ -75,3 +76,5 @@ ORDER BY 1
 2	+,-,/
 3	/
 4	NULL
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

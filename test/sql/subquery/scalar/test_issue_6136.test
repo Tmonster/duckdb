@@ -13,6 +13,7 @@ select
   (select {'__matches': count(*)} from r where ba = ra and bb = rb group by ra, rb) as ref1,
 from b;
 
+<<<<<<< HEAD
 statement error
 select
   id,
@@ -29,6 +30,8 @@ More than one row returned by a subquery
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 # this is non-deterministic since the subqueries return multiple rows
 statement ok
 select

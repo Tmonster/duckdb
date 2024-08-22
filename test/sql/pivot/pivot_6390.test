@@ -95,7 +95,11 @@ SELECT 'C3',2010,80
 from CPB pivot (sum(jg) for nf in (2010, 2017, 2018, 2022) group by cpdh)
 ----
 
+<<<<<<< HEAD
 require no_alternative_verify
+=======
+require noalternativeverify
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # nested CTEs with overlapping names
 query IIIII rowsort pivot

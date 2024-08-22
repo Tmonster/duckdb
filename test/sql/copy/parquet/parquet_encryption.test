@@ -28,6 +28,15 @@ COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {colum
 ----
 Not implemented Error: Parquet encryption_config column_keys not yet implemented
 
+<<<<<<< HEAD
+=======
+# just some code coverage for transform_constant.cpp
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: map {}}})
+----
+Unsupported expression in option list
+
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement error
 COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
 ----
@@ -95,4 +104,8 @@ PRAGMA add_parquet_key('key256base64', 'MDEyMzQ1Njc4OTExMjM0NTAxMjM0NTY3ODkxMTIz
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
 ----
+<<<<<<< HEAD
 42
+=======
+42
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

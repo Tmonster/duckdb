@@ -2,6 +2,7 @@
 # description: Correlated SetOp type mismatches
 # group: [pedro]
 
+<<<<<<< HEAD
 statement error
 SELECT '\x1E' FROM (SELECT 1) t1(c0) ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 ----
@@ -10,6 +11,8 @@ More than one row returned by a subquery
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 SELECT '\x1E' FROM (SELECT 1) t1(c0) ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 

@@ -8,7 +8,11 @@ PRAGMA enable_verification;
 statement ok
 create table x (x int);
 
+<<<<<<< HEAD
 require no_alternative_verify
+=======
+require noalternativeverify
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 with y(y) as (select 1) insert into x (select y from y);

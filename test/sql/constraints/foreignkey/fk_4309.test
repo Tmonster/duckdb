@@ -1,5 +1,9 @@
 # name: test/sql/constraints/foreignkey/fk_4309.test
+<<<<<<< HEAD
 # description: Issue #4309: Test deleting from a parent table with multiple foreign key constraints.
+=======
+# description: Issue #4309: Foreign key constraints are not honored when deleting rows from the parent table in the presence of multiple such constraints
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 # group: [foreignkey]
 
 statement ok
@@ -30,7 +34,10 @@ CREATE TABLE tf_2 (
 statement error
 INSERT INTO tf_2 VALUES (1, 1, 1);
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*does not exist in the referenced table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # insert key (1, 1, 1)
 statement ok
@@ -40,17 +47,26 @@ INSERT INTO tf_1 VALUES (1, 1, 1);
 statement error
 INSERT INTO tf_2 VALUES (2, 1, 1);
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*does not exist in the referenced table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement error
 INSERT INTO tf_2 VALUES (1, 2, 1);
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*does not exist in the referenced table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement error
 INSERT INTO tf_2 VALUES (1, 1, 2);
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*does not exist in the referenced table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # this succeeds
 statement ok
@@ -68,7 +84,10 @@ INSERT INTO tf_2 VALUES (2, NULL, NULL);
 statement error
 DELETE FROM tf_1 WHERE a = 2;
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*still referenced by a foreign key in a different table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # delete everything with a|b = 2
 statement ok
@@ -89,7 +108,10 @@ INSERT INTO tf_2 VALUES (1, 3, 1);
 statement error
 DELETE FROM tf_1 WHERE a = 2;
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*still referenced by a foreign key in a different table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # delete everything with a|b = 2
 statement ok
@@ -108,4 +130,7 @@ INSERT INTO tf_2 VALUES (1, 1, 4);
 statement error
 DELETE FROM tf_1 WHERE a = 2;
 ----
+<<<<<<< HEAD
 <REGEX>:Constraint Error.*Violates foreign key constraint.*still referenced by a foreign key in a different table.*
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

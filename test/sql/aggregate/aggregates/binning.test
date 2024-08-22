@@ -2,8 +2,11 @@
 # description: Test binning functions
 # group: [aggregates]
 
+<<<<<<< HEAD
 require 64bit
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 statement ok
 PRAGMA enable_verification
 

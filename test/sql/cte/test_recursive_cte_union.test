@@ -79,7 +79,11 @@ with recursive t as (select 1 as x union select x+(SELECT 1) from t where x < 3)
 2
 3
 
+<<<<<<< HEAD
 require no_alternative_verify
+=======
+require noalternativeverify
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # hash join
 query I

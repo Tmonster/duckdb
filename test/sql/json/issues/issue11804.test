@@ -18,6 +18,7 @@ query I
 select json_type(JSON '{"a": null}', '$.a') = 'NULL';
 ----
 true
+<<<<<<< HEAD
 
 # Test issue 13436 - JSON_TYPE function produces wrong result if path is a column expression
 query II
@@ -34,3 +35,5 @@ select unnest(json_type(JSON '{"a": null}', ['$.a', '$.a'])) = 'NULL';
 ----
 true
 true
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

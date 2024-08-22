@@ -2,9 +2,12 @@
 # description: Test list_has_any and list_has_all functions
 # group: [list]
 
+<<<<<<< HEAD
 statement ok
 PRAGMA enable_verification
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 select list_has_any([1,2,3], [2,3,4]);
 ----
@@ -175,7 +178,10 @@ select list_has_all([1, 2], 1);
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 ----
+<<<<<<< HEAD
 Binder Error: 'list_has_any' cannot compare lists of different types: 'INTEGER[]' and 'VARCHAR'
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 # Test Function in Function
 

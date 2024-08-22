@@ -28,7 +28,11 @@ INSERT INTO test SELECT range % 5000 FROM range(10000);
 query T
 SELECT stats(x) FROM test LIMIT 1;
 ----
+<<<<<<< HEAD
 [Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
+=======
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT stats(y) FROM test LIMIT 1;
@@ -48,7 +52,11 @@ PRAGMA disable_verify_parallelism;
 query T
 SELECT stats(x) FROM test LIMIT 1;
 ----
+<<<<<<< HEAD
 [Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]
+=======
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 query T
 SELECT stats(y) FROM test LIMIT 1;

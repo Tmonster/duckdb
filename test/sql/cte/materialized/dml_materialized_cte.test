@@ -5,7 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+<<<<<<< HEAD
 require no_alternative_verify
+=======
+require noalternativeverify
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 
 statement ok
 create table a(i integer);

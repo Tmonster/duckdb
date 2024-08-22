@@ -15,6 +15,7 @@ INSERT INTO t0(c0) VALUES (0);
 statement ok
 CREATE VIEW v0(c0) AS SELECT 1 FROM t0;
 
+<<<<<<< HEAD
 statement error
 SELECT * FROM v0 ORDER BY 'a';
 ----
@@ -23,7 +24,13 @@ ORDER BY non-integer literal has no effect
 statement ok
 SET order_by_non_integer_literal=true
 
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 query I
 SELECT * FROM v0 ORDER BY 'a';
 ----
 1
+<<<<<<< HEAD
+=======
+
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")

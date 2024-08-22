@@ -67,7 +67,11 @@ SELECT * FROM dates ORDER BY 1
 
 # nothing matches the glob
 statement error
+<<<<<<< HEAD
 INSERT INTO dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
+=======
+COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
 ----
 No files found that match the pattern
 

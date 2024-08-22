@@ -427,6 +427,7 @@ query II
 SELECT id, name FROM test WHERE id IN (2,3) AND name::text ILIKE '%2Pac%';
 ----
 3	[Oasis, 2Pac]
+<<<<<<< HEAD
 
 # Test list_contains with NULLs inside list_filter.
 
@@ -440,3 +441,5 @@ query I
 SELECT list_filter(l1, (x) -> list_contains(l2, x)) FROM list_of_list;
 ----
 []
+=======
+>>>>>>> 1a4d456d8b (Revert "remove tests I don't want to test")
