@@ -695,7 +695,7 @@ void IngestionSample::Verify() {
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
-	Printer::Print("Merge start");
+	// Printer::Print("Merge start");
 	if (destroyed || other->destroyed) {
 		Destroy();
 		return;
@@ -728,7 +728,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		                                                               other_ingest.NumSamplesCollected());
 	}
 
-	Printer::Print("Merge middle");
+	// Printer::Print("Merge middle");
 
 	// we know both ingestion samples have collected samples,
 	// shrink both samples so merging is easier
@@ -767,7 +767,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 			}
 		}
 	}
-	Printer::Print("Merge middle 2");
+	// Printer::Print("Merge middle 2");
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
@@ -798,7 +798,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		chunk_offset += 1;
 	}
 
-	Printer::Print("Merge middle 3");
+	// Printer::Print("Merge middle 3");
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
 	base_reservoir_sample->min_weight_threshold = min_weight;
@@ -818,7 +818,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
 
-	Printer::Print("Merge end");
+	// Printer::Print("Merge end");
 	Verify();
 }
 
@@ -827,7 +827,7 @@ idx_t IngestionSample::GetTuplesSeen() {
 }
 
 unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize() {
-	Printer::Print("ConvertToReservoirSampleToSerialize start");
+	// Printer::Print("ConvertToReservoirSampleToSerialize start");
 	Shrink();
 	Verify();
 	if (!sample_chunk || destroyed) {
@@ -870,7 +870,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 		FlatVector::Validity(ret->reservoir_chunk->chunk.data[col_idx]).Initialize(FIXED_SAMPLE_SIZE);
 	}
 
-	Printer::Print("ConvertToReservoirSampleToSerialize mid");
+	// Printer::Print("ConvertToReservoirSampleToSerialize mid");
 	// set up selection vector to copy IngestionSample to ReservoirSample
 	SelectionVector sel(num_samples_to_keep);
 	// make sure the reservoir weights are empty. We will reconstruct the heap with new indexes
@@ -896,12 +896,12 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	D_ASSERT(ret->reservoir_chunk->chunk.size() == num_samples_to_keep);
 	// ret->reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
 	D_ASSERT(ret->GetPriorityQueueSize() == ret->reservoir_chunk->chunk.size());
-	Printer::Print("ConvertToReservoirSampleToSerialize end");
+	// Printer::Print("ConvertToReservoirSampleToSerialize end");
 	return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 }
 
 idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
-	Printer::Print("Filling Reservoir");
+	// Printer::Print("Filling Reservoir");
 	idx_t ingested_count = 0;
 	if (!sample_chunk) {
 		if (chunk.size() > FIXED_SAMPLE_SIZE) {
@@ -916,7 +916,7 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 			    .Initialize(FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
 		}
 	}
-	Printer::Print("Filling Reservoir loc 2");
+	// Printer::Print("Filling Reservoir loc 2");
 	D_ASSERT(sample_chunk->ColumnCount() == chunk.ColumnCount());
 	if (sample_chunk->size() < FIXED_SAMPLE_SIZE) {
 		ingested_count = MinValue<idx_t>(FIXED_SAMPLE_SIZE - sample_chunk->size(), chunk.size());
@@ -957,7 +957,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
-	Printer::Print("Get Replacement Indexes");
+	// Printer::Print("Get Replacement Indexes");
 
 	while (true) {
 		idx_t offset =
@@ -980,7 +980,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 		remaining -= offset;
 		base_offset += offset;
 	}
-	Printer::Print("Finish Get Replacement Indexes");
+	// Printer::Print("Finish Get Replacement Indexes");
 }
 
 void IngestionSample::Finalize() {
@@ -988,7 +988,7 @@ void IngestionSample::Finalize() {
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
-	Printer::Print("Add to Reservoir start");
+	// Printer::Print("Add to Reservoir start");
 	if (destroyed || chunk.size() == 0) {
 		return;
 	}
@@ -1029,7 +1029,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		return;
 	}
 
-	Printer::Print("Add to Reservoir stop");
+	// Printer::Print("Add to Reservoir stop");
 	// at this point our sample_chunk has at least FIXED SAMPLE SIZE samples.
 	D_ASSERT(sample_chunk->size() >= FIXED_SAMPLE_SIZE);
 
@@ -1073,7 +1073,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (sample_chunk->size() >= FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
 		Shrink();
 	}
-	Printer::Print("Add to Reservoir end");
+	// Printer::Print("Add to Reservoir end");
 }
 
 void BlockingSample::Serialize(Serializer &serializer) const {
