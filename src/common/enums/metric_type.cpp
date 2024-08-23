@@ -36,6 +36,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
         MetricsType::OPTIMIZER_EXTENSION,
         MetricsType::OPTIMIZER_MATERIALIZED_CTE,
+    	MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP,
     };
 }
 
@@ -100,6 +101,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_EXTENSION;
         case OptimizerType::MATERIALIZED_CTE:
             return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+		case OptimizerType::EMPTY_RESULT_PULLUP:
+    		return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -183,6 +186,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
         case MetricsType::OPTIMIZER_EXTENSION:
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+		case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
             return true;
         default:
             return false;
