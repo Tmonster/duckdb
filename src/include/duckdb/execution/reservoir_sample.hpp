@@ -20,6 +20,8 @@
 
 namespace duckdb {
 
+enum class AddType : uint8_t { APPEND = 0, COPY = 1 };
+
 enum class SampleType : uint8_t {
 	BLOCKING_SAMPLE = 0,
 	RESERVOIR_SAMPLE = 1,
@@ -259,6 +261,11 @@ public:
 	unique_ptr<BlockingSample> Copy() const override;
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 	void Merge(unique_ptr<BlockingSample> other);
+
+	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t sel_count);
+	void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
+	                           idx_t target_offset);
+	void UpdateSampleCopy(DataChunk &other, SelectionVector &sel, idx_t source_offset, idx_t target_offset, idx_t size);
 
 	idx_t GetTuplesSeen();
 	idx_t NumSamplesCollected();

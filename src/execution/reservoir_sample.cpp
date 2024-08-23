@@ -808,7 +808,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
-	sample_chunk->Append(*other_ingest.sample_chunk, false, &sel_other, chunk_offset);
+	UpdateSampleAppend(*other_ingest.sample_chunk, sel_other, chunk_offset);
+	// sample_chunk->Append(*other_ingest.sample_chunk, false, &sel_other, chunk_offset);
 	// for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
 	// 	// perform the copy for this
 	// 	// perform copy for other with offset sample_count_this
@@ -893,6 +894,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 
 	// perform the copy
 	sample_chunk->Copy(ret->reservoir_chunk->chunk, sel, num_samples_to_keep, 0);
+	// sample_chunk->Copy(ret->reservoir_chunk->chunk, sel, num_samples_to_keep, 0);
 	D_ASSERT(ret->reservoir_chunk->chunk.size() == num_samples_to_keep);
 	// ret->reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
 	D_ASSERT(ret->GetPriorityQueueSize() == ret->reservoir_chunk->chunk.size());
@@ -925,7 +927,7 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 			sel.set_index(i, i);
 		}
 		idx_t new_cardinality = sample_chunk->size() + ingested_count;
-		sample_chunk->Append(chunk, false, &sel, ingested_count);
+		UpdateSampleAppend(chunk, sel, ingested_count);
 		D_ASSERT(sample_chunk->size() == new_cardinality);
 	}
 	// always return how many tuples were ingested
@@ -985,6 +987,52 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 
 void IngestionSample::Finalize() {
 	return;
+}
+
+void IngestionSample::UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t sel_count) {
+	idx_t new_size = sample_chunk->size() + sel_count;
+	if (other.size() == 0) {
+		return;
+	}
+	D_ASSERT(sample_chunk->GetTypes() == other.GetTypes());
+
+	UpdateSampleWithTypes(other, sel, sel_count, 0, sample_chunk->size());
+	sample_chunk->SetCardinality(new_size);
+}
+
+void IngestionSample::UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count,
+                                            idx_t source_offset, idx_t target_offset) {
+	D_ASSERT(sample_chunk->GetTypes() == other.GetTypes());
+	auto types = sample_chunk->GetTypes();
+
+	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
+		D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		auto col_type = types[i];
+		if (types[i].IsNumeric()) {
+			VectorOperations::Copy(other.data[i], sample_chunk->data[i], sel, source_count, source_offset,
+			                       target_offset);
+		}
+		// copy NULL values. This is done so we don't break storage compatability
+		// If someone collects samples in databases with versions v1.2 and v1.3
+		// we want to keep the column count the same.
+		// ie. create table t0 with 3 columns in v1.2 with a string column - sample has 3 columns
+		//     append to table t0 in v1.3, we have the proper columns
+		//     open sample again in v1.2, we can still use the sample
+		else {
+			for (idx_t j = sample_chunk->size(); j < sample_chunk->size() + other.size(); j++) {
+				FlatVector::SetNull(sample_chunk->data[i], j, true);
+			}
+			FlatVector::Validity(sample_chunk->data[i]).SetAllInvalid(sample_chunk->size() + other.size());
+			// sample_chunk->data[i].Verify();
+		}
+	}
+}
+
+void IngestionSample::UpdateSampleCopy(DataChunk &other, SelectionVector &sel, idx_t source_offset, idx_t target_offset,
+                                       idx_t size) {
+	idx_t new_size = sample_chunk->size() + size;
+	UpdateSampleWithTypes(other, sel, size, 0, sample_chunk->size());
+	sample_chunk->SetCardinality(new_size);
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
@@ -1058,11 +1106,8 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	const SelectionVector const_sel(sel);
 
 	idx_t sample_chunk_size_before_ingestion = sample_chunk->size();
-	sample_chunk->Append(chunk, false, &sel, size);
-	// for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-	// 	VectorOperations::Copy(chunk.data[col_idx], sample_chunk->data[col_idx], const_sel, size, 0,
-	// 	                       sample_chunk_size_before_ingestion);
-	// }
+	UpdateSampleAppend(chunk, sel, size);
+
 	D_ASSERT(sample_chunk->size() == sample_chunk_size_before_ingestion + sample_chunk_ind_to_data_chunk_index.size());
 
 	base_reservoir_sample->num_entries_seen_total += chunk.size();
