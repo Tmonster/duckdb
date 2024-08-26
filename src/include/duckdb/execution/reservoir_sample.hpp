@@ -268,6 +268,7 @@ public:
 	void UpdateSampleCopy(DataChunk &other, SelectionVector &sel, idx_t source_offset, idx_t target_offset, idx_t size);
 
 	idx_t GetTuplesSeen();
+	static bool ValidSampleType(const LogicalType &type);
 	idx_t NumSamplesCollected();
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;

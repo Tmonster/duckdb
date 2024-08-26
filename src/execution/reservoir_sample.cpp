@@ -574,12 +574,19 @@ void IngestionSample::Shrink() {
 
 	// create a new sample chunk to store new samples
 	auto new_sample_chunk = make_uniq<DataChunk>();
+	auto types = sample_chunk->GetTypes();
 	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(),
 	                             FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
 	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+		auto type = types[col_idx];
 		// TODO: should the validity mask be the capacity or the size?
 		FlatVector::Validity(new_sample_chunk->data[col_idx])
 		    .Initialize(FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
+
+		if (!ValidSampleType(type)) {
+			new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
+		}
 	}
 
 	// set up selection vector to copy IngestionSample to ReservoirSample
@@ -600,10 +607,15 @@ void IngestionSample::Shrink() {
 	base_reservoir_sample->min_weight_threshold = -max_weight;
 	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 
+	std::swap(sample_chunk, new_sample_chunk);
+	// first flatten the chunks to expand null constant vector columns that take the place
+	// of the un-supported columns.
 	// perform the copy
-	sample_chunk->Copy(*new_sample_chunk, sel, num_samples_to_keep, 0);
-	D_ASSERT(new_sample_chunk->size() == num_samples_to_keep);
-	sample_chunk = std::move(new_sample_chunk);
+	UpdateSampleCopy(*new_sample_chunk, sel, 0, 0, num_samples_to_keep);
+	// sample_chunk->Copy(*new_sample_chunk, sel, num_samples_to_keep, 0);
+	D_ASSERT(sample_chunk->size() == num_samples_to_keep);
+	// sample_chunk = std::move(new_sample_chunk);
+
 	Verify();
 	// We should only have one sample chunk now.
 	D_ASSERT(sample_chunk->size() > 0 && sample_chunk->size() <= FIXED_SAMPLE_SIZE);
@@ -629,19 +641,30 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 
 	// create a new sample chunk to store new samples
 	auto new_sample_chunk = make_uniq<DataChunk>();
+	auto types = sample_chunk->GetTypes();
 	D_ASSERT(sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 	idx_t new_sample_chunk_size =
 	    for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
-	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(), new_sample_chunk_size);
+	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types, new_sample_chunk_size);
 	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+		auto type = types[col_idx];
 		// TODO: should the validity mask be the capacity or the size?
 		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
+		if (!ValidSampleType(type)) {
+			new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
+		}
 	}
-	// copy chunk to copy into new sample chunk
-	sample_chunk->Copy(*new_sample_chunk);
+	// set up selection vector to copy IngestionSample to ReservoirSample
+	SelectionVector sel(new_sample_chunk_size);
 
-	new_sample_chunk->SetCardinality(sample_chunk->size());
+	for (idx_t i = 0; i < new_sample_chunk_size; i++) {
+		sel.set_index(i, i);
+	}
+
 	ret->sample_chunk = std::move(new_sample_chunk);
+	ret->UpdateSampleCopy(*sample_chunk, sel, 0, 0, sample_chunk->size());
+	D_ASSERT(ret->sample_chunk->size() == sample_chunk->size());
 
 	ret->Verify();
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
@@ -695,7 +718,6 @@ void IngestionSample::Verify() {
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
-	// Printer::Print("Merge start");
 	if (destroyed || other->destroyed) {
 		Destroy();
 		return;
@@ -727,8 +749,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		other_ingest.base_reservoir_sample->InitializeReservoirWeights(other_ingest.NumSamplesCollected(),
 		                                                               other_ingest.NumSamplesCollected());
 	}
-
-	// Printer::Print("Merge middle");
 
 	// we know both ingestion samples have collected samples,
 	// shrink both samples so merging is easier
@@ -767,7 +787,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 			}
 		}
 	}
-	// Printer::Print("Merge middle 2");
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
@@ -798,7 +817,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 		chunk_offset += 1;
 	}
 
-	// Printer::Print("Merge middle 3");
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
 	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
 	base_reservoir_sample->min_weight_threshold = min_weight;
@@ -819,7 +837,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
 
-	// Printer::Print("Merge end");
 	Verify();
 }
 
@@ -828,7 +845,6 @@ idx_t IngestionSample::GetTuplesSeen() {
 }
 
 unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize() {
-	// Printer::Print("ConvertToReservoirSampleToSerialize start");
 	Shrink();
 	Verify();
 	if (!sample_chunk || destroyed) {
@@ -871,7 +887,6 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 		FlatVector::Validity(ret->reservoir_chunk->chunk.data[col_idx]).Initialize(FIXED_SAMPLE_SIZE);
 	}
 
-	// Printer::Print("ConvertToReservoirSampleToSerialize mid");
 	// set up selection vector to copy IngestionSample to ReservoirSample
 	SelectionVector sel(num_samples_to_keep);
 	// make sure the reservoir weights are empty. We will reconstruct the heap with new indexes
@@ -893,32 +908,60 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	D_ASSERT(ret->base_reservoir_sample->min_weight_threshold > 0);
 
 	// perform the copy
-	sample_chunk->Copy(ret->reservoir_chunk->chunk, sel, num_samples_to_keep, 0);
+
+	// UpdateSampleCopy(ret->reservoir_chunk->chunk, sel, 0, 0, num_samples_to_keep);
+	// sample_chunk->Copy(ret->reservoir_chunk->chunk, sel, num_samples_to_keep, 0);
+	idx_t new_size = ret->reservoir_chunk->chunk.size() + num_samples_to_keep;
+
+	// UpdateSampleWithTypes(other, sel, size, 0, sample_chunk->size());
+	D_ASSERT(sample_chunk->GetTypes() == ret->reservoir_chunk->chunk.GetTypes());
+	auto types = sample_chunk->GetTypes();
+	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
+		auto col_type = types[i];
+		if (ValidSampleType(col_type)) {
+			D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+			VectorOperations::Copy(sample_chunk->data[i], ret->reservoir_chunk->chunk.data[i], sel, num_samples_to_keep,
+			                       0, 0);
+		} else {
+			ret->reservoir_chunk->chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(ret->reservoir_chunk->chunk.data[i], true);
+		}
+		// When the sample chunk is initialized, any non-numeric types are stored as constant vectors and set to null.
+	}
+
+	ret->reservoir_chunk->chunk.SetCardinality(new_size);
+
 	// sample_chunk->Copy(ret->reservoir_chunk->chunk, sel, num_samples_to_keep, 0);
 	D_ASSERT(ret->reservoir_chunk->chunk.size() == num_samples_to_keep);
 	// ret->reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
 	D_ASSERT(ret->GetPriorityQueueSize() == ret->reservoir_chunk->chunk.size());
-	// Printer::Print("ConvertToReservoirSampleToSerialize end");
 	return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 }
 
 idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
-	// Printer::Print("Filling Reservoir");
+
 	idx_t ingested_count = 0;
 	if (!sample_chunk) {
 		if (chunk.size() > FIXED_SAMPLE_SIZE) {
 			throw InternalException("Creating sample with DataChunk that is larger than the fixed sample size");
 		}
+		auto types = chunk.GetTypes();
 		// create a new sample chunk to store new samples
 		sample_chunk = make_uniq<DataChunk>();
-		sample_chunk->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes(),
+		sample_chunk->Initialize(Allocator::DefaultAllocator(), types,
 		                         FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
+
 		for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
+			auto col_type = types[col_idx];
 			FlatVector::Validity(sample_chunk->data[col_idx])
 			    .Initialize(FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
+			if (!ValidSampleType(col_type)) {
+				sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(sample_chunk->data[col_idx], true);
+			}
 		}
 	}
-	// Printer::Print("Filling Reservoir loc 2");
+
 	D_ASSERT(sample_chunk->ColumnCount() == chunk.ColumnCount());
 	if (sample_chunk->size() < FIXED_SAMPLE_SIZE) {
 		ingested_count = MinValue<idx_t>(FIXED_SAMPLE_SIZE - sample_chunk->size(), chunk.size());
@@ -959,7 +1002,6 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
-	// Printer::Print("Get Replacement Indexes");
 
 	while (true) {
 		idx_t offset =
@@ -982,11 +1024,14 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 		remaining -= offset;
 		base_offset += offset;
 	}
-	// Printer::Print("Finish Get Replacement Indexes");
 }
 
 void IngestionSample::Finalize() {
 	return;
+}
+
+bool IngestionSample::ValidSampleType(const LogicalType &type) {
+	return type.IsNumeric();
 }
 
 void IngestionSample::UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t sel_count) {
@@ -1006,25 +1051,13 @@ void IngestionSample::UpdateSampleWithTypes(DataChunk &other, SelectionVector &s
 	auto types = sample_chunk->GetTypes();
 
 	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
-		D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		auto col_type = types[i];
-		if (types[i].IsNumeric()) {
+		if (ValidSampleType(col_type)) {
+			D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 			VectorOperations::Copy(other.data[i], sample_chunk->data[i], sel, source_count, source_offset,
 			                       target_offset);
 		}
-		// copy NULL values. This is done so we don't break storage compatability
-		// If someone collects samples in databases with versions v1.2 and v1.3
-		// we want to keep the column count the same.
-		// ie. create table t0 with 3 columns in v1.2 with a string column - sample has 3 columns
-		//     append to table t0 in v1.3, we have the proper columns
-		//     open sample again in v1.2, we can still use the sample
-		else {
-			for (idx_t j = sample_chunk->size(); j < sample_chunk->size() + other.size(); j++) {
-				FlatVector::SetNull(sample_chunk->data[i], j, true);
-			}
-			FlatVector::Validity(sample_chunk->data[i]).SetAllInvalid(sample_chunk->size() + other.size());
-			// sample_chunk->data[i].Verify();
-		}
+		// When the sample chunk is initialized, any non-numeric types are stored as constant vectors and set to null.
 	}
 }
 
@@ -1036,7 +1069,6 @@ void IngestionSample::UpdateSampleCopy(DataChunk &other, SelectionVector &sel, i
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {
-	// Printer::Print("Add to Reservoir start");
 	if (destroyed || chunk.size() == 0) {
 		return;
 	}
@@ -1077,7 +1109,6 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		return;
 	}
 
-	// Printer::Print("Add to Reservoir stop");
 	// at this point our sample_chunk has at least FIXED SAMPLE SIZE samples.
 	D_ASSERT(sample_chunk->size() >= FIXED_SAMPLE_SIZE);
 
@@ -1118,7 +1149,6 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	if (sample_chunk->size() >= FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
 		Shrink();
 	}
-	// Printer::Print("Add to Reservoir end");
 }
 
 void BlockingSample::Serialize(Serializer &serializer) const {
