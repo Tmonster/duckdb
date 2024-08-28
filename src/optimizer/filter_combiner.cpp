@@ -690,7 +690,17 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// check the existing constant comparisons to see if we can do any pruning
 		auto ret = AddConstantComparison(info_list, info);
 
+		// PrintCombinerInfo();
 		auto &non_scalar = left_is_scalar ? *comparison.right : *comparison.left;
+		if (non_scalar.type == ExpressionType::BOUND_FUNCTION) {
+			auto &func = non_scalar.Cast<BoundFunctionExpression>();
+			if (func.IsConsistent()) {
+				Printer::Print("-------------------------------------------------");
+				for (auto &child : func.children) {
+					auto brek = 0;
+				}
+			}
+		}
 		auto transitive_filter = FindTransitiveFilter(non_scalar);
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
@@ -742,7 +752,28 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 				return FilterResult::UNSATISFIABLE;
 			}
 		}
+
+		// Now that we've added to an equivalence set, maybe we can expand on other expressions that are not
+		// Bound column ref epressions
+		PrintCombinerInfo();
+		for (auto &pair : equivalence_map) {
+			for (auto &expr : pair.second) {
+				if (expr.get().type == ExpressionType::BOUND_FUNCTION) {
+					auto &func = expr.get().Cast<BoundFunctionExpression>();
+					for (auto &child : func.children) {
+						for (auto &new_expr : left_bucket) {
+							auto &bucket_expr = new_expr.get();
+							auto comparison_thing_1 = GetEquivalenceSet(bucket_expr);
+							auto comparison_thing_2 = GetEquivalenceSet(*child);
+
+						}
+					}
+				}
+			}
+		}
+		auto brek_here = 0;
 	}
+	PrintCombinerInfo();
 	return FilterResult::SUCCESS;
 }
 
@@ -1034,12 +1065,6 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
  */
 unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 
-	if (expr.type == ExpressionType::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.IsConsistent()) {
-			auto neato = 0;
-		}
-	}
 	// We only check for bound column ref
 	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
