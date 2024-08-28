@@ -333,6 +333,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
+
+	// initialize thread-local stats so we have less lock contention when updating distinct statistics
+	state.stats = TableStatistics();
+	state.stats.InitializeEmpty(types);
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
@@ -384,16 +388,16 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
-	auto stats_lock = stats.GetLock();
+	auto local_stats_lock = state.stats.GetLock();
 	// all performance related to ingestion samping happens in the table same code
-	if (stats.table_sample) {
-		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+	if (state.stats.table_sample) {
+		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
 		ingest_sample.AddToReservoir(chunk);
 	}
 
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 	return new_row_group;
 }
@@ -411,6 +415,17 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
+
+	auto global_stats_lock = stats.GetLock();
+	auto local_stats_lock = state.stats.GetLock();
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
+		if (!global_stats.HasDistinctStats()) {
+			continue;
+		}
+		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+	}
 
 	Verify();
 }
