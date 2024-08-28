@@ -1,0 +1,28 @@
+# name: test/sql/optimizer/pushdown/pushdown_function_filters.test
+# description: Test pushing down function filters if column equalities are equal
+# group: [optimizer]
+
+
+statement ok
+create table t1 as (from values ('42'), ('43') t(a));
+
+statement ok
+create table t2 as (from values ('42'), ('43') t(b));
+
+statement ok
+create table t3 as (from values ('42'), ('43') t(c));
+
+statement ok
+pragma explain_output='optimized_only';
+
+query II
+explain
+select *
+from t1
+join t2
+  on t1.a = t2.b
+join t3
+  on t2.b = t3.c
+where right(t1.a, 1) = '2';
+----
+logical_opt	<REGEX>:.*FILTER.*FILTER.*

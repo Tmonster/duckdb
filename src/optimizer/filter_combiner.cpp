@@ -108,6 +108,10 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
 		auto &entries = entry.second;
+		for (idx_t i = 0 ; i < entries.size(); i++) {
+			auto tmp = entries.at(i);
+			auto brek_here = 0;
+		}
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
@@ -849,6 +853,52 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	return FilterResult::UNSUPPORTED;
 }
 
+
+void FilterCombiner::PrintCombinerInfo() {
+	Printer::Print("Remaining Filters = ");
+	for (auto &f : remaining_filters) {
+		f->Print();
+	}
+	Printer::Print("===============================================");
+	Printer::Print("stored expressions");
+	for (auto &key_pair : stored_expressions) {
+		Printer::Print("key");
+		key_pair.first.get().Print();
+		Printer::Print("value");
+		Printer::Print(key_pair.second->ToString());
+	}
+	Printer::Print("===============================================");
+	Printer::Print("equivalence set map");
+	for (auto &key_pair : equivalence_set_map) {
+		Printer::Print("key");
+		key_pair.first.get().Print();
+		Printer::Print("value");
+		Printer::Print(to_string(key_pair.second));
+	}
+	Printer::Print("===============================================");
+	Printer::Print("constant values");
+	for (auto &key_pair : constant_values) {
+		Printer::Print("key");
+		Printer::Print(to_string(key_pair.first));
+		Printer::Print("values");
+		for (auto &entry : key_pair.second) {
+			Printer::Print(EnumUtil::ToString(entry.comparison_type) + " " + entry.constant.ToString());
+		}
+	}
+	Printer::Print("===============================================");
+	Printer::Print("equivalence map");
+	for (auto &key_pair : equivalence_map) {
+		Printer::Print("key");
+		Printer::Print(to_string(key_pair.first));
+		Printer::Print("values");
+		for (auto &entry : key_pair.second) {
+			Printer::Print(entry.get().ToString());
+		}
+	}
+
+
+}
+
 /*
  * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
@@ -983,6 +1033,13 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
  * then removes the bound comparison from the remaining filters and returns it
  */
 unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
+
+	if (expr.type == ExpressionType::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.IsConsistent()) {
+			auto neato = 0;
+		}
+	}
 	// We only check for bound column ref
 	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;

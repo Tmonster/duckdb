@@ -61,6 +61,9 @@ private:
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
+
+	void PrintCombinerInfo();
+
 	//
 	//	//! Functions used to push and generate OR Filters
 	//	void LookUpConjunctions(Expression *expr);
@@ -94,11 +97,19 @@ private:
 	//	}
 
 private:
+	// also unsure.
 	vector<unique_ptr<Expression>> remaining_filters;
 
+	// unsure. Keeps a map of all stored expressions?
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
+	// unsure
 	expression_map_t<idx_t> equivalence_set_map;
+	// idx_t_key -> Comparisons to Constant values
+	// expressions found at equivalence_map[x] have filters to constant values at
+	// constant_values[x]. Expression Value Information encode GT, GEQ, LT, LEQ, EQ, NEQ
+	// comparison
 	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
+	// idx_t_key -> Expressions that are equal to eachother
 	unordered_map<idx_t, vector<reference<Expression>>> equivalence_map;
 	idx_t set_index = 0;
 	//

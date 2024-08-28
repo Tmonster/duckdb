@@ -21,6 +21,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		throw InternalException("Unsupported join type for cross product push down");
 	}
 	unordered_set<idx_t> left_bindings, right_bindings;
+	// check the equivalence_set_map
 	if (!filters.empty()) {
 		// check to see into which side we should push the filters
 		// first get the LHS and RHS bindings
