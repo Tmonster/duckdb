@@ -6,17 +6,15 @@ require tpch
 
 require json
 
-statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
-
-statement ok
-call dbgen(sf=0.1);
-
-statement ok
-SELECT NULL FROM (SELECT ref_2.ps_availqty AS c0, ref_3.r_regionkey AS c1, json_object() AS c2, ref_5.o_shippriority AS c3, ref_1.ps_suppkey AS c4, ref_4.s_suppkey AS c5, ref_1.ps_suppkey AS c6, hex(CAST(CAST(NULL AS BLOB) AS BLOB)) AS c7, (SELECT o_shippriority FROM main.orders LIMIT 1 OFFSET 6) AS c8, ref_1.ps_partkey AS c9, add(CAST(CAST(NULL AS UBIGINT) AS UBIGINT), CAST(CAST(NULL AS UBIGINT) AS UBIGINT)) AS c10, ref_0.r_comment AS c11, ref_1.ps_suppkey AS c12 FROM main.region AS ref_0 INNER JOIN main.partsupp AS ref_1 ON ((ref_1.ps_comment !~~ ref_0.r_name)) INNER JOIN main.partsupp AS ref_2 ON (((SELECT n_regionkey FROM main.nation LIMIT 1 OFFSET 4) IS NULL)) INNER JOIN main.region AS ref_3 ON ((ref_0.r_name !~~ ref_2.ps_comment)) INNER JOIN main.supplier AS ref_4 INNER JOIN main.orders AS ref_5 ON (EXISTS(SELECT ref_5.o_orderstatus AS c0, ref_5.o_orderkey AS c1, ref_6.o_orderdate AS c2, ref_4.s_name AS c3, ref_4.s_comment AS c4 FROM main.orders AS ref_6 WHERE EXISTS(SELECT ref_4.s_acctbal AS c0, ref_5.o_clerk AS c1, ref_5.o_custkey AS c2, ref_7.s_address AS c3, ref_6.o_orderdate AS c4, ref_7.s_acctbal AS c5, (SELECT o_comment FROM main.orders LIMIT 1 OFFSET 3) AS c6, ref_5.o_custkey AS c7, ref_5.o_totalprice AS c8, ref_5.o_orderpriority AS c9, ref_4.s_comment AS c10, ref_7.s_name AS c11 FROM main.supplier AS ref_7 WHERE (CAST(NULL AS VARCHAR) !~~ CAST(NULL AS VARCHAR)) LIMIT 16))) ON ((ref_2.ps_supplycost = ref_5.o_totalprice)) WHERE ((ref_5.o_orderpriority ^@ ref_4.s_phone) OR (ref_4.s_phone ~~ ref_4.s_name))) AS subq_0 WHERE ((subq_0.c11 ~~ subq_0.c7) AND ((CAST(nullif(subq_0.c7, CAST(NULL AS VARCHAR)) AS VARCHAR) ~~* subq_0.c7) OR (subq_0.c11 ~~ subq_0.c7) OR ((SELECT ps_partkey FROM main.partsupp LIMIT 1 OFFSET 5) IS NULL))) LIMIT 64
-
+#statement ok
+#create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+#
+#statement ok
+#call dbgen(sf=0.1);
 
 #
+## lateral join depth
+## https://github.com/duckdb/duckdb-fuzzer/issues/3244
 #statement ok
 #SELECT 44 AS c2 FROM
 #	(SELECT
@@ -40,3 +38,72 @@ SELECT NULL FROM (SELECT ref_2.ps_availqty AS c0, ref_3.r_regionkey AS c1, json_
 #				FROM main.all_types AS ref_5
 #			)
 #	)
+
+
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/3124
+statement ok
+SELECT
+    NULL
+FROM main.all_types AS ref_0
+WHERE
+    EXISTS(
+        SELECT EXISTS(
+              SELECT NULL
+              FROM main.all_types AS ref_3
+              WHERE EXISTS(SELECT NULL WHERE ref_3."varchar")
+        )
+        FROM (SELECT NULL WHERE EXISTS(SELECT NULL WHERE ref_0."varchar")))
+
+
+#statement ok
+#create or replace table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+#
+## https://github.com/duckdb/duckdb-fuzzer/issues/2860
+#statement ok
+#SELECT NULL FROM (SELECT ref_5.usmallint AS c1 FROM main.all_types LEFT JOIN main.all_types AS ref_1 ON (1) INNER JOIN main.all_types AS ref_2 INNER JOIN main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON (((SELECT stddev("double") FROM main.all_types) IS NOT NULL)) LEFT JOIN main.all_types AS ref_5 ON ((ref_5."varchar" !~~* ref_3."varchar")) ON ((ref_4."varchar" !~~ ref_2."varchar")) ON ((ref_2."varchar" ^@ ref_2."varchar")) LIMIT 41) AS subq_0 WHERE EXISTS(SELECT NULL FROM (SELECT NULL WHERE EXISTS(SELECT subq_0.c1 AS c2)) WHERE EXISTS(SELECT NULL FROM main.all_types AS ref_10 , (SELECT NULL WHERE ref_10."varchar")))
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/2697
+#statement ok
+#SELECT
+#    NULL
+#FROM
+#    (SELECT
+#        ref_0."bit" AS c0,
+#        ref_0."bit" AS c1,
+#        (SELECT NULL) AS c3,
+#        ref_0.uuid AS c4,
+#        ref_0.fixed_array_of_int_list AS c5
+#    FROM main.all_types AS ref_0)
+#    AS subq_0
+#INNER JOIN
+#    (SELECT
+#        ref_1.array_of_structs AS c1,
+#        (SELECT NULL) AS c2,
+#        ref_1."struct" AS c11,
+#        ref_2.fixed_struct_array AS c14,
+#        ref_1."double" AS c18
+#    FROM main.all_types AS ref_1
+#    INNER JOIN main.all_types AS ref_2
+#        ON (NULL)
+#    ) AS subq_1 ON (NULL) ,
+#(SELECT
+#    (SELECT uuid FROM main.all_types LIMIT 1 OFFSET 3) AS c2,
+#    subq_0.c4 AS c3,
+#    subq_2.c2 AS c4,
+#    subq_2.c2 AS c5,
+#    subq_2.c1 AS c6,
+#    subq_2.c0 AS c7,
+#    subq_1.c1 AS c8,
+#    61 AS c9,
+#    subq_1.c18 AS c10,
+#    (SELECT
+#        fixed_int_array FROM main.all_types LIMIT 1 OFFSET 4) AS c11,
+#        CAST(COALESCE(subq_0.c3, CAST(NULL AS INTEGER[])) AS INTEGER[]) AS c12,
+#        subq_0.c4 AS c13,
+#        subq_2.c0 AS c14,
+#        subq_2.c0 AS c15 FROM (SELECT ref_3.dec_9_4 AS c0, subq_0.c1 AS c1, subq_1.c14 AS c2 FROM main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON ((ref_3."varchar" !~~* ref_3."varchar")) WHERE EXISTS(SELECT ref_4.bool AS c0, (SELECT ubigint FROM main.all_types LIMIT 1 OFFSET 4) AS c1, ref_4.fixed_varchar_array AS c2, ref_4.hugeint AS c3, ref_4.timestamp_ns AS c4, 13 AS c5, ref_4.tinyint AS c6, subq_0.c5 AS c7, subq_0.c0 AS c8, ref_4.dec_9_4 AS c9, subq_1.c2 AS c10, subq_1.c11 AS c11, ref_5.nested_int_array AS c12, ref_3.usmallint AS c13, subq_1.c18 AS c14, (SELECT dec_4_1 FROM main.all_types LIMIT 1 OFFSET 5) AS c15 FROM main.all_types AS ref_5 WHERE (ref_3."varchar" !~~ (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 6)) LIMIT 110) LIMIT 132) AS subq_2 WHERE EXISTS(SELECT (SELECT dec_18_6 FROM main.all_types LIMIT 1 OFFSET 5) AS c0, subq_3.c0 AS c1, ref_7."int" AS c2 FROM main.all_types AS ref_6 LEFT JOIN main.all_types AS ref_7 ON (1) INNER JOIN main.all_types AS ref_8 RIGHT JOIN main.all_types AS ref_9 ON ((1 OR (ref_9."varchar" !~~ ref_9."varchar"))) ON ((ref_7."varchar" ^@ ref_7."varchar")) , (SELECT ref_8."int" AS c0, ref_7."bigint" AS c1 FROM main.all_types AS ref_10 WHERE 0) AS subq_3 WHERE (ref_6."varchar" ^@ ref_7."varchar")) LIMIT 96)
+
