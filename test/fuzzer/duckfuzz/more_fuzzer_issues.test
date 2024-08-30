@@ -6,43 +6,38 @@ require tpch
 
 require json
 
-#statement ok
-#create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
-#
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
 #statement ok
 #call dbgen(sf=0.1);
 
 #
 ## lateral join depth
 ## https://github.com/duckdb/duckdb-fuzzer/issues/3244
-#statement ok
-#SELECT 44 AS c2 FROM
-#	(SELECT
-#		ref_0.dec_4_1 AS c0,
-#	FROM main.all_types AS ref_0)
-#AS subq_0
-#WHERE
-#	EXISTS(
-#		SELECT
-#			EXISTS(
-#				SELECT NULL
-#				FROM main.all_types AS ref_2
-#				WHERE EXISTS
-#					(SELECT NULL
-#					WHERE ref_2."varchar")
-#			)
-#		WHERE
-#			EXISTS(
-#				SELECT ref_5.usmallint AS c0,
-#				subq_0.c0 AS c1
-#				FROM main.all_types AS ref_5
-#			)
-#	)
-
-
-
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+SELECT 44 AS c2 FROM
+	(SELECT
+		ref_0.dec_4_1 AS c0,
+	FROM main.all_types AS ref_0)
+AS subq_0
+WHERE
+	EXISTS(
+		SELECT
+			EXISTS(
+				SELECT NULL
+				FROM main.all_types AS ref_2
+				WHERE EXISTS
+					(SELECT NULL
+					WHERE ref_2."varchar")
+			)
+		WHERE
+			EXISTS(
+				SELECT ref_5.usmallint AS c0,
+				subq_0.c0 AS c1
+				FROM main.all_types AS ref_5
+			)
+	)
 
 # https://github.com/duckdb/duckdb-fuzzer/issues/3124
 statement ok
@@ -59,51 +54,53 @@ WHERE
         FROM (SELECT NULL WHERE EXISTS(SELECT NULL WHERE ref_0."varchar")))
 
 
-#statement ok
-#create or replace table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
-#
-## https://github.com/duckdb/duckdb-fuzzer/issues/2860
-#statement ok
-#SELECT NULL FROM (SELECT ref_5.usmallint AS c1 FROM main.all_types LEFT JOIN main.all_types AS ref_1 ON (1) INNER JOIN main.all_types AS ref_2 INNER JOIN main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON (((SELECT stddev("double") FROM main.all_types) IS NOT NULL)) LEFT JOIN main.all_types AS ref_5 ON ((ref_5."varchar" !~~* ref_3."varchar")) ON ((ref_4."varchar" !~~ ref_2."varchar")) ON ((ref_2."varchar" ^@ ref_2."varchar")) LIMIT 41) AS subq_0 WHERE EXISTS(SELECT NULL FROM (SELECT NULL WHERE EXISTS(SELECT subq_0.c1 AS c2)) WHERE EXISTS(SELECT NULL FROM main.all_types AS ref_10 , (SELECT NULL WHERE ref_10."varchar")))
+statement ok
+create or replace table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
 
-# https://github.com/duckdb/duckdb-fuzzer/issues/2697
-#statement ok
-#SELECT
-#    NULL
-#FROM
-#    (SELECT
-#        ref_0."bit" AS c0,
-#        ref_0."bit" AS c1,
-#        (SELECT NULL) AS c3,
-#        ref_0.uuid AS c4,
-#        ref_0.fixed_array_of_int_list AS c5
-#    FROM main.all_types AS ref_0)
-#    AS subq_0
-#INNER JOIN
-#    (SELECT
-#        ref_1.array_of_structs AS c1,
-#        (SELECT NULL) AS c2,
-#        ref_1."struct" AS c11,
-#        ref_2.fixed_struct_array AS c14,
-#        ref_1."double" AS c18
-#    FROM main.all_types AS ref_1
-#    INNER JOIN main.all_types AS ref_2
-#        ON (NULL)
-#    ) AS subq_1 ON (NULL) ,
-#(SELECT
-#    (SELECT uuid FROM main.all_types LIMIT 1 OFFSET 3) AS c2,
-#    subq_0.c4 AS c3,
-#    subq_2.c2 AS c4,
-#    subq_2.c2 AS c5,
-#    subq_2.c1 AS c6,
-#    subq_2.c0 AS c7,
-#    subq_1.c1 AS c8,
-#    61 AS c9,
-#    subq_1.c18 AS c10,
-#    (SELECT
-#        fixed_int_array FROM main.all_types LIMIT 1 OFFSET 4) AS c11,
-#        CAST(COALESCE(subq_0.c3, CAST(NULL AS INTEGER[])) AS INTEGER[]) AS c12,
-#        subq_0.c4 AS c13,
-#        subq_2.c0 AS c14,
-#        subq_2.c0 AS c15 FROM (SELECT ref_3.dec_9_4 AS c0, subq_0.c1 AS c1, subq_1.c14 AS c2 FROM main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON ((ref_3."varchar" !~~* ref_3."varchar")) WHERE EXISTS(SELECT ref_4.bool AS c0, (SELECT ubigint FROM main.all_types LIMIT 1 OFFSET 4) AS c1, ref_4.fixed_varchar_array AS c2, ref_4.hugeint AS c3, ref_4.timestamp_ns AS c4, 13 AS c5, ref_4.tinyint AS c6, subq_0.c5 AS c7, subq_0.c0 AS c8, ref_4.dec_9_4 AS c9, subq_1.c2 AS c10, subq_1.c11 AS c11, ref_5.nested_int_array AS c12, ref_3.usmallint AS c13, subq_1.c18 AS c14, (SELECT dec_4_1 FROM main.all_types LIMIT 1 OFFSET 5) AS c15 FROM main.all_types AS ref_5 WHERE (ref_3."varchar" !~~ (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 6)) LIMIT 110) LIMIT 132) AS subq_2 WHERE EXISTS(SELECT (SELECT dec_18_6 FROM main.all_types LIMIT 1 OFFSET 5) AS c0, subq_3.c0 AS c1, ref_7."int" AS c2 FROM main.all_types AS ref_6 LEFT JOIN main.all_types AS ref_7 ON (1) INNER JOIN main.all_types AS ref_8 RIGHT JOIN main.all_types AS ref_9 ON ((1 OR (ref_9."varchar" !~~ ref_9."varchar"))) ON ((ref_7."varchar" ^@ ref_7."varchar")) , (SELECT ref_8."int" AS c0, ref_7."bigint" AS c1 FROM main.all_types AS ref_10 WHERE 0) AS subq_3 WHERE (ref_6."varchar" ^@ ref_7."varchar")) LIMIT 96)
+# https://github.com/duckdb/duckdb-fuzzer/issues/2860
+statement error
+SELECT NULL FROM (SELECT ref_5.usmallint AS c1 FROM main.all_types LEFT JOIN main.all_types AS ref_1 ON (1) INNER JOIN main.all_types AS ref_2 INNER JOIN main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON (((SELECT stddev("double") FROM main.all_types) IS NOT NULL)) LEFT JOIN main.all_types AS ref_5 ON ((ref_5."varchar" !~~* ref_3."varchar")) ON ((ref_4."varchar" !~~ ref_2."varchar")) ON ((ref_2."varchar" ^@ ref_2."varchar")) LIMIT 41) AS subq_0 WHERE EXISTS(SELECT NULL FROM (SELECT NULL WHERE EXISTS(SELECT subq_0.c1 AS c2)) WHERE EXISTS(SELECT NULL FROM main.all_types AS ref_10 , (SELECT NULL WHERE ref_10."varchar")))
+----
+<REGEX>:.*Out of Range Error.*
+
+ https://github.com/duckdb/duckdb-fuzzer/issues/2697
+statement ok
+SELECT
+    NULL
+FROM
+    (SELECT
+        ref_0."bit" AS c0,
+        ref_0."bit" AS c1,
+        (SELECT NULL) AS c3,
+        ref_0.uuid AS c4,
+        ref_0.fixed_array_of_int_list AS c5
+    FROM main.all_types AS ref_0)
+    AS subq_0
+INNER JOIN
+    (SELECT
+        ref_1.array_of_structs AS c1,
+        (SELECT NULL) AS c2,
+        ref_1."struct" AS c11,
+        ref_2.fixed_struct_array AS c14,
+        ref_1."double" AS c18
+    FROM main.all_types AS ref_1
+    INNER JOIN main.all_types AS ref_2
+        ON (NULL)
+    ) AS subq_1 ON (NULL) ,
+(SELECT
+    (SELECT uuid FROM main.all_types LIMIT 1 OFFSET 3) AS c2,
+    subq_0.c4 AS c3,
+    subq_2.c2 AS c4,
+    subq_2.c2 AS c5,
+    subq_2.c1 AS c6,
+    subq_2.c0 AS c7,
+    subq_1.c1 AS c8,
+    61 AS c9,
+    subq_1.c18 AS c10,
+    (SELECT
+        fixed_int_array FROM main.all_types LIMIT 1 OFFSET 4) AS c11,
+        CAST(COALESCE(subq_0.c3, CAST(NULL AS INTEGER[])) AS INTEGER[]) AS c12,
+        subq_0.c4 AS c13,
+        subq_2.c0 AS c14,
+        subq_2.c0 AS c15 FROM (SELECT ref_3.dec_9_4 AS c0, subq_0.c1 AS c1, subq_1.c14 AS c2 FROM main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 ON ((ref_3."varchar" !~~* ref_3."varchar")) WHERE EXISTS(SELECT ref_4.bool AS c0, (SELECT ubigint FROM main.all_types LIMIT 1 OFFSET 4) AS c1, ref_4.fixed_varchar_array AS c2, ref_4.hugeint AS c3, ref_4.timestamp_ns AS c4, 13 AS c5, ref_4.tinyint AS c6, subq_0.c5 AS c7, subq_0.c0 AS c8, ref_4.dec_9_4 AS c9, subq_1.c2 AS c10, subq_1.c11 AS c11, ref_5.nested_int_array AS c12, ref_3.usmallint AS c13, subq_1.c18 AS c14, (SELECT dec_4_1 FROM main.all_types LIMIT 1 OFFSET 5) AS c15 FROM main.all_types AS ref_5 WHERE (ref_3."varchar" !~~ (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 6)) LIMIT 110) LIMIT 132) AS subq_2 WHERE EXISTS(SELECT (SELECT dec_18_6 FROM main.all_types LIMIT 1 OFFSET 5) AS c0, subq_3.c0 AS c1, ref_7."int" AS c2 FROM main.all_types AS ref_6 LEFT JOIN main.all_types AS ref_7 ON (1) INNER JOIN main.all_types AS ref_8 RIGHT JOIN main.all_types AS ref_9 ON ((1 OR (ref_9."varchar" !~~ ref_9."varchar"))) ON ((ref_7."varchar" ^@ ref_7."varchar")) , (SELECT ref_8."int" AS c0, ref_7."bigint" AS c1 FROM main.all_types AS ref_10 WHERE 0) AS subq_3 WHERE (ref_6."varchar" ^@ ref_7."varchar")) LIMIT 96)
 
