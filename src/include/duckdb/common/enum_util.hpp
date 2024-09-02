@@ -34,6 +34,8 @@ struct EnumUtil {
 
 enum class AccessMode : uint8_t;
 
+enum class AddType : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateHandling : uint8_t;
@@ -117,6 +119,8 @@ enum class DefaultOrderByNullType : uint8_t;
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
+
+enum class DestroyBufferUpon : uint8_t;
 
 enum class DistinctType : uint8_t;
 
@@ -361,6 +365,9 @@ template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
+const char* EnumUtil::ToChars<AddType>(AddType value);
+
+template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
 
 template<>
@@ -485,6 +492,9 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -848,6 +858,9 @@ template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
+AddType EnumUtil::FromString<AddType>(const char *value);
+
+template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
 
 template<>
@@ -972,6 +985,9 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
+
+template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);

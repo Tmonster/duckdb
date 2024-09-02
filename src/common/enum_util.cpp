@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
@@ -171,6 +172,29 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "READ_WRITE")) {
 		return AccessMode::READ_WRITE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<AddType>(AddType value) {
+	switch(value) {
+	case AddType::APPEND:
+		return "APPEND";
+	case AddType::COPY:
+		return "COPY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+AddType EnumUtil::FromString<AddType>(const char *value) {
+	if (StringUtil::Equals(value, "APPEND")) {
+		return AddType::APPEND;
+	}
+	if (StringUtil::Equals(value, "COPY")) {
+		return AddType::COPY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1732,6 +1756,34 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return DeprecatedIndexType::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
+	switch(value) {
+	case DestroyBufferUpon::BLOCK:
+		return "BLOCK";
+	case DestroyBufferUpon::EVICTION:
+		return "EVICTION";
+	case DestroyBufferUpon::UNPIN:
+		return "UNPIN";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCK")) {
+		return DestroyBufferUpon::BLOCK;
+	}
+	if (StringUtil::Equals(value, "EVICTION")) {
+		return DestroyBufferUpon::EVICTION;
+	}
+	if (StringUtil::Equals(value, "UNPIN")) {
+		return DestroyBufferUpon::UNPIN;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4360,6 +4412,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
+	case MetricsType::RESULT_SET_SIZE:
+		return "RESULT_SET_SIZE";
 	case MetricsType::ALL_OPTIMIZERS:
 		return "ALL_OPTIMIZERS";
 	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
@@ -4458,6 +4512,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "RESULT_SET_SIZE")) {
+		return MetricsType::RESULT_SET_SIZE;
 	}
 	if (StringUtil::Equals(value, "ALL_OPTIMIZERS")) {
 		return MetricsType::ALL_OPTIMIZERS;
