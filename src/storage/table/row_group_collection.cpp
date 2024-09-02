@@ -425,6 +425,13 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+		if (stats.table_sample && state.stats.table_sample) {
+			D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+			auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+			ingest_sample.Merge(std::move(state.stats.table_sample));
+			// initialize the table sample again
+			state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+		}
 	}
 
 	Verify();
