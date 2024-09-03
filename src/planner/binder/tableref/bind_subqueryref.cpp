@@ -17,7 +17,6 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, optional_ptr<CommonTabl
 	if (ref.alias.empty()) {
 		auto index = unnamed_subquery_index++;
 		subquery_alias = "unnamed_subquery";
-		;
 		if (index > 1) {
 			subquery_alias += to_string(index);
 		}

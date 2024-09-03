@@ -226,6 +226,9 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				if (tmask.RowIsValid(target_offset + i)) {
 					auto source_idx = sel->get_index(source_offset + i);
 					auto &source_entry = sdata[source_idx];
+					if (source_entry.length == source_entry.offset && source_entry.length > 100000) {
+						throw InternalException("this shouldn't happen");
+					}
 					for (idx_t j = 0; j < source_entry.length; ++j) {
 						child_rows.emplace_back(source_entry.offset + j);
 					}
