@@ -89,7 +89,7 @@ jobs:
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
-          test/Release/unittest.exe
+          python3 scripts/run_tests_one_by_one.py ./test/Release/unittest.exe
 
       - name: Tools Test
         shell: bash
