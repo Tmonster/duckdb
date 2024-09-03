@@ -1,0 +1,10 @@
+# name: benchmark/RealNest/twitter_unnest_loaded_table.benchmark
+# description: Multi layer unnest from 6 layers deep fom the loaded table
+# group: [RealNest]
+
+name twitter_unnest_loaded_table
+group real_nest
+
+template benchmark/realnest/realnest.benchmark.in
+QUERY_NUMBER=8
+QUERY_NUMBER_PADDED=08
