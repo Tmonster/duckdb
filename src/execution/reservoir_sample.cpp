@@ -765,6 +765,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(total_samples <= FIXED_SAMPLE_SIZE * 2);
 	// if there are more than FIXED_SAMPLE_SIZE samples, we want to keep only the
 	// highest weighted FIXED_SAMPLE_SIZE samples
+
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_ingest.base_reservoir_sample->min_weight_threshold;
@@ -792,7 +793,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
 
 	auto min_weight = base_reservoir_sample->min_weight_threshold;
-	auto max_weight_index = base_reservoir_sample->min_weighted_entry_index;
+	auto min_weight_index = base_reservoir_sample->min_weighted_entry_index;
 
 	SelectionVector sel_other(other_ingest.GetPriorityQueueSize());
 
@@ -802,11 +803,11 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// while also filling in the selection vector we wil use to copy values.
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
-		auto other_min_weight = -other_top.first;
+		auto other_weight = -other_top.first;
 		idx_t index_for_new_pair = chunk_offset + sample_chunk->size();
-		if (other_min_weight > min_weight) {
-			min_weight = other_min_weight;
-			max_weight_index = index_for_new_pair;
+		if (other_weight < min_weight) {
+			min_weight = other_weight;
+			min_weight_index = index_for_new_pair;
 		}
 
 		sel_other.set_index(chunk_offset, other_top.second);
@@ -818,7 +819,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
-	base_reservoir_sample->min_weighted_entry_index = max_weight_index;
+	base_reservoir_sample->min_weighted_entry_index = min_weight_index;
 	base_reservoir_sample->min_weight_threshold = min_weight;
 	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 	base_reservoir_sample->num_entries_seen_total =
@@ -827,15 +828,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
 	UpdateSampleAppend(*other_ingest.sample_chunk, sel_other, chunk_offset);
-	// sample_chunk->Append(*other_ingest.sample_chunk, false, &sel_other, chunk_offset);
-	// for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
-	// 	// perform the copy for this
-	// 	// perform copy for other with offset sample_count_this
-	// 	VectorOperations::Copy(other_ingest.sample_chunk->data[col_idx], sample_chunk->data[col_idx], sel_other,
-	// 	                       chunk_offset, 0, sample_chunk->size());
-	// }
-
-	// sample_chunk->SetCardinality(sample_chunk->size() + chunk_offset);
 
 	Verify();
 }
@@ -1066,6 +1058,23 @@ void IngestionSample::UpdateSampleCopy(DataChunk &other, SelectionVector &sel, i
 	idx_t new_size = sample_chunk->size() + size;
 	UpdateSampleWithTypes(other, sel, size, 0, sample_chunk->size());
 	sample_chunk->SetCardinality(new_size);
+}
+
+bool sortDouble(double i, double j) {
+	return (i < j);
+}
+
+void IngestionSample::PrintWeightsInOrder() {
+	vector<double> weights;
+	auto copy_base = base_reservoir_sample->Copy();
+	while (!copy_base->reservoir_weights.empty()) {
+		weights.push_back(copy_base->reservoir_weights.top().first);
+		copy_base->reservoir_weights.pop();
+	}
+	std::sort(weights.begin(), weights.end(), sortDouble);
+	for (idx_t pos = 0; pos < weights.size(); pos++) {
+		Printer::Print(to_string(pos) + ": " + to_string(weights.at(pos)));
+	}
 }
 
 void IngestionSample::AddToReservoir(DataChunk &chunk) {

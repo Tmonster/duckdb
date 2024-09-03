@@ -388,17 +388,25 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
+
 	auto local_stats_lock = state.stats.GetLock();
-	// all performance related to ingestion samping happens in the table same code
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+	}
 	if (state.stats.table_sample) {
 		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
 		ingest_sample.AddToReservoir(chunk);
 	}
 
-	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
-	}
+	// auto global_stats_lock = stats.GetLock();
+	// // all performance related to ingestion samping happens in the table same code
+	// if (stats.table_sample) {
+	// 	D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+	// 	auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+	// 	ingest_sample.AddToReservoir(chunk);
+	// }
+
 	return new_row_group;
 }
 
@@ -425,13 +433,13 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
-		if (stats.table_sample && state.stats.table_sample) {
-			D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
-			auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
-			ingest_sample.Merge(std::move(state.stats.table_sample));
-			// initialize the table sample again
-			state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
-		}
+	}
+	if (stats.table_sample && state.stats.table_sample) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Merge(std::move(state.stats.table_sample));
+		// initialize the table sample again
+		state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	}
 
 	Verify();

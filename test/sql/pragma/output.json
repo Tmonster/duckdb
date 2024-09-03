@@ -1,3 +1,91 @@
 {
-    "result": "error"
+    "result_set_size": 176,
+    "operator_timing": 0.00023,
+    "operator_rows_scanned": 0,
+    "cumulative_rows_scanned": 0,
+    "operator_cardinality": 0,
+    "cumulative_cardinality": 35,
+    "extra_info": {},
+    "cpu_time": 0.000243,
+    "blocked_thread_time": 0.0,
+    "query_name": "SELECT unnest(res) from (\n\tselect current_setting('custom_profiling_settings') as raw_setting,\n\traw_setting.trim('{}') as setting,\n\tstring_split(setting, ', ') as res\n) ORDER BY ALL",
+    "children": [
+        {
+            "result_set_size": 176,
+            "operator_timing": 0.000011,
+            "operator_rows_scanned": 0,
+            "cumulative_rows_scanned": 0,
+            "operator_cardinality": 11,
+            "operator_type": "ORDER_BY",
+            "cumulative_cardinality": 35,
+            "extra_info": {
+                "Order By": "unnest(res) ASC"
+            },
+            "cpu_time": 0.000013,
+            "blocked_thread_time": 0.0,
+            "children": [
+                {
+                    "result_set_size": 176,
+                    "operator_timing": 0.0,
+                    "operator_rows_scanned": 0,
+                    "cumulative_rows_scanned": 0,
+                    "operator_cardinality": 11,
+                    "operator_type": "PROJECTION",
+                    "cumulative_cardinality": 24,
+                    "extra_info": {
+                        "Projections": "UNNEST(res)",
+                        "Estimated Cardinality": "1"
+                    },
+                    "cpu_time": 0.000002,
+                    "blocked_thread_time": 0.0,
+                    "children": [
+                        {
+                            "result_set_size": 65888,
+                            "operator_timing": 0.000001,
+                            "operator_rows_scanned": 0,
+                            "cumulative_rows_scanned": 0,
+                            "operator_cardinality": 11,
+                            "operator_type": "UNNEST",
+                            "cumulative_cardinality": 13,
+                            "extra_info": {},
+                            "cpu_time": 0.000002,
+                            "blocked_thread_time": 0.0,
+                            "children": [
+                                {
+                                    "result_set_size": 32784,
+                                    "operator_timing": 0.000001,
+                                    "operator_rows_scanned": 0,
+                                    "cumulative_rows_scanned": 0,
+                                    "operator_cardinality": 1,
+                                    "operator_type": "PROJECTION",
+                                    "cumulative_cardinality": 2,
+                                    "extra_info": {
+                                        "Projections": "['\"RESULT_SET_SIZE\": \"true\"', '\"OPERATOR_TIMING\": \"true\"', '\"OPERATOR_ROWS_SCANNED\": \"true\"', '\"CUMULATIVE_ROWS_SCANNED\": \"true\"', '\"OPERATOR_CARDINALITY\": \"true\"', '\"OPERATOR_TYPE\": \"true\"', '\"CUMULATIVE_CARDINALITY\": \"true\"', '\"EXTRA_INFO\": \"true\"', '\"CPU_TIME\": \"true\"', '\"BLOCKED_THREAD_TIME\": \"true\"', '\"QUERY_NAME\": \"true\"']",
+                                        "Estimated Cardinality": "1"
+                                    },
+                                    "cpu_time": 0.000001,
+                                    "blocked_thread_time": 0.0,
+                                    "children": [
+                                        {
+                                            "result_set_size": 4,
+                                            "operator_timing": 0.0,
+                                            "operator_rows_scanned": 0,
+                                            "cumulative_rows_scanned": 0,
+                                            "operator_cardinality": 1,
+                                            "operator_type": "DUMMY_SCAN",
+                                            "cumulative_cardinality": 1,
+                                            "extra_info": {},
+                                            "cpu_time": 0.0,
+                                            "blocked_thread_time": 0.0,
+                                            "children": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }

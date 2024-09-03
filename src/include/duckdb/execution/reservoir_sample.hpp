@@ -258,6 +258,8 @@ public:
 
 	void Shrink();
 
+	void PrintWeightsInOrder();
+
 	unique_ptr<BlockingSample> Copy() const override;
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 	void Merge(unique_ptr<BlockingSample> other);
