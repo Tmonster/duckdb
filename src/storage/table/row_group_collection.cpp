@@ -392,23 +392,23 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
-	if (state.stats.table_sample) {
-		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
-
-		auto ret = make_uniq<DataChunk>();
-		idx_t ret_chunk_size = static_cast<idx_t>(chunk.size() * 0.25);
-		auto types = chunk.GetTypes();
-		SelectionVector sel(FIXED_SAMPLE_SIZE);
-		for (idx_t i = 0; i < ret_chunk_size; i++) {
-			sel.set_index(i, i);
-		}
-		ret->Initialize(Allocator::DefaultAllocator(), types.begin(), types.end(), FIXED_SAMPLE_SIZE);
-		ret->Slice(chunk, sel, ret_chunk_size);
-		ret->SetCardinality(ret_chunk_size);
-
-		ingest_sample.AddToReservoir(*ret);
-	}
+	// if (state.stats.table_sample) {
+	// 	D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+	// 	auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
+	//
+	// 	auto ret = make_uniq<DataChunk>();
+	// 	idx_t ret_chunk_size = static_cast<idx_t>(chunk.size() * 0.25);
+	// 	auto types = chunk.GetTypes();
+	// 	SelectionVector sel(FIXED_SAMPLE_SIZE);
+	// 	for (idx_t i = 0; i < ret_chunk_size; i++) {
+	// 		sel.set_index(i, i);
+	// 	}
+	// 	ret->Initialize(Allocator::DefaultAllocator(), types.begin(), types.end(), FIXED_SAMPLE_SIZE);
+	// 	ret->Slice(chunk, sel, ret_chunk_size);
+	// 	ret->SetCardinality(ret_chunk_size);
+	//
+	// 	ingest_sample.AddToReservoir(*ret);
+	// }
 
 	// auto global_stats_lock = stats.GetLock();
 	// // all performance related to ingestion samping happens in the table same code
