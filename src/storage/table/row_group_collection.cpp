@@ -388,10 +388,25 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
+
 	auto local_stats_lock = state.stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
+	if (state.stats.table_sample) {
+		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.AddToReservoir(chunk);
+	}
+
+	// auto global_stats_lock = stats.GetLock();
+	// // all performance related to ingestion samping happens in the table same code
+	// if (stats.table_sample) {
+	// 	D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+	// 	auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+	// 	ingest_sample.AddToReservoir(chunk);
+	// }
+
 	return new_row_group;
 }
 
@@ -418,6 +433,13 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+	}
+	if (stats.table_sample && state.stats.table_sample) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Merge(std::move(state.stats.table_sample));
+		// initialize the table sample again
+		state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	}
 
 	Verify();
@@ -567,6 +589,12 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+
+	// When deleting destroy the sample.
+	auto stats_guard = stats.GetLock();
+	if (stats.table_sample) {
+		stats.table_sample->Destroy();
+	}
 	return delete_count;
 }
 
@@ -604,6 +632,11 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
+	// on update destroy the sample
+	auto stats_guard = stats.GetLock();
+	if (stats.table_sample) {
+		stats.table_sample->Destroy();
+	}
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -1056,6 +1089,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	// When adding a column destroy the sample
+	D_ASSERT(lock);
+	if (result->stats.table_sample) {
+		result->stats.table_sample->Destroy();
+	}
 	return result;
 }
 
@@ -1067,6 +1105,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto result =
 	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 	result->stats.InitializeRemoveColumn(stats, col_idx);
+
+	result->stats.table_sample->Destroy();
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
@@ -1113,7 +1153,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-
 	return result;
 }
 
@@ -1161,6 +1200,18 @@ void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
+}
+
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	if (stats.table_sample && !stats.table_sample->destroyed) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Shrink();
+		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
+		auto ret = ingest_sample.ConvertToReservoirSampleToSerialize();
+		return ret;
+	}
+	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {

@@ -34,6 +34,8 @@ struct EnumUtil {
 
 enum class AccessMode : uint8_t;
 
+enum class AddType : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateHandling : uint8_t;
@@ -361,6 +363,9 @@ enum class WindowExcludeMode : uint8_t;
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
+
+template<>
+const char* EnumUtil::ToChars<AddType>(AddType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
@@ -851,6 +856,9 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
+
+template<>
+AddType EnumUtil::FromString<AddType>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
