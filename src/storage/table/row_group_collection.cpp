@@ -1,5 +1,4 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -396,7 +395,19 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	if (state.stats.table_sample) {
 		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
-		ingest_sample.AddToReservoir(chunk);
+
+		auto ret = make_uniq<DataChunk>();
+		idx_t ret_chunk_size = chunk.size() * 0.5;
+		auto types = chunk.GetTypes();
+		SelectionVector sel(FIXED_SAMPLE_SIZE);
+		for (idx_t i = 0; i < ret_chunk_size; i++) {
+			sel.set_index(i, i);
+		}
+		ret->Initialize(Allocator::DefaultAllocator(), types.begin(), types.end(), FIXED_SAMPLE_SIZE);
+		ret->Slice(chunk, sel, FIXED_SAMPLE_SIZE);
+		ret->SetCardinality(ret_chunk_size);
+
+		ingest_sample.AddToReservoir(*ret);
 	}
 
 	// auto global_stats_lock = stats.GetLock();
