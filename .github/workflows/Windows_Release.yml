@@ -1,4 +1,4 @@
-name: Windows
+name: Windows_Release
 on:
   workflow_call:
     inputs:
@@ -84,6 +84,9 @@ jobs:
       - name: Test DUCKDB_INSTALL_LIB variable
         shell: bash
         run: echo $DUCKDB_INSTALL_LIB
+
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v2
 
       - name: Test
         shell: bash

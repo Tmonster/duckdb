@@ -85,6 +85,9 @@ jobs:
         shell: bash
         run: echo $DUCKDB_INSTALL_LIB
 
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v2
+
       - name: Test
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
