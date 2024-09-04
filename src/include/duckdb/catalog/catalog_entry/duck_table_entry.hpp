@@ -29,6 +29,8 @@ public:
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 
+	unique_ptr<BlockingSample> GetSample() override;
+
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void SetAsRoot() override;
