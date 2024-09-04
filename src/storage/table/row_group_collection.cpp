@@ -404,7 +404,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			sel.set_index(i, i);
 		}
 		ret->Initialize(Allocator::DefaultAllocator(), types.begin(), types.end(), FIXED_SAMPLE_SIZE);
-		ret->Slice(chunk, sel, FIXED_SAMPLE_SIZE);
+		ret->Slice(chunk, sel, ret_chunk_size);
 		ret->SetCardinality(ret_chunk_size);
 
 		ingest_sample.AddToReservoir(*ret);
