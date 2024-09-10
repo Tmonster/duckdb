@@ -79,7 +79,7 @@ complete_timings = {old_runner: [], new_runner: []}
 
 def run_benchmark(runner, benchmark):
     import time
-    time.sleep(1)
+    time.sleep(5)
     benchmark_args = [runner, benchmark]
     if threads is not None:
         benchmark_args += ["--threads=%d" % (threads,)]
