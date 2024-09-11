@@ -72,10 +72,10 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          make debug
+          make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
-          make debug
+          make
           cd ..
 
       - name: Set up benchmarks
@@ -87,6 +87,10 @@ jobs:
         if: always()
         shell: bash
         run: |
+          mkdir duckdb_benchmark_data
+          mkdir duckdb/duckdb_benchmark_data
+          wget https://duckdb-blobs.s3.amazonaws.com/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+          cp duckdb_benchmark_data/real_nest.duckdb duckdb/duckdb_benchmark_data/real_nest.duckdb
           python scripts/regression_test_runner.py --old=duckdb/build/debug/benchmark/benchmark_runner --new=build/release/debug/benchmark_runner --benchmarks=.github/regression/realnest.csv --verbose --threads=2
 
          
