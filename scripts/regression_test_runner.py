@@ -96,8 +96,6 @@ def run_benchmark(runner, benchmark):
         print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
         return 'Failed to run benchmark ' + benchmark
     if returncode != 0:
-        import pdb
-        pdb.set_trace()
         print("Failed to run benchmark " + benchmark)
         print(
             '''====================================================
