@@ -73,10 +73,6 @@ jobs:
         shell: bash
         run: |
           make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb
-          make
-          cd ..
 
       - name: Set up benchmarks
         shell: bash
