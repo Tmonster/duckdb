@@ -20,7 +20,7 @@ insert into  medium_1  (select range::varchar,
 
 statement ok
 create table medium_2 (id integer);
-
+t
 statement ok
 insert into medium_2 (select range from range(100));
 
