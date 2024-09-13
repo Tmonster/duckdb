@@ -23,6 +23,8 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.query);
 
+	// auto copy = statement.ToString();
+	auto query = statement.query->ToString();
 	result->ctename = statement.ctename;
 	result->setop_index = GenerateTableIndex();
 
@@ -54,6 +56,8 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	result->child_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
+	// Printer::Print("adding CTE binding to statement " + copy);
+	Printer::Print("query = " + query);
 	result->child_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, names, result->types);
 
 	if (statement.child) {

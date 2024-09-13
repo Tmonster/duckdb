@@ -77,6 +77,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
+	vector<string> keys_to_delete;
 	for (auto &cte : cte_map.map) {
 		auto &cte_entry = cte.second;
 		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
@@ -85,6 +86,7 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 			mat_cte->query = cte_entry->query->node->Copy();
 			mat_cte->aliases = cte_entry->aliases;
 			materialized_ctes.push_back(std::move(mat_cte));
+			keys_to_delete.push_back(cte.first);
 		}
 	}
 
@@ -112,6 +114,8 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 	return bound_cte;
 }
 
+static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node);
+
 template <class T>
 BoundStatement Binder::BindWithCTE(T &statement) {
 	BoundStatement bound_statement;
@@ -119,9 +123,21 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 	if (bound_cte) {
 		reference<BoundCTENode> tail_ref = *bound_cte;
 
+		// here is when
 		while (tail_ref.get().child && tail_ref.get().child->type == QueryNodeType::CTE_NODE) {
 			tail_ref = tail_ref.get().child->Cast<BoundCTENode>();
 		}
+
+		// initialize counts with the CTE names
+		// case_insensitive_map_t<idx_t> cte_ref_counts;
+		// auto cte_map = tail_ref.get().
+		// for (auto &cte : cte_map) {
+		// 	cte_ref_counts[cte.first];
+		// }
+		// // count the references of each CTE
+		// GetTableRefCountsNode(cte_ref_counts, bound_cte);
+
+
 
 		auto &tail = tail_ref.get();
 		bound_statement = tail.child_binder->Bind(statement.template Cast<T>());
@@ -206,8 +222,6 @@ void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 		AddCTE(cte_it.first, *cte_it.second);
 	}
 }
-
-static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node);
 
 static void GetTableRefCountsExpr(case_insensitive_map_t<idx_t> &cte_ref_counts, ParsedExpression &expr) {
 	if (expr.type == ExpressionType::SUBQUERY) {

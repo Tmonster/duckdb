@@ -519,6 +519,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
+	Printer::Print("Adding CTE binding: " + alias);
 	cte_bindings[alias] = std::move(binding);
 	cte_references[alias] = make_shared_ptr<idx_t>(0);
 }
