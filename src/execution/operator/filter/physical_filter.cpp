@@ -42,13 +42,37 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<FilterState>();
-	idx_t result_count = state.executor.SelectExpression(input, state.sel);
-	if (result_count == input.size()) {
-		// nothing was filtered: skip adding any selection vectors
-		chunk.Reference(input);
-	} else {
-		chunk.Slice(input, state.sel, result_count);
+	ValidityMask mask(input.size());
+	idx_t match_count = state.executor.SelectExpression(input, state.sel, mask);
+	idx_t valid_count = 0;
+	for (idx_t i = 0; i < match_count; i++) {
+		idx_t sel_index = state.sel.get_index(i);
+		if (mask.RowIsValid(sel_index)) {
+			valid_count++;
+		}
 	}
+
+	if (valid_count != match_count) {
+		// chunk.Slice(input, state.sel, result_count);
+		// return OperatorResultType::NEED_MORE_INPUT;
+		SelectionVector new_true_sel(valid_count);
+		valid_count = 0;
+		for (idx_t i = 0; i < match_count; i++) {
+			if (mask.RowIsValid(i)) {
+				new_true_sel.set_index(valid_count, state.sel.get_index(i));
+				valid_count++;
+			}
+		}
+		chunk.Slice(input, new_true_sel, valid_count);
+	} else {
+		if (match_count == input.size()) {
+			// nothing was filtered: skip adding any selection vectors
+			chunk.Reference(input);
+		} else {
+			chunk.Slice(input, state.sel, match_count);
+		}
+	}
+
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

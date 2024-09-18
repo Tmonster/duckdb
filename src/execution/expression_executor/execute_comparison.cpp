@@ -1,11 +1,9 @@
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -290,16 +288,17 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, optional_ptr<con
 	// Handle NULL nested values
 	Vector l_not_null(left);
 	Vector r_not_null(right);
-
 	auto match_count = SelectNotNull(l_not_null, r_not_null, count, *sel, maybe_vec, false_opt, null_mask);
 	auto no_match_count = count - match_count;
 	count = match_count;
 
 	//	Now that we have handled the NULLs, we can use the recursive nested comparator for the rest.
-	match_count =
-	    NestedSelector::Select<OP>(l_not_null, r_not_null, &maybe_vec, count, optional_ptr<SelectionVector>(true_opt),
-	                               optional_ptr<SelectionVector>(false_opt), null_mask);
+	match_count = NestedSelector::Select<OP>(l_not_null, r_not_null, &maybe_vec, match_count,
+	                                         optional_ptr<SelectionVector>(true_opt),
+	                                         optional_ptr<SelectionVector>(false_opt), null_mask);
 	no_match_count += (count - match_count);
+
+	// match_count = 0;
 
 	// Copy the buffered selections to the output selections
 	ScatterSelection(true_sel, match_count, true_vec);
@@ -347,7 +346,7 @@ idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, optional_ptr
 
 idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+                                 SelectionVector *false_sel, optional_ptr<ValidityMask> mask) {
 	// resolve the children
 	state->intermediate_chunk.Reset();
 	auto &left = state->intermediate_chunk.data[0];
@@ -358,17 +357,17 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel, mask);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
