@@ -1,7 +1,10 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+
+#include <duckdb/planner/expression_iterator.hpp>
 namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
@@ -45,34 +48,47 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 	ValidityMask mask(input.size());
 	idx_t match_count = state.executor.SelectExpression(input, state.sel, mask);
 	idx_t valid_count = 0;
-	for (idx_t i = 0; i < match_count; i++) {
-		idx_t sel_index = state.sel.get_index(i);
-		if (mask.RowIsValid(sel_index)) {
-			valid_count++;
-		}
+	for (auto &expr : state.executor.expressions) {
+		
 	}
 
-	if (valid_count != match_count) {
-		// chunk.Slice(input, state.sel, result_count);
-		// return OperatorResultType::NEED_MORE_INPUT;
-		SelectionVector new_true_sel(valid_count);
-		valid_count = 0;
-		for (idx_t i = 0; i < match_count; i++) {
-			if (mask.RowIsValid(i)) {
-				new_true_sel.set_index(valid_count, state.sel.get_index(i));
-				valid_count++;
+	// if the input has a nested type, then check the validity mask
+	for (auto &type : input.GetTypes()) {
+		if (type.id() == LogicalTypeId::LIST ||
+			type.id() == LogicalTypeId::ARRAY ||
+			type.id() == LogicalTypeId::STRUCT) {
+
+			for (idx_t i = 0; i < match_count; i++) {
+				idx_t sel_index = state.sel.get_index(i);
+				if (mask.RowIsValid(sel_index)) {
+					valid_count++;
+				}
 			}
-		}
-		chunk.Slice(input, new_true_sel, valid_count);
-	} else {
-		if (match_count == input.size()) {
-			// nothing was filtered: skip adding any selection vectors
-			chunk.Reference(input);
-		} else {
-			chunk.Slice(input, state.sel, match_count);
+
+			if (valid_count != match_count) {
+				// chunk.Slice(input, state.sel, result_count);
+				// return OperatorResultType::NEED_MORE_INPUT;
+				SelectionVector new_true_sel(valid_count);
+				valid_count = 0;
+				for (idx_t i = 0; i < match_count; i++) {
+					if (mask.RowIsValid(i)) {
+						new_true_sel.set_index(valid_count, state.sel.get_index(i));
+						valid_count++;
+					}
+				}
+				chunk.Slice(input, new_true_sel, valid_count);
+			}
+
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 	}
 
+	if (match_count == input.size()) {
+		// nothing was filtered: skip adding any selection vectors
+		chunk.Reference(input);
+	} else {
+		chunk.Slice(input, state.sel, match_count);
+	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
