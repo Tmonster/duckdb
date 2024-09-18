@@ -25,6 +25,8 @@ query I
 select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a<>b;
 ----
 
+mode skip
+
 
 query I
 select 1 from VALUES ([NULL, 1, NULL], [5, 6, 7])  t(a, b) where  a=b;

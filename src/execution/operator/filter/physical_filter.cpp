@@ -4,6 +4,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
+#include <duckdb/planner/expression/bound_reference_expression.hpp>
 #include <duckdb/planner/expression_iterator.hpp>
 namespace duckdb {
 
@@ -42,52 +43,79 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 	return make_uniq<FilterState>(context, *expression);
 }
 
+static bool ExprHasNestedType(const Expression &expr) {
+	auto ret = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		switch (child.expression_class) {
+		case ExpressionClass::BOUND_REF: {
+			auto &colref = child.Cast<BoundReferenceExpression>();
+			if (colref.return_type.IsNested()) {
+				ret = true;
+			}
+			break;
+		}
+		case ExpressionClass::BOUND_COLUMN_REF: {
+			auto &colref = child.Cast<BoundColumnRefExpression>();
+			if (colref.return_type.IsNested()) {
+				ret = true;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		if (!ret) {
+			ret = ExprHasNestedType(child);
+		}
+	});
+	return ret;
+}
+
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<FilterState>();
 	ValidityMask mask(input.size());
 	idx_t match_count = state.executor.SelectExpression(input, state.sel, mask);
 	idx_t valid_count = 0;
+	auto run_nested_check = false;
 	for (auto &expr : state.executor.expressions) {
-		
-	}
-
-	// if the input has a nested type, then check the validity mask
-	for (auto &type : input.GetTypes()) {
-		if (type.id() == LogicalTypeId::LIST ||
-			type.id() == LogicalTypeId::ARRAY ||
-			type.id() == LogicalTypeId::STRUCT) {
-
-			for (idx_t i = 0; i < match_count; i++) {
-				idx_t sel_index = state.sel.get_index(i);
-				if (mask.RowIsValid(sel_index)) {
-					valid_count++;
-				}
-			}
-
-			if (valid_count != match_count) {
-				// chunk.Slice(input, state.sel, result_count);
-				// return OperatorResultType::NEED_MORE_INPUT;
-				SelectionVector new_true_sel(valid_count);
-				valid_count = 0;
-				for (idx_t i = 0; i < match_count; i++) {
-					if (mask.RowIsValid(i)) {
-						new_true_sel.set_index(valid_count, state.sel.get_index(i));
-						valid_count++;
-					}
-				}
-				chunk.Slice(input, new_true_sel, valid_count);
-			}
-
-			return OperatorResultType::NEED_MORE_INPUT;
+		run_nested_check = ExprHasNestedType(*expr);
+		if (run_nested_check) {
+			break;
 		}
 	}
 
-	if (match_count == input.size()) {
-		// nothing was filtered: skip adding any selection vectors
-		chunk.Reference(input);
+	if (run_nested_check && !mask.AllValid()) {
+		// make sure the rows are valid
+		for (idx_t i = 0; i < match_count; i++) {
+			idx_t sel_index = state.sel.get_index(i);
+			if (mask.RowIsValid(sel_index)) {
+				valid_count++;
+			}
+		}
+
+		if (valid_count != match_count) {
+			// chunk.Slice(input, state.sel, result_count);
+			// return OperatorResultType::NEED_MORE_INPUT;
+			SelectionVector new_true_sel(valid_count);
+			valid_count = 0;
+			for (idx_t i = 0; i < match_count; i++) {
+				if (mask.RowIsValid(i)) {
+					new_true_sel.set_index(valid_count, state.sel.get_index(i));
+					valid_count++;
+				}
+			}
+			chunk.Slice(input, new_true_sel, valid_count);
+		} else {
+			chunk.Slice(input, state.sel, match_count);
+		}
 	} else {
-		chunk.Slice(input, state.sel, match_count);
+		if (match_count == input.size()) {
+			// nothing was filtered: skip adding any selection vectors
+			chunk.Reference(input);
+		} else {
+			chunk.Slice(input, state.sel, match_count);
+		}
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
