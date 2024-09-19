@@ -29,7 +29,7 @@ CREATE VIEW intlists AS SELECT * FROM (VALUES
 	) lv(i, fk);
 
 query III
-SELECT i, pk, fk FROM intlistdim, intlists WHERE pk = fk ORDER BY i
+SELECT i, pk, fk FROM intlistdim, intlists WHERE pk = fk ORDER BY i;
 ----
 1	[1]	[1]
 3	[]	[]

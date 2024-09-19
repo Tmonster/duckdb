@@ -49,7 +49,10 @@ static bool ExprHasNestedType(const Expression &expr) {
 		switch (child.expression_class) {
 		case ExpressionClass::BOUND_REF: {
 			auto &colref = child.Cast<BoundReferenceExpression>();
-			if (colref.return_type.IsNested()) {
+			// UNION type stores NULLs for the non used type I think?
+			// The validity mask will then return null for everything which would not
+			// be good for us.
+			if (colref.return_type.IsNested() && colref.return_type.id() != LogicalTypeId::UNION) {
 				ret = true;
 			}
 			break;
