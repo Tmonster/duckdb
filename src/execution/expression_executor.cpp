@@ -84,10 +84,11 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
-idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel, optional_ptr<ValidityMask> mask) {
 	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
-	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	idx_t selected_tuples =
+	    Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr, mask);
 	return selected_tuples;
 }
 
@@ -223,7 +224,8 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 }
 
 idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+                                 optional_ptr<ValidityMask> mask) {
 	if (count == 0) {
 		return 0;
 	}
@@ -233,9 +235,9 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_COMPARISON:
-		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel, mask);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel, mask);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

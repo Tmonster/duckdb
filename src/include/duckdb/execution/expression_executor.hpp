@@ -61,7 +61,8 @@ public:
 	DUCKDB_API void ExecuteExpression(Vector &result);
 	//! Execute the ExpressionExecutor and generate a selection vector from all true values in the result; this should
 	//! only be used with a single boolean expression
-	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
+	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel,
+	                                  optional_ptr<ValidityMask> mask = nullptr);
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
@@ -133,16 +134,17 @@ protected:
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in
 	//! the result
 	idx_t Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
+	             SelectionVector *true_sel, SelectionVector *false_sel, optional_ptr<ValidityMask> mask = nullptr);
 	idx_t DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
 	idx_t Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
+	             SelectionVector *true_sel, SelectionVector *false_sel, optional_ptr<ValidityMask> mask = nullptr);
 	idx_t Select(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+	             optional_ptr<ValidityMask> mask = nullptr);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);

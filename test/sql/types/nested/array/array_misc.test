@@ -45,6 +45,7 @@ SELECT DISTINCT a FROM arrays WHERE a[1] > 0 ORDER BY ALL
 [4, NULL, 2]
 [7, 8, 9]
 
+
 query I
 SELECT * FROM (
     SELECT a FROM ARRAYS

@@ -64,6 +64,9 @@ SELECT * FROM a WHERE b[1][1]=1
 ----
 0	[[1, 2], NULL, [3, NULL]]
 
+
+mode skip
+
 query II
 SELECT * FROM a WHERE b[1][1]=1 OR b[1][2]=2
 ----

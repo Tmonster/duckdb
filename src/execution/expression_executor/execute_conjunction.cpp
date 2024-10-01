@@ -54,7 +54,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 
 idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+                                 SelectionVector *false_sel, optional_ptr<ValidityMask> mask) {
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
@@ -75,7 +75,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
 			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
-			                      current_count, true_sel, temp_false.get());
+			                      current_count, true_sel, temp_false.get(), mask);
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
