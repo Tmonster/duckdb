@@ -223,6 +223,9 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
                                                const unordered_map<idx_t, LogicalType> &new_column_types);
 
+//! When to call init_global to initialize the table function
+enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
+
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API
@@ -239,7 +242,7 @@ public:
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
 	//! (Optional) Bind replace function
-	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! This function is called before the regular bind function. It allows returning a TableRef that will be used to
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
 	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;
@@ -300,6 +303,11 @@ public:
 	bool filter_prune;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+
+	//! When to call init_global
+	//! By default init_global is called when the pipeline is ready for execution
+	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
+	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 };
