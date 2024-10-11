@@ -62,8 +62,7 @@ public:
 	virtual bool IsScalar() const = 0;
 	//! Returns true if the expression has a parameter
 	virtual bool HasParameter() const = 0;
-	//! Returns true if executing the base expression can throw an error
-	//! I.e Cast('a' to INT).
+	//! Returns true if executing the expression can throw an error
 	virtual bool CanThrow() const = 0;
 
 	//! Get the name of the expression
