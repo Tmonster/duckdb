@@ -41,7 +41,6 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 		}
 	};
 
-	
 	vector<ExpressionCosts> expression_costs;
 	expression_costs.reserve(expressions.size());
 	// iterate expressions, get cost for each one

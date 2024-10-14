@@ -311,15 +311,19 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			auto function = ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
-			                               BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
+			ScalarFunction function("+", {left_type, right_type}, left_type, nullptr,
+			                        BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
 			return function;
 		} else if (left_type.IsIntegral()) {
-			return ScalarFunction("+", {left_type, right_type}, left_type,
-			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
-			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
+			ScalarFunction function("+", {left_type, right_type}, left_type,
+			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
+			                        nullptr, nullptr,
+			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		} else {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
@@ -591,18 +595,19 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			auto function =
-			    ScalarFunction("-", {left_type, right_type}, left_type, nullptr,
-			                   BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
+			ScalarFunction function("-", {left_type, right_type}, left_type, nullptr,
+			                        BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
 			return function;
 		} else if (left_type.IsIntegral()) {
-			return ScalarFunction(
+			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
-
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		} else {
 			return ScalarFunction("-", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
@@ -636,8 +641,11 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("-", {left_type, right_type}, LogicalType::INTERVAL,
-			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::INTERVAL,
+			    ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		}
 		break;
 	case LogicalTypeId::TIME:
@@ -800,31 +808,34 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 }
 
 ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
-	ScalarFunctionSet multiply("*");
+	ScalarFunctionSet functions("*");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
-			multiply.AddFunction(function);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			functions.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
-			multiply.AddFunction(ScalarFunction(
+			ScalarFunction function(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
-			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
+			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			functions.AddFunction(function);
 		} else {
-			multiply.AddFunction(
+			functions.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
-	multiply.AddFunction(
+	functions.AddFunction(ScalarFunction::SetReturnsError(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	multiply.AddFunction(
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>)));
+	functions.AddFunction(ScalarFunction::SetReturnsError(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>)));
 
-	return multiply;
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//

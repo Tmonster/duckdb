@@ -275,7 +275,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	return fun;
 }
 
-AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::FLOAT:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<float, float, float>(type, type);
@@ -311,6 +311,12 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	default:
 		throw NotImplementedException("Unimplemented Median Absolute Deviation aggregate");
 	}
+}
+
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
+	auto result = GetMedianAbsoluteDeviationAggregateFunctionInternal(type);
+	result.errors = FunctionErrors::CAN_THROW_ERROR;
+	return result;
 }
 
 unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &context, AggregateFunction &function,
