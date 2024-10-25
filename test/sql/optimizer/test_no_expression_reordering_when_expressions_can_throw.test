@@ -1,0 +1,13 @@
+# name: test/sql/optimizer/test_no_expression_reordering_when_expressions_can_throw.test
+# description: Expression reordering should not happen if the expressions can throw an error.
+# group: [optimizer]
+
+statement ok
+CREATE TABLE x AS
+    FROM range(100) SELECT range::varchar v UNION ALL
+    SELECT 'asdf';
+
+
+# we want contains to execute first since v::int can throw
+statement ok
+FROM x WHERE NOT contains(v, 'asdf') AND v::int > 0;
