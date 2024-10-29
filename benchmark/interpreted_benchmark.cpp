@@ -40,20 +40,22 @@ static string ParseGroupFromPath(string file) {
 struct InterpretedBenchmarkState : public BenchmarkState {
 	duckdb::unique_ptr<DBConfig> benchmark_config;
 	DuckDB db;
-	Connection con;
+	duckdb::unique_ptr<Connection> con;
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 
-	explicit InterpretedBenchmarkState(string path)
-	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
-	      con(db) {
+	explicit InterpretedBenchmarkState(string path) {
 		auto &instance = BenchmarkRunner::GetInstance();
-		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
+		benchmark_config = GetBenchmarkConfig(instance.configuration);
+		db = DuckDB(path.empty() ? nullptr : path.c_str(), benchmark_config.get());
+		con = make_uniq<Connection>(db);
+		auto res = con->Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
 	}
 
-	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig() {
+	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(BenchmarkConfiguration &configuration) {
 		auto result = make_uniq<DBConfig>();
 		result->options.load_extensions = false;
+		result->options.allow_unsigned_extensions = configuration.run_unsigned;
 		return result;
 	}
 };
@@ -98,7 +100,9 @@ InterpretedBenchmark::InterpretedBenchmark(string full_path)
 
 void InterpretedBenchmark::ReadResultFromFile(BenchmarkFileReader &reader, const string &file) {
 	// read the results from the file
-	DuckDB db;
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 	auto result =
 	    con.Query("SELECT * FROM read_csv_auto('" + file + "', delim='|', header=1, nullstr='NULL', all_varchar=1)");
@@ -384,7 +388,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 
 	if (queries.find("init") != queries.end()) {
 		string init_query = queries["init"];
-		result = state->con.Query(init_query);
+		result = state->con->Query(init_query);
 		while (result) {
 			if (result->HasError()) {
 				result->ThrowError();
@@ -402,11 +406,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		auto fs = FileSystem::CreateLocal();
 		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
-			result = state->con.Query(load_query);
+			result = state->con->Query(load_query);
 		}
 	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
-		result = state->con.Query(load_query);
+		result = state->con->Query(load_query);
 	} else {
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
@@ -414,7 +418,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			// Currently connected to a cached db. check if any tables exist.
 			// If tables exist, it's a good indication that the database is fine
 			// If they don't load the database
-			auto result = state->con.Query("SHOW TABLES;");
+			auto result = state->con->Query("SHOW TABLES;");
 			if (result->HasError()) {
 				result->ThrowError();
 			}
@@ -424,7 +428,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
-			result = state->con.Query(load_query);
+			result = state->con->Query(load_query);
 		}
 	}
 	while (result) {
@@ -446,10 +450,10 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
-		state->con.Query("PRAGMA enable_profiling");
+		state->con->Query("PRAGMA enable_profiling");
 	} else if (config.profile_info == BenchmarkProfileInfo::DETAILED) {
-		state->con.Query("PRAGMA enable_profiling");
-		state->con.Query("PRAGMA profiling_mode='detailed'");
+		state->con->Query("PRAGMA enable_profiling");
+		state->con->Query("PRAGMA profiling_mode='detailed'");
 	}
 	return std::move(state);
 }
@@ -476,7 +480,7 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 
 void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	auto &context = state.con.context;
+	auto &context = state.con->context;
 
 	auto &config = ClientConfig::GetConfig(*context);
 	auto result_collector_setting = PrepareResultCollector(config, *this);
@@ -502,7 +506,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 	if (queries.find("cleanup") != queries.end()) {
 		duckdb::unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
-		result = state.con.Query(cleanup_query);
+		result = state.con->Query(cleanup_query);
 		while (result) {
 			if (result->HasError()) {
 				result->ThrowError();
@@ -553,10 +557,10 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, Materialize
 
 			Value verify_val(result_values[r][c]);
 			try {
-				verify_val = verify_val.CastAs(*state.con.context, value.type());
+				verify_val = verify_val.CastAs(*state.con->context, value.type());
 			} catch (...) {
 			}
-			if (!Value::ValuesAreEqual(*state.con.context, verify_val, value)) {
+			if (!Value::ValuesAreEqual(*state.con->context, verify_val, value)) {
 				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got "
 				                          "value \"%s\"\nObtained result:\n%s",
 				                          r + 1, c + 1, verify_val.ToString().c_str(), value.ToString().c_str(),
@@ -598,19 +602,19 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 			create_tbl += types[i].ToString();
 		}
 		create_tbl += ")";
-		auto new_result = state.con.Query(create_tbl);
+		auto new_result = state.con->Query(create_tbl);
 		if (new_result->HasError()) {
 			return new_result->GetError();
 		}
 		// now append the result to the answer table
-		auto table_info = state.con.TableInfo("__answer");
+		auto table_info = state.con->TableInfo("__answer");
 		if (table_info == nullptr) {
 			throw std::runtime_error("Received a nullptr when querying table info of __answer");
 		}
-		state.con.Append(*table_info, collection);
+		state.con->Append(*table_info, collection);
 
 		// finally run the result query and verify the result of that query
-		new_result = state.con.Query(result_query);
+		new_result = state.con->Query(result_query);
 		if (new_result->HasError()) {
 			return new_result->GetError();
 		}
@@ -622,7 +626,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 
 void InterpretedBenchmark::Interrupt(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	state.con.Interrupt();
+	state.con->Interrupt();
 }
 
 string InterpretedBenchmark::BenchmarkInfo() {
@@ -631,7 +635,7 @@ string InterpretedBenchmark::BenchmarkInfo() {
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	auto &profiler = QueryProfiler::Get(*state.con.context);
+	auto &profiler = QueryProfiler::Get(*state.con->context);
 	return profiler.ToJSON();
 }
 

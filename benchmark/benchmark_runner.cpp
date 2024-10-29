@@ -184,6 +184,7 @@ void print_help() {
 	fprintf(stderr, "              --log=[file]           Move log output to file\n");
 	fprintf(stderr, "              --info                 Prints info about the benchmark\n");
 	fprintf(stderr, "              --query                Prints query of the benchmark\n");
+	fprintf(stderr, "              --unsigned                 Run duckdbn in unsigned mode\n");
 	fprintf(stderr, "              --root-dir             Sets the root directory for where to store temp data and "
 	                "look for the 'benchmarks' directory\n");
 	fprintf(stderr, "              --disable-timeout      Disables killing the run after a certain amount of time has "
@@ -252,6 +253,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
 			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+		} else if (arg == "--unsigned") {
+			instance.configuration.run_unsigned = true;
 		} else if (arg == "--root-dir") {
 			// We've already handled this, skip it
 			arg_index++;

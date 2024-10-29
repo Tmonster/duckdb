@@ -1,0 +1,76 @@
+# name: benchmark/138333_test.benchmark
+# description: Run CSV scan on glob
+# group: [benchmark]
+
+name CSV Read with glob reorder
+group csv
+
+require httpfs
+
+require parquet
+
+load
+force install postgres_scanner from local_build_release;
+load postgres_scanner;
+ATTACH 'host=ddb.tmont.es dbname=ddb user=ddb password=the-password-for-ddb' AS my_psql_table (TYPE postgres, READ_ONLY);
+CREATE OR REPLACE SECRET my_secret (
+	TYPE S3,
+	KEY_ID 'ddb',
+	SECRET 'the-password-for-ddb',
+	SCOPE 's3://ddb',
+	ENDPOINT 'ddb.tmont.es:9000',
+        USE_SSL false,
+	URL_STYLE 'path'
+);
+
+
+run
+WITH txns AS (
+	SELECT *
+	FROM parquet_scan(
+		's3://ddb/data/**/*.parquet',
+		hive_partitioning=true
+	)
+),
+products AS (
+	SELECT
+		product_id,
+		product_type
+	FROM
+		my_psql_table.reference.products
+),
+c_deb_map AS (
+	SELECT *
+	FROM (VALUES
+	    ('e', 1),
+	    ('0', 1),
+	    ('f', -1),
+	    ('4', -1),
+	) AS t(c_deb, value)
+)
+SELECT
+	t.i_a,
+	date_trunc('day', t.ts),
+	SUM(t.q),
+	SUM(t.uga),
+	SUM(t.i_v),
+	SUM(t.v_v),
+	SUM(t.n_v),
+	SUM(t.sc),
+	SUM(t.rb),
+	SUM(COALESCE(m.value, 0)),
+	COUNT(DISTINCT t.c),
+	SUM(t.ver),
+	SUM(t.crr),
+	SUM(t.cr)
+FROM
+	txns t
+	LEFT JOIN products p ON (t.p_id = p.product_id)
+	JOIN c_deb_map m ON (t.c_deb = m.c_deb)
+WHERE
+	t.year = 2022
+	AND
+	p.product_type = '94'
+GROUP BY ALL
+;
+

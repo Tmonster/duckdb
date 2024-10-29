@@ -28,6 +28,7 @@ public:
 	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
 	BenchmarkProfileInfo profile_info = BenchmarkProfileInfo::NONE;
 	optional_idx timeout_duration = optional_idx(DEFAULT_TIMEOUT);
+	bool run_unsigned = false;
 };
 
 } // namespace duckdb
