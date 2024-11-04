@@ -417,7 +417,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	if (stats.table_sample) {
 		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
-		// ingest_sample.AddToReservoir(chunk);
+		ingest_sample.AddToReservoir(chunk);
 	}
 
 	return new_row_group;
