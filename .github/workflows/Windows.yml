@@ -1,4 +1,4 @@
-name: Windows
+name: Windows_Debug
 on:
   workflow_call:
     inputs:
