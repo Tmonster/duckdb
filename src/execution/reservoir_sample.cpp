@@ -218,7 +218,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	for (idx_t i = offset; i < offset + ret_chunk_size; i++) {
 		sel.set_index(i - offset, i);
 	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), FIXED_SAMPLE_SIZE);
+	ret->Initialize(allocator, reservoir_types, FIXED_SAMPLE_SIZE);
 	ret->Slice(Chunk(), sel, FIXED_SAMPLE_SIZE);
 	ret->SetCardinality(ret_chunk_size);
 	return ret;
@@ -237,7 +237,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 		for (idx_t i = samples_remaining; i < Chunk().size(); i++) {
 			sel.set_index(i - samples_remaining, i);
 		}
-		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), FIXED_SAMPLE_SIZE);
+		ret->Initialize(allocator, reservoir_types, FIXED_SAMPLE_SIZE);
 		ret->Slice(Chunk(), sel, FIXED_SAMPLE_SIZE);
 		ret->SetCardinality(FIXED_SAMPLE_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
@@ -538,7 +538,7 @@ unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	for (idx_t i = offset; i < offset + ret_chunk_size; i++) {
 		sel.set_index(i - offset, i);
 	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), FIXED_SAMPLE_SIZE);
+	ret->Initialize(allocator, reservoir_types, FIXED_SAMPLE_SIZE);
 	ret->Slice(*chunk_to_copy, sel, FIXED_SAMPLE_SIZE);
 	ret->SetCardinality(ret_chunk_size);
 	return ret;
@@ -1111,7 +1111,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		for (idx_t i = 0; i < samples_remaining; i++) {
 			sel.set_index(i, tuples_consumed + i);
 		}
-		slice->Initialize(Allocator::DefaultAllocator(), types.begin(), types.end(), samples_remaining);
+		slice->Initialize(Allocator::DefaultAllocator(), types, samples_remaining);
 		slice->Slice(chunk, sel, samples_remaining);
 		slice->SetCardinality(samples_remaining);
 		AddToReservoir(*slice);
