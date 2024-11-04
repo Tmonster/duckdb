@@ -363,7 +363,7 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
 	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
 	return update_result;
 }
@@ -768,17 +768,6 @@ EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 )", nullptr};
 
 static const char *const community_public_keys[] = {
-    R"(
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv+Jki3aiZt0eOzShgD2g
-BYPjPpkhHowOwPzUKtTVPob7vxyzd2wPyWDF/Zn6sN8QzravAdlXFE3SNF7ayO86
-IPHhMxO6P2YlxbipyKzPOUJsasXBiwYw2aSvb0RtwnYwD5lJs8Tz2ET1RQCFgXGc
-LW7bDjKRbHSME0Me5rLRWVztOqULeoMeY1oCOmKKeAYxjFOASJJfQF9oQxkuu3j1
-qpcXnfHldlPGzFM77OFlWFtlc9QW4WNoxkO3HwskFW6ZRaQipM8vgSzkIfPFESGL
-TtDRw+RcUPqmS6NVW8nhaiptBIMXy+9cP/l1LGmGwrZRhWP0YBlk6V9MUMzjyo+R
-JQIDAQAB
------END PUBLIC KEY-----
-)",
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXl28loGwAH3ZGQXXgJQ

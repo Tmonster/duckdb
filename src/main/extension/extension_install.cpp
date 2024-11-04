@@ -268,15 +268,20 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
                                                                const string &local_extension_path,
                                                                ExtensionInstallOptions &options,
                                                                optional_ptr<ClientContext> context) {
-	string file = fs.ConvertSeparators(path);
-
-	// Try autoloading httpfs for loading extensions over https
-	if (context) {
-		auto &db = DatabaseInstance::GetDatabase(*context);
-		if (StringUtil::StartsWith(path, "https://") && !db.ExtensionIsLoaded("httpfs") &&
-		    db.config.options.autoload_known_extensions) {
-			ExtensionHelper::AutoLoadExtension(*context, "httpfs");
+	string extension;
+	string file;
+	if (fs.IsRemoteFile(path, extension)) {
+		file = path;
+		// Try autoloading httpfs for loading extensions over https
+		if (context) {
+			auto &db = DatabaseInstance::GetDatabase(*context);
+			if (extension == "httpfs" && !db.ExtensionIsLoaded("httpfs") &&
+			    db.config.options.autoload_known_extensions) {
+				ExtensionHelper::AutoLoadExtension(*context, "httpfs");
+			}
 		}
+	} else {
+		file = fs.ConvertSeparators(path);
 	}
 
 	// Check if file exists
@@ -353,7 +358,15 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	{
 		auto fs = FileSystem::CreateLocal();
 		if (fs->FileExists(local_extension_path + ".info")) {
-			install_info = ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+			try {
+				install_info =
+				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+			} catch (...) {
+				if (!options.force_install) {
+					// We are going to rewrite the file anyhow, so this is fine
+					throw;
+				}
+			}
 		}
 	}
 

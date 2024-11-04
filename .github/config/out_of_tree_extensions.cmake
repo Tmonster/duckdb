@@ -29,7 +29,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG e738b4cc07a86d323db8b38220323752cd183a04
+            GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
             )
 endif()
 
@@ -38,7 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG eddc48422c76a2f02a57a45d31b650b2680168f5
+            GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             )
 endif()
 
@@ -49,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            GIT_TAG b7333c0143e101c720117d564651e693b317bb31
     )
 endif()
 
@@ -73,7 +73,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
+            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
             )
 endif()
 
@@ -81,7 +81,7 @@ endif()
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_inet
-    GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
+    GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
     )
@@ -93,7 +93,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG d0e0115f29a9dbe44f026aea7290a1c6d4622a73
+            GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
             )
 endif()
 
@@ -101,7 +101,7 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 0bc9dff490cff60526061e7c72dceed945d3b3a3
+    GIT_TAG 7ea79b614755d2bdee4be468691e4e17b39b8dbc
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
@@ -117,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
+        GIT_TAG d5d62657702d33cb44a46cddc7ffc4b67bf7e961
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 7b00307a0c00fbb85bef2010330946f11311ba4c
+        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
 
 ################# SUBSTRAIT
@@ -131,7 +131,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 55922a3e77756054abbe3e04dae17ccf4203ad6f
+            GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
             )
 endif()
 
@@ -141,7 +141,7 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 3e192f25de97bdd759f96eeb488c59750db73937
+        GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
         TEST_DIR test/sql
     )
 
@@ -151,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
+            GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
             )
 endif()

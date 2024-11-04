@@ -91,7 +91,7 @@ struct ExtensionAccess {
 	}
 
 	//! Called by the extension get a pointer the correctly versioned extension C API struct.
-	static void *GetAPI(duckdb_extension_info info, const char *version) {
+	static const void *GetAPI(duckdb_extension_info info, const char *version) {
 
 		string version_string = version;
 		idx_t major, minor, patch;
@@ -106,7 +106,8 @@ struct ExtensionAccess {
 			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
 			return nullptr;
 		}
-		load_state.api_struct = CreateAPIv0();
+
+		load_state.api_struct = load_state.db.GetExtensionAPIV0();
 		return &load_state.api_struct;
 	}
 };
@@ -173,7 +174,7 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) noexcept {
 	ParsedExtensionMetaData result;
 
 	vector<string> metadata_field;
@@ -194,12 +195,18 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
 
-	result.abi_type = EnumUtil::FromString<ExtensionABIType>(FilterZeroAtEnd(metadata_field[4]));
+	auto extension_abi_metadata = FilterZeroAtEnd(metadata_field[4]);
 
-	if (result.abi_type == ExtensionABIType::C_STRUCT) {
+	if (extension_abi_metadata == "C_STRUCT") {
+		result.abi_type = ExtensionABIType::C_STRUCT;
 		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
-	} else if (result.abi_type == ExtensionABIType::CPP) {
+	} else if (extension_abi_metadata == "CPP" || extension_abi_metadata.empty()) {
+		result.abi_type = ExtensionABIType::CPP;
 		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	} else {
+		result.abi_type = ExtensionABIType::UNKNOWN;
+		result.duckdb_version = "unknown";
+		result.extension_abi_metadata = extension_abi_metadata;
 	}
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);

@@ -32,6 +32,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
 
@@ -177,7 +178,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", sql_type_list);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
-	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>());
+	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", dialect_options.rows_until_header);
 }
 
@@ -220,7 +221,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", result.sql_type_list);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", result.sql_types_per_column);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", result.columns_set, false);
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>());
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	deserializer.ReadPropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", result.dialect_options.rows_until_header);
 	return result;
 }
@@ -314,6 +315,34 @@ void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
 	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	return result;
+}
+
+void ExportedTableData::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "table_name", table_name);
+	serializer.WritePropertyWithDefault<string>(2, "schema_name", schema_name);
+	serializer.WritePropertyWithDefault<string>(3, "database_name", database_name);
+	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
+	serializer.WritePropertyWithDefault<vector<string>>(5, "not_null_columns", not_null_columns);
+}
+
+ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
+	ExportedTableData result;
+	deserializer.ReadPropertyWithDefault<string>(1, "table_name", result.table_name);
+	deserializer.ReadPropertyWithDefault<string>(2, "schema_name", result.schema_name);
+	deserializer.ReadPropertyWithDefault<string>(3, "database_name", result.database_name);
+	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
+	deserializer.ReadPropertyWithDefault<vector<string>>(5, "not_null_columns", result.not_null_columns);
+	return result;
+}
+
+void ExportedTableInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ExportedTableData>(1, "table_data", table_data);
+}
+
+ExportedTableInfo ExportedTableInfo::Deserialize(Deserializer &deserializer) {
+	auto table_data = deserializer.ReadProperty<ExportedTableData>(1, "table_data");
+	ExportedTableInfo result(deserializer.Get<ClientContext &>(), table_data);
 	return result;
 }
 

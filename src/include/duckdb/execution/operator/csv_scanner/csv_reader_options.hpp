@@ -40,13 +40,13 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not we should ignore InvalidInput errors
+	//! Whether we should ignore InvalidInput errors
 	CSVOption<bool> ignore_errors = false;
 	//! Whether we store CSV Errors in the rejects table or not
 	CSVOption<bool> store_rejects = false;
 	//! Rejects table name (Name of the table the store rejects errors)
 	CSVOption<string> rejects_table_name = {"reject_errors"};
-	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	//! Rejects Scan name  (Name of the table the store rejects scans)
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
@@ -168,8 +168,10 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
-	void ToNamedParameters(named_parameter_map_t &out);
-	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context);
+	void ToNamedParameters(named_parameter_map_t &out) const;
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context);
+	//! Verify options are not conflicting
+	void Verify();
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set

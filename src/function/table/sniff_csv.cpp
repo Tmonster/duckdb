@@ -1,7 +1,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -50,6 +50,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		input.named_parameters.erase("auto_detect");
 	}
 	result->options.FromNamedParameters(input.named_parameters, context);
+	result->options.Verify();
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -96,6 +97,9 @@ string FormatOptions(char opt) {
 	if (opt == '\'') {
 		return "''";
 	}
+	if (opt == '\0') {
+		return "";
+	}
 	string result;
 	result += opt;
 	return result;
@@ -123,6 +127,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.name_list.empty()) {
 		sniffer_options.name_list = data.names_csv;
 	}
+
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
@@ -213,7 +218,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		         << "'" << separator;
 	}
 	// 11.2. Quote
-	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
+	if (!sniffer_options.dialect_options.state_machine_options.quote.IsSetByUser()) {
 		csv_read << "quote="
 		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.quote.GetValue()) << "'"
 		         << separator;

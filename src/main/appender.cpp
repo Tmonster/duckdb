@@ -62,6 +62,9 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 	}
 	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
+		if (column.Generated()) {
+			continue;
+		}
 		types.push_back(column.Type());
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
@@ -114,7 +117,7 @@ void BaseAppender::BeginRow() {
 void BaseAppender::EndRow() {
 	// check that all rows have been appended to
 	if (column != chunk.ColumnCount()) {
-		throw InvalidInputException("Call to EndRow before all rows have been appended to!");
+		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);

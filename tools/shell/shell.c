@@ -9454,7 +9454,7 @@ sqlite3expert *sqlite3_expert_new(sqlite3 *db, char **pzErrmsg){
     sqlite3_set_authorizer(pNew->dbv, idxAuthCallback, (void*)pNew);
   }
 
-  /* If an error has occurred, free the new object and reutrn NULL. Otherwise,
+  /* If an error has occurred, free the new object and return NULL. Otherwise,
   ** return the new sqlite3expert handle.  */
   if( rc!=SQLITE_OK ){
     sqlite3_expert_destroy(pNew);
@@ -11694,8 +11694,12 @@ static int shell_callback(
           }
         }else if( aiType && aiType[i]==SQLITE_BLOB && p->pStmt ){
           const void *pBlob = sqlite3_column_blob(p->pStmt, i);
-          int nBlob = sqlite3_column_bytes(p->pStmt, i);
-          output_hex_blob(p->out, pBlob, nBlob);
+          if(pBlob) {
+          	int nBlob = sqlite3_column_bytes(p->pStmt, i);
+          	output_hex_blob(p->out, pBlob, nBlob);
+          } else {
+	        utf8_printf(p->out,"NULL");
+          }
         }else if( isNumber(azArg[i], 0) ){
           utf8_printf(p->out,"%s", azArg[i]);
         }else if( ShellHasFlag(p, SHFLG_Newlines) ){
@@ -14152,7 +14156,7 @@ static void open_db(ShellState *p, int openFlags){
 }
 
 /*
-** Attempt to close the databaes connection.  Report errors.
+** Attempt to close the database connection.  Report errors.
 */
 void close_db(sqlite3 *db){
   int rc = sqlite3_close(db);

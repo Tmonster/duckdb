@@ -216,6 +216,7 @@ simple_select:
 					n->windowClause = $8;
 					n->qualifyClause = $9;
 					n->sampleOptions = $10;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			|
@@ -234,6 +235,7 @@ simple_select:
 					n->windowClause = $10;
 					n->qualifyClause = $11;
 					n->sampleOptions = $12;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			| values_clause_opt_comma							{ $$ = $1; }
@@ -1130,7 +1132,7 @@ single_pivot_value:
 	;
 
 pivot_header:
-	| d_expr	                 			{ $$ = list_make1($1); }
+	d_expr	                 			{ $$ = list_make1($1); }
 	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 

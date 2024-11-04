@@ -3,6 +3,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include <chrono>
 #include <thread>
@@ -17,6 +19,18 @@ TEST_CASE("Test comment in CPP API", "[api]") {
 	con.SendQuery("--ups");
 	//! Should not crash
 	REQUIRE(1);
+}
+
+TEST_CASE("Test StarExpression replace_list parameter", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto sql = "select * replace(i * $n as i) from range(1, 10) t(i)";
+	auto stmts = con.ExtractStatements(sql);
+
+	auto &select_stmt = stmts[0]->Cast<SelectStatement>();
+	auto &select_node = select_stmt.node->Cast<SelectNode>();
+
+	REQUIRE(select_node.select_list[0]->HasParameter());
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
@@ -578,6 +592,25 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 
 	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException later on", "[api][.]") {
+	auto db = DuckDB(nullptr);
+	auto conn = Connection(db);
+
+	conn.Query("CREATE TABLE foo(a int, b varchar, c int)");
+
+	auto query = "INSERT INTO Foo values (1, 'qwerty', 42)";
+
+	auto stmts = conn.ExtractStatements(query);
+	auto &stmt = stmts[0];
+
+	// Issue was here: calling ToString destroyed the 'alias' of the ValuesList
+	stmt->ToString();
+	// Which caused an 'InternalException: expected non-empty binding_name' here
+	auto prepared_stmt = conn.Prepare(std::move(stmt));
+	REQUIRE(!prepared_stmt->HasError());
+	REQUIRE_NO_FAIL(prepared_stmt->Execute());
 }
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {

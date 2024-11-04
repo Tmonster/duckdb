@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
@@ -36,18 +37,21 @@ ExpressionBinder::~ExpressionBinder() {
 }
 
 void ExpressionBinder::InitializeStackCheck() {
+	static constexpr idx_t INITIAL_DEPTH = 5;
 	if (binder.HasActiveBinder()) {
-		stack_depth = binder.GetActiveBinder().stack_depth;
+		stack_depth = binder.GetActiveBinder().stack_depth + INITIAL_DEPTH;
 	} else {
-		stack_depth = 0;
+		stack_depth = INITIAL_DEPTH;
 	}
 }
 
 StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
 	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
-	if (stack_depth + extra_stack >= MAXIMUM_STACK_DEPTH) {
-		throw BinderException("Maximum recursion depth exceeded (Maximum: %llu) while binding \"%s\"",
-		                      MAXIMUM_STACK_DEPTH, expr.ToString());
+	auto &options = ClientConfig::GetConfig(context);
+	if (stack_depth + extra_stack >= options.max_expression_depth) {
+		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      options.max_expression_depth);
 	}
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
@@ -165,7 +169,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	// get query location
 	QueryErrorContext context;
 	current_entry = current_info.find("position");
-	new_entry = current_info.find("position");
+	new_entry = new_info.find("position");
 	uint64_t position;
 	if (current_entry != current_info.end() &&
 	    TryCast::Operation<string_t, uint64_t>(current_entry->second, position)) {
