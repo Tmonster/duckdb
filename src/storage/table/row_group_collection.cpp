@@ -399,7 +399,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
 
 		auto ret = make_uniq<DataChunk>();
-		idx_t ret_chunk_size = static_cast<idx_t>(chunk.size() * 0.25);
+		idx_t ret_chunk_size = static_cast<idx_t>(static_cast<double>(chunk.size()) * 0.25);
 		auto types = chunk.GetTypes();
 		SelectionVector sel(FIXED_SAMPLE_SIZE);
 		for (idx_t i = 0; i < ret_chunk_size; i++) {
