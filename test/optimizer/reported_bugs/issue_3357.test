@@ -1,0 +1,58 @@
+# name: test/optimizer/reported_bugs/issue_3357.test
+# description: IN filter on join column
+# group: [reported_bugs]
+
+
+# this stops the internal exception
+#statement ok
+#pragma disable_optimizer;
+
+# Initializing DuckDB environment.
+statement ok
+create schema if not exists logica_home;
+
+# Logica type: logicarecord383307722
+statement ok
+drop type if exists logicarecord383307722 cascade;
+
+statement ok
+create type logicarecord383307722 as struct(a timestamp);
+
+statement ok
+DROP TABLE IF EXISTS logica_home.QueryRequest;
+
+statement ok
+CREATE TABLE logica_home.QueryRequest AS SELECT * FROM (
+    SELECT
+      ['A', 'B']::text[] AS query_request
+   UNION ALL
+    SELECT
+      ['A']::text[] AS query_request
+   UNION ALL
+    SELECT
+      ['B']::text[] AS query_request
+) AS UNUSED_TABLE_NAME;
+
+# Interacting with table logica_home.QueryRequest
+
+statement ok
+DROP TABLE IF EXISTS logica_home.ObjectAttributes;
+
+statement ok
+CREATE TABLE logica_home.ObjectAttributes AS SELECT
+  'zero' AS object_id,
+  ['a']::text[] AS logica_value;
+
+# Interacting with table logica_home.ObjectAttributes
+
+statement ok
+SELECT
+  QueryRequest.query_request AS query_request,
+  ObjectAttributes.object_id AS object_id,
+  ObjectAttributes.logica_value AS object_attributes,
+  ARRAY_AGG(DISTINCT x_9.unnested_pod) AS attributes_union
+FROM
+  logica_home.QueryRequest AS QueryRequest, logica_home.ObjectAttributes AS ObjectAttributes, (select unnest(((ObjectAttributes.logica_value) || (QueryRequest.query_request))) as unnested_pod) as x_9
+WHERE
+  (ObjectAttributes.object_id = 'zero')
+GROUP BY QueryRequest.query_request, ObjectAttributes.object_id, ObjectAttributes.logica_value;
