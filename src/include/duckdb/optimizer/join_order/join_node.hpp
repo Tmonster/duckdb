@@ -17,13 +17,13 @@ struct NeighborInfo;
 class DPJoinNode {
 public:
 	//! Represents a node in the join plan
-	JoinRelationSet &set;
+	JoinRelationSetOld &set;
 	//! information on how left and right are connected
 	optional_ptr<NeighborInfo> info;
 	bool is_leaf;
 	//! left and right plans
-	JoinRelationSet &left_set;
-	JoinRelationSet &right_set;
+	JoinRelationSetOld &left_set;
+	JoinRelationSetOld &right_set;
 
 	//! The cost of the join node. The cost is stored here so that the cost of
 	//! a join node stays in sync with how the join node is constructed. Storing the cost in an unordered_set
@@ -34,13 +34,13 @@ public:
 	idx_t cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right,
+	DPJoinNode(JoinRelationSetOld &set, optional_ptr<NeighborInfo> info, JoinRelationSetOld &left, JoinRelationSetOld &right,
 	           double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	explicit DPJoinNode(JoinRelationSet &set);
+	explicit DPJoinNode(JoinRelationSetOld &set);
 };
 
 } // namespace duckdb

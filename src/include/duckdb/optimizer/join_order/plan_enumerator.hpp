@@ -39,7 +39,7 @@ public:
 	void SolveJoinOrder();
 	void InitLeafPlans();
 
-	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans() const;
+	const reference_map_t<JoinRelationSetOld, unique_ptr<DPJoinNode>> &GetPlans() const;
 
 private:
 	//! The set of edges used in the join optimizer
@@ -51,26 +51,26 @@ private:
 	//! Cost model to evaluate cost of joins
 	CostModel &cost_model;
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
-	reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> plans;
+	reference_map_t<JoinRelationSetOld, unique_ptr<DPJoinNode>> plans;
 
 	unordered_set<string> join_nodes_in_full_plan;
 
-	unique_ptr<DPJoinNode> CreateJoinTree(JoinRelationSet &set,
+	unique_ptr<DPJoinNode> CreateJoinTree(JoinRelationSetOld &set,
 	                                      const vector<reference<NeighborInfo>> &possible_connections, DPJoinNode &left,
 	                                      DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	DPJoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	DPJoinNode &EmitPair(JoinRelationSetOld &left, JoinRelationSetOld &right, const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	bool TryEmitPair(JoinRelationSetOld &left, JoinRelationSetOld &right, const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSetOld &left, JoinRelationSetOld &right, unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
-	bool EmitCSG(JoinRelationSet &node);
+	bool EmitCSG(JoinRelationSetOld &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCSGRecursive(JoinRelationSetOld &node, unordered_set<idx_t> &exclusion_set);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 

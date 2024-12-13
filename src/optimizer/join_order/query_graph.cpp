@@ -4,6 +4,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
 
+#include <duckdb/optimizer/join_order/plan_enumerator.hpp>
+
 namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
@@ -97,7 +99,7 @@ void QueryGraphEdges::EnumerateNeighborsDFS(JoinRelationSet &node, reference<Que
 
 void QueryGraphEdges::EnumerateNeighbors(JoinRelationSet &node,
                                          const std::function<bool(NeighborInfo &)> &callback) const {
-	for (idx_t j = 0; j < node.count; j++) {
+	for (idx_t j = 0; j < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; j++) {
 		auto iter = root.children.find(node.relations[j]);
 		if (iter != root.children.end()) {
 			reference<QueryEdge> new_info = *iter->second;

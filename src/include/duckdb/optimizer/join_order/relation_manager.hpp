@@ -51,7 +51,7 @@ public:
 	//! both sides of the join filter, along with the tables & indexes.
 	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
 	                                            vector<reference<LogicalOperator>> &filter_operators,
-	                                            JoinRelationSetManager &set_manager);
+	                                            JoinRelationSetManagerOld &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);

@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
+using JoinRelationTreeNode = JoinRelationSetManagerOld::JoinRelationTreeNode;
 
 // LCOV_EXCL_START
-string JoinRelationSet::ToString() const {
+string JoinRelationSetOld::ToString() const {
 	string result = "[";
 	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
 	result += "]";
@@ -19,24 +19,24 @@ string JoinRelationSet::ToString() const {
 // LCOV_EXCL_STOP
 
 //! Returns true if sub is a subset of super
-bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
-	D_ASSERT(sub.count > 0);
-	if (sub.count > super.count) {
-		return false;
-	}
-	idx_t j = 0;
-	for (idx_t i = 0; i < super.count; i++) {
-		if (sub.relations[j] == super.relations[i]) {
-			j++;
-			if (j == sub.count) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
+// bool JoinRelationSetOld::IsSubset(JoinRelationSetOld &super, JoinRelationSetOld &sub) {
+// 	D_ASSERT(sub.count > 0);
+// 	if (sub.count > super.count) {
+// 		return false;
+// 	}
+// 	idx_t j = 0;
+// 	for (idx_t i = 0; i < super.count; i++) {
+// 		if (sub.relations[j] == super.relations[i]) {
+// 			j++;
+// 			if (j == sub.count) {
+// 				return true;
+// 			}
+// 		}
+// 	}
+// 	return false;
+// }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
+JoinRelationSetOld &JoinRelationSetManagerOld::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -52,13 +52,13 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx
 	// now check if the JoinRelationSet has already been created
 	if (!info.get().relation) {
 		// if it hasn't we need to create it
-		info.get().relation = make_uniq<JoinRelationSet>(std::move(relations), count);
+		info.get().relation = make_uniq<JoinRelationSetOld>(std::move(relations), count);
 	}
 	return *info.get().relation;
 }
 
 //! Create or get a JoinRelationSet from a single node with the given index
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
+JoinRelationSetOld &JoinRelationSetManagerOld::GetJoinRelation(idx_t index) {
 	// create a sorted vector of the relations
 	auto relations = make_unsafe_uniq_array<idx_t>(1);
 	relations[0] = index;
@@ -66,7 +66,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
+JoinRelationSetOld &JoinRelationSetManagerOld::GetJoinRelation(const unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
 	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
 	idx_t count = 0;
@@ -77,7 +77,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
+JoinRelationSetOld &JoinRelationSetManagerOld::Union(JoinRelationSetOld &left, JoinRelationSetOld &right) {
 	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
@@ -112,6 +112,58 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 	}
 	return GetJoinRelation(std::move(relations), count);
 }
+
+bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
+	std::bitset<12> sub_copy = sub.relations;
+	sub_copy &= super.relations;
+	return sub_copy == sub.relations;
+}
+
+
+
+reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
+	auto ret = make_uniq<JoinRelationSet>(relations, count);
+	return GetJoinRelation(std::move(ret));
+}
+
+reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unique_ptr<JoinRelationSet> set) {
+	auto existing = active_relation_sets.find(set->relations);
+	if (existing == active_relation_sets.end()) {
+		active_relation_sets[set->relations] = std::move(set);
+	}
+	auto ret = active_relation_sets.find(set->relations);
+	auto &wat = *ret->second;
+	return wat;
+}
+
+//! Create or get a JoinRelationSet from a single node with the given index
+reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(idx_t index) {
+	// create a sorted vector of the relations
+	auto relations = make_unsafe_uniq_array<idx_t>(1);
+	relations[0] = index;
+	idx_t count = 1;
+	return GetJoinRelation(std::move(relations), count);
+}
+
+reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
+	// create a sorted vector of the relations
+	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
+	idx_t count = 0;
+	for (auto &entry : bindings) {
+		relations[count++] = entry;
+	}
+	std::sort(relations.get(), relations.get() + count);
+	return GetJoinRelation(std::move(relations), count);
+}
+
+reference<JoinRelationSet> JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
+	auto left_copy = make_uniq<JoinRelationSet>(left.Copy());
+	auto right_copy = right.Copy();
+	left_copy->relations |= right_copy.relations;
+	return GetJoinRelation(std::move(left_copy));
+}
+
+
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
 // 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);
@@ -155,11 +207,11 @@ static string JoinRelationTreeNodeToString(const JoinRelationTreeNode *node) {
 	return result;
 }
 
-string JoinRelationSetManager::ToString() const {
+string JoinRelationSetManagerOld::ToString() const {
 	return JoinRelationTreeNodeToString(&root);
 }
 
-void JoinRelationSetManager::Print() {
+void JoinRelationSetManagerOld::Print() {
 	Printer::Print(ToString());
 }
 

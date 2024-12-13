@@ -473,7 +473,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
-                                                             JoinRelationSetManager &set_manager) {
+                                                             JoinRelationSetManagerOld &set_manager) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
@@ -504,9 +504,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 				// create the filter info so all required LHS relations are present when reconstructing the
 				// join
-				optional_ptr<JoinRelationSet> left_set;
-				optional_ptr<JoinRelationSet> right_set;
-				optional_ptr<JoinRelationSet> full_set;
+				optional_ptr<JoinRelationSetOld> left_set;
+				optional_ptr<JoinRelationSetOld> right_set;
+				optional_ptr<JoinRelationSetOld> full_set;
 				// here we create a left_set that unions all relations from the left side of
 				// every expression and a right_set that unions all relations frmo the right side of a
 				// every expression (although this should always be 1).

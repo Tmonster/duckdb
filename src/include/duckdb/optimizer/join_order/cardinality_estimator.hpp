@@ -17,11 +17,11 @@ namespace duckdb {
 class FilterInfo;
 
 struct DenomInfo {
-	DenomInfo(JoinRelationSet &numerator_relations, double filter_strength, double denominator)
+	DenomInfo(JoinRelationSetOld &numerator_relations, double filter_strength, double denominator)
 	    : numerator_relations(numerator_relations), filter_strength(filter_strength), denominator(denominator) {
 	}
 
-	JoinRelationSet &numerator_relations;
+	JoinRelationSetOld &numerator_relations;
 	double filter_strength;
 	double denominator;
 };
@@ -59,8 +59,8 @@ public:
 };
 
 struct Subgraph2Denominator {
-	optional_ptr<JoinRelationSet> relations;
-	optional_ptr<JoinRelationSet> numerator_relations;
+	optional_ptr<JoinRelationSetOld> relations;
+	optional_ptr<JoinRelationSetOld> numerator_relations;
 	double denom;
 
 	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {};
@@ -94,28 +94,28 @@ public:
 private:
 	vector<RelationsToTDom> relations_to_tdoms;
 	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
-	JoinRelationSetManager set_manager;
+	JoinRelationSetManagerOld set_manager;
 	vector<RelationStats> relation_stats;
 
 public:
 	void RemoveEmptyTotalDomains();
-	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats);
+	void UpdateTotalDomains(optional_ptr<JoinRelationSetOld> set, RelationStats &stats);
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
+	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSetOld> set, RelationStats &stats);
 
 	//! cost model needs estimated cardinalities to the fraction since the formula captures
 	//! distinct count selectivities and multiplicities. Hence the template
 	template <class T>
-	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
+	T EstimateCardinalityWithSet(JoinRelationSetOld &new_set);
 
 	//! used for debugging.
 	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
 	void PrintRelationToTdomInfo();
 
 private:
-	double GetNumerator(JoinRelationSet &set);
-	DenomInfo GetDenominator(JoinRelationSet &set);
+	double GetNumerator(JoinRelationSetOld &set);
+	DenomInfo GetDenominator(JoinRelationSetOld &set);
 
 	bool SingleColumnFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info);
@@ -126,7 +126,7 @@ private:
 
 	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
 	                             FilterInfoWithTotalDomains &filter);
-	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
+	JoinRelationSetOld &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
 	                                          FilterInfoWithTotalDomains &filter);
 
 	void AddRelationTdom(FilterInfo &filter_info);

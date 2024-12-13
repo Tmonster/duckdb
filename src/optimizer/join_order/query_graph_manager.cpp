@@ -56,11 +56,11 @@ const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() con
 	return filters_and_bindings;
 }
 
-void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
+void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSetOld> left_set_new) {
 	left_set = left_set_new;
 }
 
-void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
+void FilterInfo::SetRightSet(optional_ptr<JoinRelationSetOld> right_set_new) {
 	right_set = right_set_new;
 }
 
@@ -235,10 +235,10 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
-                                                      JoinRelationSet &set) {
-	optional_ptr<JoinRelationSet> left_node;
-	optional_ptr<JoinRelationSet> right_node;
-	optional_ptr<JoinRelationSet> result_relation;
+                                                      JoinRelationSetOld &set) {
+	optional_ptr<JoinRelationSetOld> left_node;
+	optional_ptr<JoinRelationSetOld> right_node;
+	optional_ptr<JoinRelationSetOld> result_relation;
 	unique_ptr<LogicalOperator> result_operator;
 
 	auto dp_entry = plans->find(set);
@@ -285,7 +285,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				         (JoinRelationSet::IsSubset(*left.set, *f->right_set) &&
 				          JoinRelationSet::IsSubset(*right.set, *f->left_set)));
 
-				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
+				bool invert = !JoinRelationSetOld::IsSubset(*left.set, *f->left_set);
 				// If the left and right set are inverted AND it is a semi or anti join
 				// swap left and right children back.
 				if (invert && (f->join_type == JoinType::SEMI || f->join_type == JoinType::ANTI)) {
@@ -333,7 +333,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
+			if (info.set.get().count > 0 && JoinRelationSetOld::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
 				// if it is, we can push the filter
@@ -348,11 +348,11 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				// check if the nodes can be split up into left/right
 				bool found_subset = false;
 				bool invert = false;
-				if (JoinRelationSet::IsSubset(*left_node, *info.left_set) &&
-				    JoinRelationSet::IsSubset(*right_node, *info.right_set)) {
+				if (JoinRelationSetOld::IsSubset(*left_node, *info.left_set) &&
+				    JoinRelationSetOld::IsSubset(*right_node, *info.right_set)) {
 					found_subset = true;
-				} else if (JoinRelationSet::IsSubset(*right_node, *info.left_set) &&
-				           JoinRelationSet::IsSubset(*left_node, *info.right_set)) {
+				} else if (JoinRelationSetOld::IsSubset(*right_node, *info.left_set) &&
+				           JoinRelationSetOld::IsSubset(*left_node, *info.right_set)) {
 					invert = true;
 					found_subset = true;
 				}
@@ -407,7 +407,7 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 	return query_graph;
 }
 
-void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
+void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSetOld &left, JoinRelationSetOld &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
 }
