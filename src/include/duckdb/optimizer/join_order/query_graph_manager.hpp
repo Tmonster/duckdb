@@ -29,11 +29,11 @@ namespace duckdb {
 class QueryGraphEdges;
 
 struct GenerateJoinRelation {
-	GenerateJoinRelation(optional_ptr<JoinRelationSetOld> set, unique_ptr<LogicalOperator> op_p)
+	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)
 	    : set(set), op(std::move(op_p)) {
 	}
 
-	optional_ptr<JoinRelationSetOld> set;
+	optional_ptr<JoinRelationSet> set;
 	unique_ptr<LogicalOperator> op;
 };
 
@@ -41,23 +41,23 @@ struct GenerateJoinRelation {
 //! but is also eventually transformed into a query edge.
 class FilterInfo {
 public:
-	FilterInfo(unique_ptr<Expression> filter, JoinRelationSetOld &set, idx_t filter_index,
+	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
 	           JoinType join_type = JoinType::INNER)
 	    : filter(std::move(filter)), set(set), filter_index(filter_index), join_type(join_type) {
 	}
 
 public:
 	unique_ptr<Expression> filter;
-	reference<JoinRelationSetOld> set;
+	reference<JoinRelationSet> set;
 	idx_t filter_index;
 	JoinType join_type;
-	optional_ptr<JoinRelationSetOld> left_set;
-	optional_ptr<JoinRelationSetOld> right_set;
+	optional_ptr<JoinRelationSet> left_set;
+	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
 
-	void SetLeftSet(optional_ptr<JoinRelationSetOld> left_set_new);
-	void SetRightSet(optional_ptr<JoinRelationSetOld> right_set_new);
+	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
+	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -72,7 +72,7 @@ public:
 	RelationManager relation_manager;
 
 	//! A structure holding all the created JoinRelationSet objects
-	JoinRelationSetManagerOld set_manager;
+	JoinRelationSetManager set_manager;
 
 	ClientContext &context;
 
@@ -92,10 +92,10 @@ public:
 
 	//! Plan enumerator may not find a full plan and therefore will need to create cross
 	//! products to create edges.
-	void CreateQueryGraphCrossProduct(JoinRelationSetOld &left, JoinRelationSetOld &right);
+	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
-	optional_ptr<const reference_map_t<JoinRelationSetOld, unique_ptr<DPJoinNode>>> plans;
+	optional_ptr<const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> plans;
 
 // private:
 	vector<reference<LogicalOperator>> filter_operators;
@@ -110,7 +110,7 @@ public:
 
 	void CreateHyperGraphEdges();
 
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSetOld &set);
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 };
 
 } // namespace duckdb

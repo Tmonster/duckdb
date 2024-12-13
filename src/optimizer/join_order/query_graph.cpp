@@ -41,18 +41,16 @@ void QueryGraphEdges::Print() {
 optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	// find the EdgeInfo corresponding to the left set
 	optional_ptr<QueryEdge> info(&root);
-	for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
-		if (left.relations[i]) {
-			auto entry = info.get()->children.find(i);
-			if (entry == info.get()->children.end()) {
-				// node not found, create it
-				auto insert_it = info.get()->children.insert(make_pair(i, make_uniq<QueryEdge>()));
-				entry = insert_it.first;
-			}
-			// move to the next node
-			info = entry->second;
+	JoinRelationSet::EnumerateRelations(left.relations, [&](idx_t relation_id) {
+		auto entry = info.get()->children.find(relation_id);
+		if (entry == info.get()->children.end()) {
+			// node not found, create it
+			auto insert_it = info.get()->children.insert(make_pair(relation_id, make_uniq<QueryEdge>()));
+			entry = insert_it.first;
 		}
-	}
+		// move to the next node
+		info = entry->second;
+	});
 	return info;
 }
 
