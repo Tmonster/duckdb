@@ -32,7 +32,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// get relation_stats here since the reconstruction process will move all relations.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+	plan->Print();
 	unique_ptr<LogicalOperator> new_logical_plan = nullptr;
+	query_graph_manager.query_graph.Print();
 
 	if (reorderable) {
 		// query graph now has filters and relations
