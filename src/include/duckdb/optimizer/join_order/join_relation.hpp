@@ -14,9 +14,9 @@
 
 namespace duckdb {
 
-
 struct JoinRelationSet {
-	JoinRelationSet() {}
+	JoinRelationSet() {
+	}
 	JoinRelationSet(unsafe_unique_array<idx_t> &relations_, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			relations[relations_[i]] = true;
@@ -25,12 +25,12 @@ struct JoinRelationSet {
 	static void EnumerateRelations(std::bitset<12> relations, const std::function<void(idx_t relation)> &callback);
 
 	string ToString() const;
+	idx_t Count() const;
 	std::bitset<12> relations;
 
 	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
-	JoinRelationSet Copy();
+	JoinRelationSet Copy() const;
 };
-
 
 //! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to
 //! them

@@ -55,7 +55,7 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 }
 
 void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<FilterInfo> filter_info) {
-	D_ASSERT(left.count > 0 && right.count > 0);
+	D_ASSERT(left.Count() > 0 && right.Count() > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
@@ -114,12 +114,11 @@ void QueryGraphEdges::EnumerateNeighbors(JoinRelationSet &node,
 //! Returns true if a JoinRelationSet is banned by the list of exclusion_set, false otherwise
 static bool JoinRelationSetIsExcluded(optional_ptr<JoinRelationSet> node, unordered_set<idx_t> &exclusion_set) {
 	// TODO: figure this one out.
-	for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
-		if (node->relations[i]) {
-			return exclusion_set.find(i) != exclusion_set.end();
-		}
-	}
-	throw InternalException("something went wrong");
+	bool is_excluded = false;
+	JoinRelationSet::EnumerateRelations(node->relations, [&](idx_t relation_id) {
+		is_excluded |= exclusion_set.find(relation_id) != exclusion_set.end();
+	});
+	return is_excluded;
 }
 
 const vector<idx_t> QueryGraphEdges::GetNeighbors(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) const {

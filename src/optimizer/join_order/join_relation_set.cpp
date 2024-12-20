@@ -4,16 +4,14 @@
 #include "duckdb/common/to_string.hpp"
 
 #include <algorithm>
+#include <duckdb/main/relation/join_relation.hpp>
 
 namespace duckdb {
-
 
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	EnumerateRelations(relations, [&](idx_t relation) {
-		result += to_string(relation) + ", ";
-	});
+	EnumerateRelations(relations, [&](idx_t relation) { result += to_string(relation) + ", "; });
 	result += "]";
 	return result;
 }
@@ -43,12 +41,29 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return sub_copy == sub.relations;
 }
 
-void JoinRelationSet::EnumerateRelations(std::bitset<12> relations, const std::function<void(idx_t relation)> &callback) {
+void JoinRelationSet::EnumerateRelations(std::bitset<12> relations,
+                                         const std::function<void(idx_t relation)> &callback) {
 	for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
 		if (relations[i]) {
 			callback(i);
 		}
 	}
+}
+
+idx_t JoinRelationSet::Count() const {
+	idx_t count = 0;
+	for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
+		if (relations[i]) {
+			count++;
+		}
+	}
+	return count;
+}
+
+JoinRelationSet JoinRelationSet::Copy() const {
+	JoinRelationSet result;
+	result.relations = relations;
+	return result;
 }
 
 reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
@@ -59,7 +74,9 @@ reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unsafe_unique
 reference<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unique_ptr<JoinRelationSet> set) {
 	auto existing = active_relation_sets.find(set->relations);
 	if (existing == active_relation_sets.end()) {
+		auto copy = make_uniq<JoinRelationSet>(set->Copy());
 		active_relation_sets[set->relations] = std::move(set);
+		set = std::move(copy);
 	}
 	auto ret = active_relation_sets.find(set->relations);
 	auto &wat = *ret->second;
@@ -92,8 +109,6 @@ reference<JoinRelationSet> JoinRelationSetManager::Union(JoinRelationSet &left, 
 	left_copy->relations |= right_copy.relations;
 	return GetJoinRelation(std::move(left_copy));
 }
-
-
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
 // 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);

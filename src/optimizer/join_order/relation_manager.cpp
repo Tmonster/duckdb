@@ -473,7 +473,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
-                                                             JoinRelationSetManagerOld &set_manager) {
+                                                             JoinRelationSetManager &set_manager) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
@@ -504,9 +504,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 				// create the filter info so all required LHS relations are present when reconstructing the
 				// join
-				optional_ptr<JoinRelationSetOld> left_set;
-				optional_ptr<JoinRelationSetOld> right_set;
-				optional_ptr<JoinRelationSetOld> full_set;
+				optional_ptr<JoinRelationSet> left_set;
+				optional_ptr<JoinRelationSet> right_set;
+				optional_ptr<JoinRelationSet> full_set;
 				// here we create a left_set that unions all relations from the left side of
 				// every expression and a right_set that unions all relations frmo the right side of a
 				// every expression (although this should always be 1).
@@ -518,20 +518,20 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					ExtractBindings(*comp.left, left_bindings);
 
 					if (!left_set) {
-						left_set = set_manager.GetJoinRelation(left_bindings);
+						left_set = set_manager.GetJoinRelation(left_bindings).get();
 					} else {
-						left_set = set_manager.Union(set_manager.GetJoinRelation(left_bindings), *left_set);
+						left_set = set_manager.Union(set_manager.GetJoinRelation(left_bindings), *left_set).get();
 					}
 					if (!right_set) {
-						right_set = set_manager.GetJoinRelation(right_bindings);
+						right_set = set_manager.GetJoinRelation(right_bindings).get();
 					} else {
-						right_set = set_manager.Union(set_manager.GetJoinRelation(right_bindings), *right_set);
+						right_set = set_manager.Union(set_manager.GetJoinRelation(right_bindings), *right_set).get();
 					}
 				}
-				full_set = set_manager.Union(*left_set, *right_set);
-				D_ASSERT(left_set && left_set->count > 0);
-				D_ASSERT(right_set && right_set->count == 1);
-				D_ASSERT(full_set && full_set->count > 0);
+				full_set = set_manager.Union(*left_set, *right_set).get();
+				D_ASSERT(left_set && left_set->Count() > 0);
+				D_ASSERT(right_set && right_set->Count() == 1);
+				D_ASSERT(full_set && full_set->Count() > 0);
 
 				// now we push the conjunction expressions
 				// In QueryGraphManager::GenerateJoins we extract each condition again and create a standalone join
@@ -551,7 +551,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filter_set.insert(*comparison);
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*comparison, bindings);
-						auto &set = set_manager.GetJoinRelation(bindings);
+						auto set = set_manager.GetJoinRelation(bindings);
 						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
 						                                         filters_and_bindings.size(), join.join_type);
 						filters_and_bindings.push_back(std::move(filter_info));
@@ -572,7 +572,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						leftover_expressions.push_back(std::move(expression));
 						continue;
 					}
-					auto &set = set_manager.GetJoinRelation(bindings);
+					auto set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}

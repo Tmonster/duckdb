@@ -21,7 +21,7 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set.get().count >= 1);
+	D_ASSERT(filter_info.set.get().Count() >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -37,7 +37,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().Count() > 1) {
 		// Both set and are from different relations
 		return false;
 	}
@@ -111,8 +111,8 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		} else if (EmptyFilter(*filter)) {
 			continue;
 		}
-		D_ASSERT(filter->left_set->count >= 1);
-		D_ASSERT(filter->right_set->count >= 1);
+		D_ASSERT(filter->left_set->Count() >= 1);
+		D_ASSERT(filter->right_set->Count() >= 1);
 
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
@@ -126,11 +126,11 @@ void CardinalityEstimator::RemoveEmptyTotalDomains() {
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
 }
 
-double CardinalityEstimator::GetNumerator(JoinRelationSetOld &set) {
+double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
-	for (idx_t i = 0; i < set.count; i++) {
-		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
+	for (idx_t i = 0; i < set.Count(); i++) {
+		auto single_node_set = set_manager.GetJoinRelation(set.relations[i]);
+		auto card_helper = relation_set_2_cardinality[single_node_set.get().ToString()];
 		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 	}
 	return numerator;
@@ -138,13 +138,13 @@ double CardinalityEstimator::GetNumerator(JoinRelationSetOld &set) {
 
 bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph) {
 	if (edge.filter_info->left_set) {
-		if (JoinRelationSetOld::IsSubset(*subgraph.relations, *edge.filter_info->left_set)) {
+		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->left_set)) {
 			// cool
 			return true;
 		}
 	}
 	if (edge.filter_info->right_set) {
-		if (JoinRelationSetOld::IsSubset(*subgraph.relations, *edge.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->right_set)) {
 			return true;
 		}
 	}
@@ -152,11 +152,11 @@ bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgra
 }
 
 vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_to_tdom,
-                                            JoinRelationSetOld &requested_set) {
+                                            JoinRelationSet &requested_set) {
 	vector<FilterInfoWithTotalDomains> res;
 	for (auto &relation_2_tdom : relations_to_tdom) {
 		for (auto &filter : relation_2_tdom.filters) {
-			if (JoinRelationSetOld::IsSubset(requested_set, filter->set)) {
+			if (JoinRelationSet::IsSubset(requested_set, filter->set)) {
 				FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
 				res.push_back(new_edge);
 			}
@@ -194,13 +194,13 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 	return res;
 }
 
-JoinRelationSetOld &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
+JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
                                                                 FilterInfoWithTotalDomains &filter) {
 	switch (filter.filter_info->join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
-		if (JoinRelationSetOld::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-		    JoinRelationSetOld::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
+		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
 			return *left.numerator_relations;
 		}
 		return *right.numerator_relations;
@@ -261,8 +261,8 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	}
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
-		if (JoinRelationSetOld::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-		    JoinRelationSetOld::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
+		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
 			new_denom = left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
 			return new_denom;
 		}
@@ -275,7 +275,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	}
 }
 
-DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSetOld &set) {
+DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	vector<Subgraph2Denominator> subgraphs;
 
 	// Finding the denominator is tricky. You need to go through the tdoms in decreasing order
@@ -321,19 +321,19 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSetOld &set) {
 			auto right_subgraph = Subgraph2Denominator();
 			right_subgraph.relations = edge.filter_info->right_set;
 			right_subgraph.numerator_relations = edge.filter_info->right_set;
-			if (JoinRelationSetOld::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
 				right_subgraph.relations = edge.filter_info->left_set;
 				right_subgraph.numerator_relations = edge.filter_info->left_set;
 			}
 
-			if (JoinRelationSetOld::IsSubset(*left_subgraph->relations, *edge.filter_info->left_set) &&
-			    JoinRelationSetOld::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_set) &&
+			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
 				// here we have an edge that connects the same subgraph to the same subgraph. Just continue. no need to
 				// update the denom
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
-			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
+			left_subgraph->relations = set_manager.Union(*left_subgraph->relations, *right_subgraph.relations).get();
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
@@ -341,7 +341,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSetOld &set) {
 			auto subgraph_to_merge_into = &subgraphs.at(subgraph_connections.at(0));
 			auto subgraph_to_delete = &subgraphs.at(subgraph_connections.at(1));
 			subgraph_to_merge_into->relations =
-			    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
+			    set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations).get();
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
@@ -361,10 +361,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSetOld &set) {
 		auto final_subgraph = subgraphs.at(0);
 		for (auto merge_with = subgraphs.begin() + 1; merge_with != subgraphs.end(); merge_with++) {
 			D_ASSERT(final_subgraph.relations && merge_with->relations);
-			final_subgraph.relations = &set_manager.Union(*final_subgraph.relations, *merge_with->relations);
+			final_subgraph.relations = set_manager.Union(*final_subgraph.relations, *merge_with->relations).get();
 			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
 			final_subgraph.numerator_relations =
-			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
+			    set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations).get();
 			final_subgraph.denom *= merge_with->denom;
 		}
 	}
@@ -377,7 +377,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSetOld &set) {
 }
 
 template <>
-double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSetOld &new_set) {
+double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
@@ -394,7 +394,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSetOld &new_
 }
 
 template <>
-idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSetOld &new_set) {
+idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
 	if (cardinality_as_double >= (double)max) {
@@ -416,7 +416,7 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
 
-void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSetOld> set, RelationStats &stats) {
+void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
 	// Get the join relation set
 	D_ASSERT(stats.stats_initialized);
 	auto relation_cardinality = stats.cardinality;
@@ -430,8 +430,8 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 }
 
-void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSetOld> set, RelationStats &stats) {
-	D_ASSERT(set->count == 1);
+void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
+	D_ASSERT(set->Count() == 1);
 	auto relation_id = set->relations[0];
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	//	D_ASSERT(stats.column_distinct_count.size() >= 1);
