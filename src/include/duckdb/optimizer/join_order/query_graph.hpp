@@ -37,6 +37,10 @@ struct NeighborInfo {
 class QueryGraphEdges {
 public:
 	//! Contains a node with info about neighboring relations and child edge infos
+	//! The root is a top level QueryEdge with no neighbors, then each child represents a single
+	//! relation node. Neighbors with these single nodes are in the neighbors vector.
+	//! If the edge is complex (like a+b = c), then the children structure is used to capture
+	//! the presence of [a, b].
 	struct QueryEdge {
 		vector<unique_ptr<NeighborInfo>> neighbors;
 		unordered_map<idx_t, unique_ptr<QueryEdge>> children;
