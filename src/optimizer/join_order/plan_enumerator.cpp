@@ -34,8 +34,10 @@ static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_
 
 //! Update the exclusion set with all entries in the subgraph
 static void UpdateExclusionSet(optional_ptr<JoinRelationSet> node, unordered_set<idx_t> &exclusion_set) {
-	for (idx_t i = 0; i < node->Count(); i++) {
-		exclusion_set.insert(node->relations[i]);
+	for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
+		if (node->relations[i]) {
+			exclusion_set.insert(i);
+		}
 	}
 }
 
@@ -187,9 +189,15 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
 	unordered_set<idx_t> exclusion_set;
-	for (idx_t i = 0; i < node.relations[0]; i++) {
-		exclusion_set.insert(i);
+	for (idx_t j = 0; j < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; ++j) {
+		if (node.relations[j]) {
+			for (idx_t i = 0; i < j; i++) {
+				exclusion_set.insert(i);
+			}
+			break;
+		}
 	}
+
 	UpdateExclusionSet(&node, exclusion_set);
 	// find the neighbors given this exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
@@ -322,15 +330,16 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 	// now we perform the actual dynamic programming to compute the final result
 	// we enumerate over all the possible pairs in the neighborhood
 	for (idx_t i = query_graph_manager.relation_manager.NumRelations(); i > 0; i--) {
+		auto relation_id = i - 1;
 		// for every node in the set, we consider it as the start node once
-		auto start_node = query_graph_manager.set_manager.GetJoinRelation(i - 1);
+		auto start_node = query_graph_manager.set_manager.GetJoinRelation(relation_id);
 		// emit the start node
 		if (!EmitCSG(start_node)) {
 			return false;
 		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
 		unordered_set<idx_t> exclusion_set;
-		for (idx_t j = 0; j < i; j++) {
+		for (idx_t j = 0; j < relation_id; j++) {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries

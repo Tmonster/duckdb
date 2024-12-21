@@ -26,6 +26,7 @@ struct JoinRelationSet {
 
 	string ToString() const;
 	idx_t Count() const;
+	idx_t NextNeighbor(idx_t i);
 	std::bitset<12> relations;
 
 	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);

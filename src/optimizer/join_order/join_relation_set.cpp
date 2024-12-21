@@ -1,10 +1,6 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 
 #include <algorithm>
-#include <duckdb/main/relation/join_relation.hpp>
 
 namespace duckdb {
 
@@ -58,6 +54,15 @@ idx_t JoinRelationSet::Count() const {
 		}
 	}
 	return count;
+}
+
+idx_t JoinRelationSet::NextNeighbor(idx_t i) {
+	for (idx_t j = 0; j < i; j++) {
+		if (relations[j]) {
+			return j;
+		}
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 JoinRelationSet JoinRelationSet::Copy() const {

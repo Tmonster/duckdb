@@ -113,7 +113,6 @@ void QueryGraphEdges::EnumerateNeighbors(JoinRelationSet &node,
 
 //! Returns true if a JoinRelationSet is banned by the list of exclusion_set, false otherwise
 static bool JoinRelationSetIsExcluded(optional_ptr<JoinRelationSet> node, unordered_set<idx_t> &exclusion_set) {
-	// TODO: figure this one out.
 	bool is_excluded = false;
 	JoinRelationSet::EnumerateRelations(node->relations, [&](idx_t relation_id) {
 		is_excluded |= exclusion_set.find(relation_id) != exclusion_set.end();
@@ -126,12 +125,11 @@ const vector<idx_t> QueryGraphEdges::GetNeighbors(JoinRelationSet &node, unorder
 	EnumerateNeighbors(node, [&](NeighborInfo &info) -> bool {
 		if (!JoinRelationSetIsExcluded(info.neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
-			for (idx_t i = 0; i < PlanEnumerator::THRESHOLD_TO_SWAP_TO_APPROXIMATE; i++) {
-				if (info.neighbor->relations[i]) {
-					result.insert(i);
-					break;
+			JoinRelationSet::EnumerateRelations(info.neighbor->relations, [&](idx_t relation_id) {
+				if (result.size() == 0) {
+					result.insert(relation_id);
 				}
-			}
+			});
 		}
 		return false;
 	});
