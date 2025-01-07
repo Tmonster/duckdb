@@ -54,7 +54,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
         run: |
-          ./Release/duckdb.exe -c "create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
+          ./Release/duckdb.exe -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
 
       - name: Install ninja (MacOS)
         shell: bash
@@ -85,7 +85,7 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
-          ./build/relassert/duckdb -c "create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
+          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
 
       - name: upload sample file
         uses: actions/upload-artifact@v4
@@ -103,4 +103,9 @@ jobs:
       - name: check all samples are the same
         shell: bash
         run: |
-          diff *.csv > diffs.txt
+          diff macos-latest_sample.csv windows-latest_sample.csv > mac_vs_windows.csv
+          diff macos-latest_sample.csv ubuntu-latest_sample.csv > mac_vs_ubuntu.csv
+          diff ubuntu-latest_sample.csv windows-latest_sample.csv > windows_vs_ubuntu.csv
+          cat mac_vs_windows.csv
+          cat mac_vs_ubuntu.csv
+          cat windows_vs_ubuntu.csv
