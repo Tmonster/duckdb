@@ -39,12 +39,6 @@ jobs:
         shell: bash
         run: brew install duckdb
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
 #      - name: Build
 #        shell: bash
 #        run: UNSAFE_NUMERIC_CAST=1 make relassert
