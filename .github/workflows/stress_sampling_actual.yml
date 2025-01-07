@@ -71,29 +71,22 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' }}
         run: brew install gcc
 
-      - name: Build (MacOS)
-        shell: bash
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: GEN=ninja make relassert
-
-      - name: Install (Linux)
+      - name: Install (Ubuntu)
         shell: bash
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build wget unzip
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
+      - name: Build (MacOS & UBUNTU)
+        shell: bash
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: GEN=ninja make relassert
 
-      - name: Build
+      - name: Build (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
         run: UNSAFE_NUMERIC_CAST=1 make relassert
 
-      - name: Create sample file
+      - name: Create sample file (Ubuntu & macos)
         if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
