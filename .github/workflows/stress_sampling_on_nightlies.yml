@@ -7,16 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/NightlyTests.yml'
-      - '!.github/patches/duckdb-wasm/**'
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/NightlyTests.yml'
-      - '!.github/patches/duckdb-wasm/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -82,7 +72,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
-        with:
 
       - name: check all samples are the same
         shell: bash
