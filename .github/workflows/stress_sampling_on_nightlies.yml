@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ linux-latest ]
+        os: [ linux-latest ]
     runs-on: ${{ matrix.os }}
     env:
       CC: gcc-10
