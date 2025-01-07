@@ -83,7 +83,6 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: *.csv
 
       - name: check all samples are the same
         shell: bash
