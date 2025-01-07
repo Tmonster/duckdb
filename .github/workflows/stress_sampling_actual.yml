@@ -54,7 +54,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
         run: |
-          ./Release/duckdb.exe -c "create table tbl1 as select * from range(10000000); create table t2 as select * from t1; copy (select * from duckdb_table_sample('t2') to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
+          ./Release/duckdb.exe -c "create table tbl1 as select * from range(10000000); create table t2 as select * from t1; copy (select * from duckdb_table_sample('t2')) to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
 
       - name: Install ninja (MacOS)
         shell: bash
