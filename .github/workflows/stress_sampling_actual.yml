@@ -59,7 +59,17 @@ jobs:
       - name: Install ninja (MacOS)
         shell: bash
         if: ${{ matrix.os == 'macos-latest' }}
-        run: brew install ninja cmake gcc
+        run: brew install ninja
+
+      - name: Install cmake (MacOS)
+        shell: bash
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: brew install cmake
+
+      - name: Install gcc (MacOS)
+        shell: bash
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: brew install gcc
 
       - name: Build (MacOS)
         shell: bash
