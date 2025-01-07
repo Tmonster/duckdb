@@ -56,17 +56,17 @@ jobs:
         run: |
           ./Release/duckdb.exe -c "create table tbl1 as select * from range(10000000); create table t2 as select * from t1; copy (select * from duckdb_table_sample('t2') to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
 
-      - name: Install ninja
+      - name: Install ninja (MacOS)
         shell: bash
         if: ${{ matrix.os == 'macos-latest' }}
-        run: brew install ninja
+        run: brew install ninja cmake gcc
 
-      - name: Build
+      - name: Build (MacOS)
         shell: bash
         if: ${{ matrix.os == 'macos-latest' }}
         run: GEN=ninja make relassert
 
-      - name: Install Linux/MacOS
+      - name: Install (Linux)
         shell: bash
         if: ${{ matrix.os == 'linux-latest' }}
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build wget unzip
