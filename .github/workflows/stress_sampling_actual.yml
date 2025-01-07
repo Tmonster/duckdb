@@ -1,0 +1,101 @@
+name: Stess Samples actual
+on:
+  workflow_dispatch:
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build-versions-create-samples:
+    name: Release Assertions
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ linux-latest, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ccache
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        run: |
+          python scripts/windows_ci.py
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+          cmake --build . --config Release --parallel
+
+      - name: Create Sample file Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        run: |
+          ./Release/duckdb.exe -c "create table tbl1 as select * from range(10000000); create table t2 as select * from t1; copy (select * from duckdb_table_sample('t2') to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
+
+      - name: Install Linux/MacOS
+        shell: bash
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build wget unzip
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        if: ${{ matrix.os != 'windows-latest' }}
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: UNSAFE_NUMERIC_CAST=1 make relassert
+
+      - name: Create sample file
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          ./build/relassert/duckdb -c "create table tbl1 as select * from range(10000000); create table t2 as select * from t1; copy (select * from duckdb_table_sample('t2') to '${{ matrix.os }}_sample.csv' (FORMAT CSV)"
+
+      - name: upload sample file
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}_sample.csv
+          path: ${{ matrix.os }}_sample.csv
+
+  verify-samples-are-the-same:
+    name: verify-samples-are-the-same
+    needs: build-versions-create-samples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: check all samples are the same
+        shell: bash
+        run: |
+          diff *.csv > diffs.txt
+
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
