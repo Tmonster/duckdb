@@ -225,10 +225,10 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 	for (uint32_t i = 0; i < range; i++) {
 		ret.push_back(i);
 	}
-	if (size == FIXED_SAMPLE_SIZE) {
-		std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
-		return ret;
-	}
+	// if (size == FIXED_SAMPLE_SIZE) {
+	// 	std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
+	// 	return ret;
+	// }
 	for (uint32_t i = 0; i < size; i++) {
 		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger32(i, range);
 		if (random_shuffle == i) {
@@ -461,7 +461,7 @@ void ReservoirSample::NormalizeWeights() {
 		tmp_weights.push_back(std::move(top));
 		base_reservoir_sample->reservoir_weights.pop();
 	}
-	std::sort(tmp_weights.begin(), tmp_weights.end(),
+	std::stable_sort(tmp_weights.begin(), tmp_weights.end(),
 	          [&](std::pair<double, idx_t> a, std::pair<double, idx_t> b) { return a.second < b.second; });
 	for (idx_t i = 0; i < tmp_weights.size(); i++) {
 		base_reservoir_sample->reservoir_weights.emplace(tmp_weights.at(i).first, i);
