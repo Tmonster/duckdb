@@ -461,7 +461,7 @@ void ReservoirSample::NormalizeWeights() {
 		tmp_weights.push_back(std::move(top));
 		base_reservoir_sample->reservoir_weights.pop();
 	}
-	std::stable_sort(tmp_weights.begin(), tmp_weights.end(),
+	std::sort(tmp_weights.begin(), tmp_weights.end(),
 	          [&](std::pair<double, idx_t> a, std::pair<double, idx_t> b) { return a.second < b.second; });
 	for (idx_t i = 0; i < tmp_weights.size(); i++) {
 		base_reservoir_sample->reservoir_weights.emplace(tmp_weights.at(i).first, i);
