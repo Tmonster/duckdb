@@ -50,14 +50,19 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
           cmake --build . --config Release --parallel
 
+      - name: create csvs directory
+        shell: bash
+        run: |
+          mkdir csvs
+
       - name: Create Sample file Windows
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
         run: |
-          ./Release/duckdb.exe -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample_1.csv' (FORMAT CSV)"
-          ./Release/duckdb.exe -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample_2.csv' (FORMAT CSV)"
-          ./Release/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_small_sample_1.csv' (FORMAT CSV)"
-          ./Release/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_small_sample_2.csv' (FORMAT CSV)"
+          ./Release/duckdb.exe -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_sample_1.csv' (FORMAT CSV)"
+          ./Release/duckdb.exe -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_sample_2.csv' (FORMAT CSV)"
+          ./Release/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_small_sample_1.csv' (FORMAT CSV)"
+          ./Release/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_small_sample_2.csv' (FORMAT CSV)"
 
       - name: Install ninja (MacOS)
         shell: bash
@@ -77,7 +82,8 @@ jobs:
       - name: Install (Ubuntu)
         shell: bash
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build wget unzip
+        run: |
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build wget unzip
 
       - name: Build (MacOS & UBUNTU)
         shell: bash
@@ -88,22 +94,16 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
-          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample_1.csv' (FORMAT CSV)"
-          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_sample_2.csv' (FORMAT CSV)"
-          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_small_sample_1.csv' (FORMAT CSV)"
-          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to '${{ matrix.os }}_small_sample_2.csv' (FORMAT CSV)"
+          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_sample_1.csv' (FORMAT CSV)"
+          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(10000000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_sample_2.csv' (FORMAT CSV)"
+          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_small_sample_1.csv' (FORMAT CSV)"
+          ./build/relassert/duckdb -c "pragma threads=1; create table tbl1 as select * from range(100000); create table tbl2 as select * from tbl1; copy (select * from duckdb_table_sample('tbl2')) to 'csvs/${{ matrix.os }}_small_sample_2.csv' (FORMAT CSV)"
 
       - name: upload sample file
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}_sample_1.csv
-          path: ${{ matrix.os }}_sample_1.csv
-
-      - name: upload sample file
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.os }}_sample_2.csv
-          path: ${{ matrix.os }}_sample_2.csv
+          name: csvs
+          path: csvs/
 
   verify-samples-are-the-same:
     name: verify-samples-are-the-same
