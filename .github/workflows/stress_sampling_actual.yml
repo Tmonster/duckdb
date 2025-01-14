@@ -102,7 +102,7 @@ jobs:
       - name: upload sample file
         uses: actions/upload-artifact@v4
         with:
-          name: csvs
+          name: csvs-${{ matrix.os }}
           path: csvs/
 
   verify-samples-are-the-same:
