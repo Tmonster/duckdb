@@ -3,6 +3,12 @@
 # group: [expression_rewriter]
 
 statement ok
+SET order_by_non_integer_literal=true;
+SELECT DISTINCT ON ( 'string' ) 'string', GROUP BY CUBE ( 'string', ), 'string' IN ( SELECT 'string' ), HAVING 'string' IN ( SELECT 'string');
+
+mode skip
+
+statement ok
 create table t1 as from range(-5000, 5000, 1) t1(a);
 
 # case expression must happen first, otherwise sqrt will throw an error
