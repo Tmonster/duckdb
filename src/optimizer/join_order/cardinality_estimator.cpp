@@ -14,14 +14,14 @@ namespace duckdb {
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
-	if (!filter_info.left_set && !filter_info.right_set) {
+	if (filter_info.left_relation_set->count == 0 && filter_info.right_relation_set->count == 0) {
 		return true;
 	}
 	return false;
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set.get().count >= 1);
+	D_ASSERT(filter_info.set->count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -37,7 +37,8 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
+	if (filter_info.left_relation_set->count >= 1 && filter_info.right_relation_set->count >= 1 &&
+	    filter_info.set->count >= 2) {
 		// Both set and are from different relations
 		return false;
 	}
@@ -103,16 +104,11 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
 	for (auto &filter : filter_infos) {
-		if (SingleColumnFilter(*filter)) {
-			// Filter on one relation, (i.e. string or range filter on a column).
-			// Grab the first relation and add it to  the equivalence_relations
-			AddRelationTdom(*filter);
-			continue;
-		} else if (EmptyFilter(*filter)) {
+		if (EmptyFilter(*filter) || filter->SingleColumnFilter()) {
 			continue;
 		}
-		D_ASSERT(filter->left_set->count >= 1);
-		D_ASSERT(filter->right_set->count >= 1);
+		D_ASSERT(filter->left_relation_set->count >= 1);
+		D_ASSERT(filter->right_relation_set->count >= 1);
 
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
@@ -137,14 +133,14 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 }
 
 bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph) {
-	if (edge.filter_info->left_set) {
-		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->left_set)) {
+	if (edge.filter_info->left_relation_set) {
+		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->left_relation_set)) {
 			// cool
 			return true;
 		}
 	}
-	if (edge.filter_info->right_set) {
-		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->right_set)) {
+	if (edge.filter_info->right_relation_set) {
+		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->right_relation_set)) {
 			return true;
 		}
 	}
@@ -156,7 +152,8 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_t
 	vector<FilterInfoWithTotalDomains> res;
 	for (auto &relation_2_tdom : relations_to_tdom) {
 		for (auto &filter : relation_2_tdom.filters) {
-			if (JoinRelationSet::IsSubset(requested_set, filter->set)) {
+			if (JoinRelationSet::IsSubset(requested_set, *filter->set) &&
+			    filter->left_relation_set != filter->right_relation_set) {
 				FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
 				res.push_back(new_edge);
 			}
@@ -199,8 +196,8 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	switch (filter.filter_info->join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
-		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_relation_set) &&
+		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_relation_set)) {
 			return *left.numerator_relations;
 		}
 		return *right.numerator_relations;
@@ -215,6 +212,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
                                                    FilterInfoWithTotalDomains &filter) {
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
+	case JoinType::LEFT:
 	case JoinType::INNER: {
 		bool set = false;
 		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
@@ -262,8 +260,8 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	}
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
-		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_relation_set) &&
+		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_relation_set)) {
 			new_denom = left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
 			return new_denom;
 		}
@@ -309,31 +307,43 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
 			auto left_subgraph = Subgraph2Denominator();
 			auto right_subgraph = Subgraph2Denominator();
-			left_subgraph.relations = edge.filter_info->left_set;
-			left_subgraph.numerator_relations = edge.filter_info->left_set;
-			right_subgraph.relations = edge.filter_info->right_set;
-			right_subgraph.numerator_relations = edge.filter_info->right_set;
+			left_subgraph.relations = edge.filter_info->left_relation_set;
+			left_subgraph.numerator_relations = edge.filter_info->left_relation_set;
+			right_subgraph.relations = edge.filter_info->right_relation_set;
+			right_subgraph.numerator_relations = edge.filter_info->right_relation_set;
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = edge.filter_info->set.get();
+			if (edge.filter_info->join_type == JoinType::LEFT) {
+				auto denom =
+				    edge.has_tdom_hll ? static_cast<double>(edge.tdom_hll) : static_cast<double>(edge.tdom_no_hll);
+				denom = MaxValue<double>(denom, 1);
+				left_subgraph.numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
+			}
+			left_subgraph.relations = edge.filter_info->set;
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
 			auto right_subgraph = Subgraph2Denominator();
-			right_subgraph.relations = edge.filter_info->right_set;
-			right_subgraph.numerator_relations = edge.filter_info->right_set;
+			right_subgraph.relations = edge.filter_info->right_relation_set;
+			right_subgraph.numerator_relations = edge.filter_info->right_relation_set;
 			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
-				right_subgraph.relations = edge.filter_info->left_set;
-				right_subgraph.numerator_relations = edge.filter_info->left_set;
+				right_subgraph.relations = edge.filter_info->left_relation_set;
+				right_subgraph.numerator_relations = edge.filter_info->left_relation_set;
 			}
 
-			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_set) &&
-			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_relation_set) &&
+			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_relation_set)) {
 				// here we have an edge that connects the same subgraph to the same subgraph. Just continue. no need to
 				// update the denom
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+			if (edge.filter_info->join_type == JoinType::LEFT) {
+				auto denom =
+				    edge.has_tdom_hll ? static_cast<double>(edge.tdom_hll) : static_cast<double>(edge.tdom_no_hll);
+				denom = MaxValue<double>(denom, 1);
+				left_subgraph->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
+			}
 			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
@@ -346,6 +356,12 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+			if (edge.filter_info->join_type == JoinType::LEFT) {
+				auto denom =
+				    edge.has_tdom_hll ? static_cast<double>(edge.tdom_hll) : static_cast<double>(edge.tdom_no_hll);
+				D_ASSERT(denom >= 1);
+				subgraph_to_merge_into->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
+			}
 			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
@@ -366,6 +382,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
 			final_subgraph.numerator_relations =
 			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
+			final_subgraph.numerator_relations_extra *= merge_with->numerator_relations_extra;
 			final_subgraph.denom *= merge_with->denom;
 		}
 	}
@@ -374,7 +391,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom * denom_multiplier);
+	// auto filter_str
+	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_relations_extra,
+	                 subgraphs.at(0).denom * denom_multiplier);
 }
 
 template <>
@@ -387,6 +406,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// can happen if a table has cardinality 0, or a tdom is set to 0
 	auto denom = GetDenominator(new_set);
 	auto numerator = GetNumerator(denom.numerator_relations);
+	numerator *= denom.extra_multiplier;
 
 	double result = numerator / denom.denominator;
 	auto new_entry = CardinalityHelper(result);
