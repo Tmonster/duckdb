@@ -99,15 +99,19 @@ struct KurtosisOperation {
 };
 
 AggregateFunction KurtosisFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KurtosisState, double, double,
+	auto function = AggregateFunction::UnaryAggregate<KurtosisState, double, double,
 	                                         KurtosisOperation<KurtosisFlagBiasCorrection>>(LogicalType::DOUBLE,
 	                                                                                        LogicalType::DOUBLE);
+	function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	return function;
 }
 
 AggregateFunction KurtosisPopFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KurtosisState, double, double,
+	auto function = AggregateFunction::UnaryAggregate<KurtosisState, double, double,
 	                                         KurtosisOperation<KurtosisFlagNoBiasCorrection>>(LogicalType::DOUBLE,
 	                                                                                          LogicalType::DOUBLE);
+    function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	return function;
 }
 
 } // namespace duckdb
