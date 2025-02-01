@@ -133,4 +133,12 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	SetNextEntry();
 }
 
+void BaseReservoirSampling::Reset() {
+	next_index_to_sample = 0;
+	min_weight_threshold = 0;
+	min_weighted_entry_index = 0;
+	num_entries_to_skip_b4_next_sample = 0;
+	num_entries_seen_total = 0;
+}
+
 } // namespace duckdb

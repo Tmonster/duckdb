@@ -53,6 +53,7 @@ public:
 	//! Take ownership of the sample, needed for merging. Requires the lock
 	unique_ptr<BlockingSample> GetTableSample(TableStatisticsLock &lock);
 	void SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);
+	bool SampleExists(TableStatisticsLock &lock);
 
 	void DestroyTableSample(TableStatisticsLock &lock) const;
 	void AppendToTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);

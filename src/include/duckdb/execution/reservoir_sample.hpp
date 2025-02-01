@@ -65,6 +65,8 @@ public:
 	//! we need to serialize weights again.
 	void FillWeights(SelectionVector &sel, idx_t &sel_size);
 
+	void Reset();
+
 	unique_ptr<BaseReservoirSampling> Copy();
 
 	//! The random generator
@@ -212,7 +214,7 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 	//! Merge two Reservoir Samples. Other must be a reservoir sample
-	void Merge(unique_ptr<BlockingSample> other);
+	void Merge(reference<BlockingSample> other);
 
 	void ShuffleSel(SelectionVector &sel, idx_t range, idx_t size) const;
 
@@ -227,12 +229,15 @@ public:
 
 	// get the chunk from Reservoir chunk
 	DataChunk &Chunk();
+	bool HasSampleChunk() const;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
 	unique_ptr<DataChunk> GetChunk() override;
 	void Destroy() override;
+	//! Indicates the sample is empty. This is usually called after Merge
+	void Empty();
 	void Finalize() override;
 	void Verify();
 

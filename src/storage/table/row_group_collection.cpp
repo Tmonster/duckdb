@@ -443,20 +443,22 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
 	}
 
-	auto local_sample = state.stats.GetTableSample(*local_stats_lock);
-	auto global_sample = stats.GetTableSample(*global_stats_lock);
+	// It's possible the global sample does not exist yet.
+	if (state.stats.SampleExists(*local_stats_lock) || stats.SampleExists(*global_stats_lock)) {
+		auto &local_sample = state.stats.GetTableSampleRef(*local_stats_lock);
+		auto &global_sample = stats.GetTableSampleRef(*global_stats_lock);
 
-	if (local_sample && global_sample) {
-		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
-		reservoir_sample.Merge(std::move(local_sample));
-		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
-		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
-	} else {
-		state.stats.SetTableSample(*local_stats_lock, std::move(local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
+		D_ASSERT(global_sample.type == SampleType::RESERVOIR_SAMPLE);
+		auto &reservoir_sample = global_sample.Cast<ReservoirSample>();
+		if (!reservoir_sample.HasSampleChunk()) {
+			Printer::Print("Global sample does not have a reservoir chunk");
+		}
+		if (reservoir_sample.HasSampleChunk()) {
+			Printer::Print("Global sample does have a reservoir chunk");
+		}
+		// local sample is reset so memory is re-used
+		reservoir_sample.Merge(local_sample);
+		auto wat = 0;
 	}
 
 	Verify();

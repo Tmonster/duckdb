@@ -1,0 +1,11 @@
+# name: test/sql/sample/table_samples/test_sample_allocations.test
+# group: [table_samples]
+
+statement ok
+create table t0 as select range a, range b from range(40000000);
+
+statement ok
+pragma threads=2;
+
+statement ok
+create table t1 as select * from t0;

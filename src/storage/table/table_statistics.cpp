@@ -111,11 +111,13 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 			D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 			auto &this_reservoir = table_sample->Cast<ReservoirSample>();
 			D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
-			this_reservoir.Merge(std::move(other.table_sample));
+			this_reservoir.Merge(*other.table_sample);
+			D_ASSERT(other.table_sample);
 		}
 		// if no other.table sample, do nothig
 	} else {
 		if (other.table_sample) {
+			Printer::Print("umm, in this weird merging state");
 			auto &other_reservoir = other.table_sample->Cast<ReservoirSample>();
 			auto other_table_sample_copy = other_reservoir.Copy();
 			table_sample = std::move(other_table_sample_copy);
@@ -148,11 +150,23 @@ BlockingSample &TableStatistics::GetTableSampleRef(TableStatisticsLock &lock) {
 }
 
 unique_ptr<BlockingSample> TableStatistics::GetTableSample(TableStatisticsLock &lock) {
+	Printer::Print("Moving Table Sample!!!");
 	return std::move(table_sample);
 }
 
 void TableStatistics::SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample) {
 	table_sample = std::move(sample);
+}
+
+bool TableStatistics::SampleExists(TableStatisticsLock &lock) {
+	D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
+	auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
+	auto sample_exists = table_sample != nullptr;
+	auto sample_chunk_exists = false;
+	if (sample_exists) {
+		sample_chunk_exists = reservoir_sample.HasSampleChunk();
+	}
+	return sample_exists && sample_chunk_exists;
 }
 
 void TableStatistics::DestroyTableSample(TableStatisticsLock &lock) const {

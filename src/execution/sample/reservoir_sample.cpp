@@ -2,6 +2,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include <unordered_set>
+#include <duckdb/common/printer.hpp>
 
 namespace duckdb {
 
@@ -107,6 +108,11 @@ DataChunk &ReservoirSample::Chunk() {
 	return reservoir_chunk->chunk;
 }
 
+bool ReservoirSample::HasSampleChunk() const {
+	return reservoir_chunk != nullptr;
+}
+
+
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (destroyed || !reservoir_chunk || Chunk().size() == 0) {
 		return nullptr;
@@ -172,6 +178,7 @@ void ReservoirSample::Vacuum() {
 	}
 
 	auto ret = Copy();
+	Printer::Print("calling vacuum, maybe something here?");
 	auto ret_reservoir = duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(ret));
 	reservoir_chunk = std::move(ret_reservoir->reservoir_chunk);
 	sel = std::move(ret_reservoir->sel);
@@ -201,6 +208,7 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 	// how many values should be copied
 	idx_t values_to_copy = MinValue<idx_t>(GetActiveSampleCount(), sample_count);
 
+	Printer::Print("creating new sample chunk in Copy()");
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
 	SelectionVector sel_copy(sel);
@@ -249,6 +257,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	D_ASSERT(other.GetSamplingState() == SamplingState::RANDOM);
 
 	if (other.GetActiveSampleCount() == 0 && other.GetTuplesSeen() == 0) {
+		other.Empty();
 		return;
 	}
 
@@ -256,6 +265,8 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 		sel = SelectionVector(other.sel);
 		sel_size = other.sel_size;
 		base_reservoir_sample->num_entries_seen_total = other.GetTuplesSeen();
+		std::swap(other.reservoir_chunk, reservoir_chunk);
+		other.Empty();
 		return;
 	}
 
@@ -324,6 +335,8 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	if (GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}
+	other.Empty();
+	D_ASSERT(other.reservoir_chunk);
 	Verify();
 }
 
@@ -403,18 +416,24 @@ void ReservoirSample::WeightedMerge(ReservoirSample &other_sample) {
 	if (reservoir_chunk->chunk.size() > FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
 		Vacuum();
 	}
-
+	other_sample.Empty();
+	D_ASSERT(other_sample.reservoir_chunk);
 	Verify();
 }
 
-void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
-	if (destroyed || other->destroyed) {
+void ReservoirSample::Empty() {
+	D_ASSERT(base_reservoir_sample);
+	base_reservoir_sample->Reset();
+}
+
+void ReservoirSample::Merge(reference<BlockingSample> other) {
+	if (destroyed || other.get().destroyed) {
 		Destroy();
 		return;
 	}
 
-	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
-	auto &other_sample = other->Cast<ReservoirSample>();
+	D_ASSERT(other.get().type == SampleType::RESERVOIR_SAMPLE);
+	auto &other_sample = other.get().Cast<ReservoirSample>();
 
 	// if the other sample has not collected anything yet return
 	if (!other_sample.reservoir_chunk || other_sample.reservoir_chunk->chunk.size() == 0) {
@@ -423,10 +442,12 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// this has not collected samples, take over the other
 	if (!reservoir_chunk || reservoir_chunk->chunk.size() == 0) {
-		base_reservoir_sample = std::move(other->base_reservoir_sample);
-		reservoir_chunk = std::move(other_sample.reservoir_chunk);
+		std::swap(base_reservoir_sample, other_sample.base_reservoir_sample);
+		std::swap(reservoir_chunk, other_sample.reservoir_chunk);
 		sel = SelectionVector(other_sample.sel);
 		sel_size = other_sample.sel_size;
+		// Empty the other sample so the reservoir sample can be used again
+		other_sample.Empty();
 		Verify();
 		return;
 	}
@@ -475,6 +496,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 		return;
 	}
 
+	Printer::Print("Evicting over budget samples");
 	// since this is for serialization, we really need to make sure keep a
 	// minimum of 1% of the rows or 2048 rows
 	idx_t num_samples_to_keep =
@@ -505,6 +527,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	D_ASSERT(num_samples_to_keep <= sample_count);
 	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
+	Printer::Print("Creating new Sample in Evict over budget samples");
 	auto new_reservoir_chunk = CreateNewSampleChunk(types, sample_count);
 
 	// The current selection vector can potentially have 2048 valid mappings.
@@ -542,12 +565,16 @@ void ReservoirSample::ExpandSerializedSample() {
 	}
 
 	auto types = reservoir_chunk->chunk.GetTypes();
+	Printer::Print("Creating new sample chunk in Expand Serialized Sample");
 	auto new_res_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 	auto copy_count = reservoir_chunk->chunk.size();
 	SelectionVector tmp_sel = SelectionVector(0, copy_count);
 	UpdateSampleAppend(new_res_chunk->chunk, reservoir_chunk->chunk, tmp_sel, copy_count);
 	new_res_chunk->chunk.SetCardinality(copy_count);
 	std::swap(reservoir_chunk, new_res_chunk);
+	if (new_res_chunk) {
+		new_res_chunk->chunk.Destroy();
+	}
 }
 
 idx_t ReservoirSample::GetReservoirChunkCapacity() const {
@@ -562,6 +589,10 @@ idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
 			throw InternalException("Creating sample with DataChunk that is larger than the fixed sample size");
 		}
 		auto types = chunk.GetTypes();
+		Printer::Print("Creating new Sample Chunk in Fill Reservoir");
+		if (base_reservoir_sample->next_index_to_sample == 0) {
+			auto break_here = 0;
+		}
 		// create a new sample chunk to store new samples
 		reservoir_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 	}
