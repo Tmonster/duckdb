@@ -499,8 +499,11 @@ void ReservoirSample::EvictOverBudgetSamples() {
 
 	// since this is for serialization, we really need to make sure keep a
 	// minimum of 1% of the rows or 2048 rows
-	idx_t num_samples_to_keep =
-	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
+	idx_t num_samples_to_keep = sample_count;
+	if (stats_sample) {
+		num_samples_to_keep = MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
+	}
+
 
 	if (num_samples_to_keep <= 0) {
 		reservoir_chunk->chunk.SetCardinality(0);
@@ -553,6 +556,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	UpdateSampleAppend(new_reservoir_chunk->chunk, reservoir_chunk->chunk, new_sel, num_samples_to_keep);
 	// set the cardinality
 	new_reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
+	reservoir_chunk->chunk.Destroy();
 	reservoir_chunk = std::move(new_reservoir_chunk);
 	sel_size = num_samples_to_keep;
 	base_reservoir_sample->UpdateMinWeightThreshold();
@@ -889,7 +893,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 			input.Slice(sel, append_to_next_sample);
 		}
 		// now our first sample is filled: append it to the set of finished samples
-
+		current_sample->EvictOverBudgetSamples();
 		finished_samples.push_back(std::move(current_sample));
 		// allocate a new sample, and potentially add the remainder of the current input to that sample
 		current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random());
