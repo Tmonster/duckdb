@@ -450,12 +450,6 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 
 		D_ASSERT(global_sample.type == SampleType::RESERVOIR_SAMPLE);
 		auto &reservoir_sample = global_sample.Cast<ReservoirSample>();
-		if (!reservoir_sample.HasSampleChunk()) {
-			Printer::Print("Global sample does not have a reservoir chunk");
-		}
-		if (reservoir_sample.HasSampleChunk()) {
-			Printer::Print("Global sample does have a reservoir chunk");
-		}
 		// local sample is reset so memory is re-used
 		reservoir_sample.Merge(local_sample);
 		auto wat = 0;

@@ -178,11 +178,13 @@ void ReservoirSample::Vacuum() {
 	}
 
 	auto ret = Copy();
-	Printer::Print("calling vacuum, maybe something here?");
 	auto ret_reservoir = duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(ret));
+	reservoir_chunk->chunk.Destroy();
 	reservoir_chunk = std::move(ret_reservoir->reservoir_chunk);
+
 	sel = std::move(ret_reservoir->sel);
 	sel_size = ret_reservoir->sel_size;
+
 
 	Verify();
 	// We should only have one sample chunk now.
@@ -208,7 +210,6 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 	// how many values should be copied
 	idx_t values_to_copy = MinValue<idx_t>(GetActiveSampleCount(), sample_count);
 
-	Printer::Print("creating new sample chunk in Copy()");
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
 	SelectionVector sel_copy(sel);
@@ -496,7 +497,6 @@ void ReservoirSample::EvictOverBudgetSamples() {
 		return;
 	}
 
-	Printer::Print("Evicting over budget samples");
 	// since this is for serialization, we really need to make sure keep a
 	// minimum of 1% of the rows or 2048 rows
 	idx_t num_samples_to_keep =
@@ -527,7 +527,6 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	D_ASSERT(num_samples_to_keep <= sample_count);
 	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
-	Printer::Print("Creating new Sample in Evict over budget samples");
 	auto new_reservoir_chunk = CreateNewSampleChunk(types, sample_count);
 
 	// The current selection vector can potentially have 2048 valid mappings.
@@ -565,7 +564,6 @@ void ReservoirSample::ExpandSerializedSample() {
 	}
 
 	auto types = reservoir_chunk->chunk.GetTypes();
-	Printer::Print("Creating new sample chunk in Expand Serialized Sample");
 	auto new_res_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 	auto copy_count = reservoir_chunk->chunk.size();
 	SelectionVector tmp_sel = SelectionVector(0, copy_count);
@@ -578,7 +576,7 @@ void ReservoirSample::ExpandSerializedSample() {
 }
 
 idx_t ReservoirSample::GetReservoirChunkCapacity() const {
-	return sample_count + (FIXED_SAMPLE_SIZE_MULTIPLIER * FIXED_SAMPLE_SIZE);
+	return sample_count + (FIXED_SAMPLE_SIZE_MULTIPLIER * sample_count);
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
@@ -589,7 +587,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
 			throw InternalException("Creating sample with DataChunk that is larger than the fixed sample size");
 		}
 		auto types = chunk.GetTypes();
-		Printer::Print("Creating new Sample Chunk in Fill Reservoir");
 		if (base_reservoir_sample->next_index_to_sample == 0) {
 			auto break_here = 0;
 		}
@@ -892,8 +889,8 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 			input.Slice(sel, append_to_next_sample);
 		}
 		// now our first sample is filled: append it to the set of finished samples
-		finished_samples.push_back(std::move(current_sample));
 
+		finished_samples.push_back(std::move(current_sample));
 		// allocate a new sample, and potentially add the remainder of the current input to that sample
 		current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, base_reservoir_sample->random());
 		if (append_to_next_sample > 0) {
