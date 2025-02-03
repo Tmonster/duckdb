@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -396,14 +397,11 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
-
 	auto local_stats_lock = state.stats.GetLock();
-
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &column_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
-
 	return new_row_group;
 }
 
@@ -423,8 +421,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
 
-	auto local_stats_lock = state.stats.GetLock();
 	auto global_stats_lock = stats.GetLock();
+	auto local_stats_lock = state.stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
 		if (!global_stats.HasDistinctStats()) {
@@ -584,7 +582,6 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
-
 	return delete_count;
 }
 
@@ -1142,7 +1139,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-
 	return result;
 }
 
@@ -1154,9 +1150,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
-
-	auto result_lock = result->stats.GetLock();
-	result->stats.DestroyTableSample(*result_lock);
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
@@ -1204,6 +1197,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+
 	return result;
 }
 
@@ -1250,17 +1244,13 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 
 //===--------------------------------------------------------------------===//
 // Statistics
-//===---------------------------------------------------------------r-----===//
+//===--------------------------------------------------------------------===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
-}
-
-unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
