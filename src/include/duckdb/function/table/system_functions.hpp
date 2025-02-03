@@ -119,10 +119,6 @@ struct DuckDBTablesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DuckDBTableSample {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct DuckDBTemporaryFilesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

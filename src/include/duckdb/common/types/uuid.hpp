@@ -13,7 +13,7 @@
 
 namespace duckdb {
 class ClientContext;
-class RandomEngine;
+struct RandomEngine;
 
 //! The UUID class contains static operations for the UUID type
 class UUID {

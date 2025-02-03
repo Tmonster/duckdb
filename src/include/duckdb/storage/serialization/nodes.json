@@ -281,7 +281,7 @@
         "type": "unique_ptr<ReservoirChunk>"
       }
     ],
-    "constructor": ["sample_count", "reservoir_chunk"]
+    "constructor": ["sample_count"]
   },
   {
     "class": "ReservoirSamplePercentage",
@@ -331,6 +331,7 @@
     ],
     "pointer_type": "none"
   },
+
   {
     "class": "PivotColumnEntry",
     "members": [
