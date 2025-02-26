@@ -1,5 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
