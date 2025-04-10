@@ -166,9 +166,11 @@ def launch_test(test, list_of_tests=False):
     stderr = res.stderr.decode('utf8')
 
     if len(stderr) > 0:
+        print("look a test failed")
         # when list_of_tests test name gets transformed, but we can get it from stderr
         test = test if not list_of_tests else get_test_name_from(stderr)
-        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        copy_stderr = stderr
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": copy_stderr}
         error_container.append(new_data)
 
     end = time.time()
@@ -195,7 +197,7 @@ RETURNCODE
 --------------------"""
     )
     print(res.returncode)
-    if not list_of_tests:
+    if not list_of_tests or len(stderr) > 0:
         print(
             """--------------------
 STDOUT
@@ -207,7 +209,7 @@ STDOUT
 STDERR
 --------------------"""
         )
-        print(stderr)
+        print(copy_stderr)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
@@ -248,11 +250,12 @@ def run_tests_batched(batch_count):
         test_number = next_entry
 
 
-if args.tests_per_invocation == 1:
-    run_tests_one_by_one()
-else:
-    assertions = False
-    run_tests_batched(args.tests_per_invocation)
+# if args.tests_per_invocation == 1:
+run_tests_one_by_one()
+# else:
+#     assertions = False
+#     run_tests_batched(args.tests_per_invocation)
+
 
 if all_passed:
     exit(0)
