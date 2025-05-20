@@ -17,7 +17,12 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
-
+	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+		// cannot apply this on filter expressions since you may remove a cast that is being projected
+		// if the cast is from singed to unsinged, it's possible the removal allows values that evaluate to NULL
+		// on Cast see optimize_unsigned_vs_signed_ints.test
+		return nullptr;
+	}
 	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &constant_expr = bindings[1].get();
 	bool column_ref_left = expr.left.get() != &constant_expr;
