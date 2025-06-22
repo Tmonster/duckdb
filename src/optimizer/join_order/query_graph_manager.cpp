@@ -97,10 +97,10 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
 				if (!filter_info->left_set) {
-					filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
+					filter_info->left_set = set_manager.GetJoinRelation(left_bindings).get();
 				}
 				if (!filter_info->right_set) {
-					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+					filter_info->right_set = set_manager.GetJoinRelation(right_bindings).get();
 				}
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
@@ -179,7 +179,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
 		bindings.insert(i);
 	}
-	auto &total_relation = set_manager.GetJoinRelation(bindings);
+	auto total_relation = set_manager.GetJoinRelation(bindings).get();
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
@@ -310,10 +310,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		}
 		left_node = left.set;
 		right_node = right.set;
-		result_relation = &set_manager.Union(*left.set, *right.set);
+		result_relation = set_manager.Union(*left.set, *right.set).get();
 	} else {
 		// base node, get the entry from the list of extracted relations
-		D_ASSERT(node->set.count == 1);
+		D_ASSERT(node->set.Count() == 1);
 		D_ASSERT(extracted_relations[node->set.relations[0]]);
 		result_relation = &node->set;
 		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
@@ -333,7 +333,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
+			if (info.set.get().Count() > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
 				// if it is, we can push the filter

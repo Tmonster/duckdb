@@ -14,46 +14,47 @@
 
 namespace duckdb {
 
-//! Set of relations, used in the join graph.
 struct JoinRelationSet {
-	JoinRelationSet(unsafe_unique_array<idx_t> relations, idx_t count) : relations(std::move(relations)), count(count) {
+	JoinRelationSet() {
 	}
+	JoinRelationSet(unsafe_unique_array<idx_t> &relations_, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			relations[relations_[i]] = true;
+		}
+	}
+	static void EnumerateRelations(std::bitset<12> relations, const std::function<void(idx_t relation)> &callback);
 
 	string ToString() const;
-
-	unsafe_unique_array<idx_t> relations;
-	idx_t count;
+	idx_t Count() const;
+	idx_t NextNeighbor(idx_t i);
+	std::bitset<12> relations;
 
 	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
+	JoinRelationSet Copy() const;
 };
 
 //! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to
 //! them
 class JoinRelationSetManager {
-public:
-	//! Contains a node with a JoinRelationSet and child relations
-	// FIXME: this structure is inefficient, could use a bitmap for lookup instead (todo: profile)
-	struct JoinRelationTreeNode {
-		unique_ptr<JoinRelationSet> relation;
-		unordered_map<idx_t, unique_ptr<JoinRelationTreeNode>> children;
-	};
 
 public:
 	//! Create or get a JoinRelationSet from a single node with the given index
-	JoinRelationSet &GetJoinRelation(idx_t index);
+	reference<JoinRelationSet> GetJoinRelation(idx_t index);
 	//! Create or get a JoinRelationSet from a set of relation bindings
-	JoinRelationSet &GetJoinRelation(const unordered_set<idx_t> &bindings);
+	reference<JoinRelationSet> GetJoinRelation(const unordered_set<idx_t> &bindings);
 	//! Create or get a JoinRelationSet from a (sorted, duplicate-free!) list of relations
-	JoinRelationSet &GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
+	reference<JoinRelationSet> GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
+	//! Create or get a JoinRelationSet from another JoinRelation Set
+	reference<JoinRelationSet> GetJoinRelation(unique_ptr<JoinRelationSet> set);
 	//! Union two sets of relations together and create a new relation set
-	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
+	reference<JoinRelationSet> Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)
 	// JoinRelationSet *Difference(JoinRelationSet *left, JoinRelationSet *right);
 	string ToString() const;
 	void Print();
 
 private:
-	JoinRelationTreeNode root;
+	unordered_map<std::bitset<12>, unique_ptr<JoinRelationSet>> active_relation_sets;
 };
 
 } // namespace duckdb

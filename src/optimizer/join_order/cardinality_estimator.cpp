@@ -23,7 +23,7 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set.get().count >= 1);
+	D_ASSERT(filter_info.set.get().Count() >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -39,7 +39,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().Count() > 1) {
 		// Both set and are from different relations
 		return false;
 	}
@@ -113,8 +113,8 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		} else if (EmptyFilter(*filter)) {
 			continue;
 		}
-		D_ASSERT(filter->left_set->count >= 1);
-		D_ASSERT(filter->right_set->count >= 1);
+		D_ASSERT(filter->left_set->Count() >= 1);
+		D_ASSERT(filter->right_set->Count() >= 1);
 
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
@@ -130,9 +130,9 @@ void CardinalityEstimator::RemoveEmptyTotalDomains() {
 
 double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
-	for (idx_t i = 0; i < set.count; i++) {
-		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
+	for (idx_t i = 0; i < set.Count(); i++) {
+		auto single_node_set = set_manager.GetJoinRelation(set.relations[i]);
+		auto card_helper = relation_set_2_cardinality[single_node_set.get().ToString()];
 		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 	}
 	return numerator;
@@ -332,7 +332,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
-			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
+			left_subgraph->relations = set_manager.Union(*left_subgraph->relations, *right_subgraph.relations).get();
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
@@ -340,7 +340,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			auto subgraph_to_merge_into = &subgraphs.at(subgraph_connections.at(0));
 			auto subgraph_to_delete = &subgraphs.at(subgraph_connections.at(1));
 			subgraph_to_merge_into->relations =
-			    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
+			    set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations).get();
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
@@ -360,10 +360,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		auto final_subgraph = subgraphs.at(0);
 		for (auto merge_with = subgraphs.begin() + 1; merge_with != subgraphs.end(); merge_with++) {
 			D_ASSERT(final_subgraph.relations && merge_with->relations);
-			final_subgraph.relations = &set_manager.Union(*final_subgraph.relations, *merge_with->relations);
+			final_subgraph.relations = set_manager.Union(*final_subgraph.relations, *merge_with->relations).get();
 			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
 			final_subgraph.numerator_relations =
-			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
+			    set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations).get();
 			final_subgraph.denom *= merge_with->denom;
 		}
 	}
@@ -430,7 +430,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 }
 
 void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
-	D_ASSERT(set->count == 1);
+	D_ASSERT(set->Count() == 1);
 	auto relation_id = set->relations[0];
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	//	D_ASSERT(stats.column_distinct_count.size() >= 1);

@@ -97,7 +97,7 @@ public:
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
 	optional_ptr<const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> plans;
 
-private:
+// private:
 	vector<reference<LogicalOperator>> filter_operators;
 
 	//! Filter information including the column_bindings that join filters

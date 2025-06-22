@@ -558,20 +558,20 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					ExtractBindings(*comp.left, left_bindings);
 
 					if (!left_set) {
-						left_set = set_manager.GetJoinRelation(left_bindings);
+						left_set = set_manager.GetJoinRelation(left_bindings).get();
 					} else {
-						left_set = set_manager.Union(set_manager.GetJoinRelation(left_bindings), *left_set);
+						left_set = set_manager.Union(set_manager.GetJoinRelation(left_bindings), *left_set).get();
 					}
 					if (!right_set) {
-						right_set = set_manager.GetJoinRelation(right_bindings);
+						right_set = set_manager.GetJoinRelation(right_bindings).get();
 					} else {
-						right_set = set_manager.Union(set_manager.GetJoinRelation(right_bindings), *right_set);
+						right_set = set_manager.Union(set_manager.GetJoinRelation(right_bindings), *right_set).get();
 					}
 				}
-				full_set = set_manager.Union(*left_set, *right_set);
-				D_ASSERT(left_set && left_set->count > 0);
-				D_ASSERT(right_set && right_set->count == 1);
-				D_ASSERT(full_set && full_set->count > 0);
+				full_set = set_manager.Union(*left_set, *right_set).get();
+				D_ASSERT(left_set && left_set->Count() > 0);
+				D_ASSERT(right_set && right_set->Count() == 1);
+				D_ASSERT(full_set && full_set->Count() > 0);
 
 				// now we push the conjunction expressions
 				// In QueryGraphManager::GenerateJoins we extract each condition again and create a standalone join
@@ -591,7 +591,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filter_set.insert(*comparison);
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*comparison, bindings);
-						auto &set = set_manager.GetJoinRelation(bindings);
+						auto set = set_manager.GetJoinRelation(bindings);
 						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
 						                                         filters_and_bindings.size(), join.join_type);
 						filters_and_bindings.push_back(std::move(filter_info));
@@ -612,7 +612,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						leftover_expressions.push_back(std::move(expression));
 						continue;
 					}
-					auto &set = set_manager.GetJoinRelation(bindings);
+					auto set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
