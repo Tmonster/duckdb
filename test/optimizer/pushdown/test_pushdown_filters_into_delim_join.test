@@ -2,9 +2,11 @@
 # description: Push filters into delim joins.
 # group: [pushdown]
 
+statement ok
+pragma enable_verification;
 
 statement ok
-attach 'post.db' as posts_db;
+attach 'posts.db' as posts_db;
 
 statement ok
 use posts_db
@@ -13,7 +15,7 @@ statement ok
 SELECT
     (t0."Tags") AS "Tags",
     (COUNT(Id)) AS "total_posts_measure"
-FROM "posts", LATERAL UNNEST("Tags") t0("Tags")
+FROM posts, LATERAL UNNEST("Tags") t0("Tags")
 WHERE ("CreationDate" >= '2023-01-01T00:00:00.000Z' AND "CreationDate" < '2023-04-01T00:00:00.000Z')
 GROUP BY 1
 ORDER BY "total_posts_measure" DESC NULLS LAST LIMIT 8;
