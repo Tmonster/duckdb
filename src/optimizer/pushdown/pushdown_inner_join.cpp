@@ -21,11 +21,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 			LogicalJoin::GetTableReferences(*op->children[i], child_bindings);
 			// only add filters to the children if we know the bindings are in the join child
 			for (auto &filter : filters) {
-				for (auto &filter : filters) {
-					if (std::all_of(filter->bindings.begin(), filter->bindings.end(),
-					                [&](const idx_t &binding) { return child_bindings.count(binding); })) {
-						new_pushdown.AddFilter(filter->filter->Copy());
-					}
+				if (std::all_of(filter->bindings.begin(), filter->bindings.end(),
+				                [&](const idx_t &binding) { return child_bindings.count(binding); })) {
+					new_pushdown.AddFilter(filter->filter->Copy());
 				}
 			}
 			new_pushdown.GenerateFilters();
@@ -33,6 +31,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 				join.children[i] = new_pushdown.Rewrite(std::move(join.children[i]));
 			}
 		}
+		// TODO: prevent recursive calls since the Rewrites above will already
+		// pushdown extra filters
 		return FinishPushdown(std::move(op));
 	}
 	// inner join: gather all the conditions of the inner join and add to the filter list
