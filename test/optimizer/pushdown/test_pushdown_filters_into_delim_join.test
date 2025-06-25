@@ -41,3 +41,16 @@ GROUP BY 1
 ORDER BY "total_posts_measure" DESC NULLS LAST LIMIT 8;
 ----
 logical_opt	<REGEX>:.*DELIM_JOIN.*FILTER.*
+
+
+# filter is pushed below the right delim join, and is not duplicated above it as well.
+query II
+explain SELECT
+(t0."Tags") AS "Tags",
+(COUNT(Id)) AS "total_posts_measure"
+FROM posts, LATERAL UNNEST("Tags") t0("Tags")
+WHERE ("CreationDate" >= '2023-01-01T00:00:00.000Z' AND "CreationDate" < '2023-04-01T00:00:00.000Z')
+GROUP BY 1
+ORDER BY "total_posts_measure" DESC NULLS LAST LIMIT 8;
+----
+logical_opt	<!REGEX>:.*FILTER.*DELIM_JOIN.*FILTER.*
