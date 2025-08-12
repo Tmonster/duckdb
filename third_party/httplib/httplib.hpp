@@ -15,6 +15,11 @@
 
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/common/string.hpp"
+#if defined(_WIN32)
+#include "duckdb/common/windows.hpp"
+#endif
+#include <exception>
+#include <stdexcept>
 
 /*
  * Configuration
