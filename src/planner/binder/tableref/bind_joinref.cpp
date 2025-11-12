@@ -132,6 +132,7 @@ unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref)
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
+	// check here maybe correlated column is planed?
 	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
 	auto &right_binder = *result->right_binder;

@@ -283,6 +283,10 @@ void Optimizer::RunBuiltInOptimizers() {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	if (plan_p->type == LogicalOperatorType::LOGICAL_PROJECTION && plan_p->children.size() != 0 &&
+	    plan_p->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		auto break_here = 0;
+	}
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);

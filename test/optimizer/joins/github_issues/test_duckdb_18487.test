@@ -1,0 +1,49 @@
+# name: test/optimizer/joins/github_issues/test_duckdb_18487.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [github_issues]
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+CREATE TABLE t2(c2 DOUBLE);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1);
+
+statement ok
+INSERT INTO t2(c2) VALUES (7.5);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+SELECT * FROM t0, t2,
+(
+	SELECT
+		t1.c0 AS col_0,
+		t2.c2 AS col_1
+	FROM t1
+) as subQuery0 CROSS JOIN  ( SELECT t0.c0 AS col_0);
+
+
+#
+# CREATE TABLE t0(c0 INT);
+# CREATE TABLE t1(c0 INT);
+# CREATE TABLE t2(c2 DOUBLE);
+# INSERT INTO t1(c0) VALUES (1);
+# INSERT INTO t2(c2) VALUES (7.5);
+# INSERT INTO t0(c0) VALUES (0);
+# SELECT * FROM t0, t2,
+# (
+# 	SELECT
+# 		t1.c0 AS col_0,
+# 		t2.c2 AS col_1
+# 	FROM t1
+# ) as subQuery0 CROSS JOIN  ( SELECT t0.c0 AS col_0);

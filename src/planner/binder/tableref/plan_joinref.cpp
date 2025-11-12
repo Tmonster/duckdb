@@ -300,6 +300,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
+	right->Print();
 	is_outside_flattened = old_is_outside_flattened;
 
 	// For joins, depth of the bindings will be one higher on the right because of the lateral binder

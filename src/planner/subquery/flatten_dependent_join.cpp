@@ -419,6 +419,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			return std::move(join);
 		} else {
 			auto cross_product = LogicalCrossProduct::Create(Decorrelate(std::move(plan)), std::move(delim_scan));
+			auto bindings = cross_product->GetColumnBindings();
 			return cross_product;
 		}
 	}
@@ -471,6 +472,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &proj = plan->Cast<LogicalProjection>();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			auto &col = correlated_columns[i];
+			// also check here where the correlated columns start. Maybe there is an extra delim_offest value hidden in
+			// here
 			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(std::move(colref));
