@@ -1063,6 +1063,14 @@ idx_t RowGroup::GetCommittedRowCount() {
 	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
+idx_t RowGroup::GetCommittedRowCount(transaction_t start_time, transaction_t transaction_id) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return count;
+	}
+	return vinfo->GetCommittedDeletedCount(start_time, transaction_id, count);
+}
+
 bool RowGroup::HasUnloadedDeletes() const {
 	if (deletes_pointers.empty()) {
 		// no stored deletes at all

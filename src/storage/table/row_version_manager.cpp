@@ -29,6 +29,28 @@ idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 	return deleted_count;
 }
 
+idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t start_time, transaction_t transaction_id, idx_t count) {
+	lock_guard<mutex> l(version_lock);
+	idx_t deleted_count = 0;
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		if (i >= vector_info.size() || !vector_info[i]) {
+			// deleted_count += STANDARD_VECTOR_SIZE;
+			continue;
+		}
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (max_count == 0) {
+			break;
+		}
+		deleted_count += vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+		// SelectionVector sel_vector;
+		// TransactionData txn(transaction_id, start_time);
+		//
+		// deleted_count += vector_info[i]->GetSelVector(txn, sel_vector, max_count);
+		// auto break_here = true;
+	}
+	return deleted_count;
+}
+
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 	if (vector_idx >= vector_info.size()) {
 		return nullptr;

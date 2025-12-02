@@ -100,7 +100,7 @@ public:
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
 	//! row_number column index
-	idx_t row_number_col_index = DConstants::INVALID_INDEX;
+	optional_idx row_number_col_index;
 	//! Synchronize changes to the global scan state.
 	mutex global_state_mutex;
 
@@ -301,6 +301,11 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
+		auto &db = bind_data.table.catalog;
+		auto &txn = DuckTransaction::Get(context.client, db);
+		l_state->scan_state.local_state.transaction = txn;
+		l_state->scan_state.table_state.transaction = txn;
+
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
@@ -329,14 +334,13 @@ public:
 				storage.Scan(tx, output, l_state.scan_state);
 			}
 			if (output.size() > 0) {
-				if (row_number_col_index != DConstants::INVALID_INDEX) {
-					auto &row_number_vec = output.data[row_number_col_index];
+				if (row_number_col_index.IsValid()) {
+					auto &row_number_vec = output.data[row_number_col_index.GetIndex()];
 					row_number_vec.SetVectorType(VectorType::FLAT_VECTOR);
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					idx_t row_group_index = l_state.scan_state.table_state.batch_index - 1;
-					idx_t base = state.scan_state.collection->GetPrefixSum(row_group_index) + l_state.row_number_count;
+					idx_t base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);
@@ -404,11 +408,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	for (idx_t i = 0; i < input.column_ids.size(); i++) {
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
 			g_state->row_number_col_index = i;
+			g_state->state.scan_state.emit_row_numbers = true;
 			break;
 		}
-	}
-	if (g_state->row_number_col_index != DConstants::INVALID_INDEX) {
-		g_state->state.scan_state.collection->PrecomputePrefixSums();
 	}
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);

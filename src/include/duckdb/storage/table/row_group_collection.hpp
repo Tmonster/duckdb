@@ -155,25 +155,6 @@ public:
 	}
 	void SetAppendRequiresNewRowGroup();
 
-	std::vector<idx_t> prefix_sums;
-
-	void PrecomputePrefixSums() {
-		idx_t cumulative = 0;
-		prefix_sums.resize(owned_row_groups->GetSegmentCount());
-
-		for (idx_t i = 0; i < owned_row_groups->GetSegmentCount(); ++i) {
-			cumulative += owned_row_groups.get()->GetSegment(i)->GetNode().GetCommittedRowCount();
-			prefix_sums[i] = cumulative;
-		}
-	}
-
-	idx_t GetPrefixSum(idx_t index) const {
-		if (index == 0) {
-			return 0; // No rows before the first row group
-		}
-		return prefix_sums[index - 1];
-	}
-
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;

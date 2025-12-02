@@ -20,6 +20,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "fmt/format.h"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -213,6 +214,8 @@ public:
 	idx_t batch_index;
 	//! The valid selection
 	SelectionVector valid_sel;
+	idx_t base_row_number;
+	TransactionData transaction;
 
 	RandomEngine random;
 
@@ -304,6 +307,9 @@ struct ParallelCollectionScanState {
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
+	optional_idx base_row_number;
+	bool emit_row_numbers;
+	// TransactionData transaction_data;
 	atomic<idx_t> processed_rows;
 	mutex lock;
 
