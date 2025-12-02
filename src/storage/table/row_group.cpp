@@ -1068,7 +1068,7 @@ idx_t RowGroup::GetCommittedRowCount(transaction_t start_time, transaction_t tra
 	if (!vinfo) {
 		return count;
 	}
-	return vinfo->GetCommittedDeletedCount(start_time, transaction_id, count);
+	return count - vinfo->GetCommittedDeletedCount(start_time, transaction_id, count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

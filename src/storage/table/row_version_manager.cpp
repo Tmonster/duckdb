@@ -32,16 +32,29 @@ idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t start_time, transaction_t transaction_id, idx_t count) {
 	lock_guard<mutex> l(version_lock);
 	idx_t deleted_count = 0;
-	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (i >= vector_info.size() || !vector_info[i]) {
+	for (idx_t row_id = 0, row_batch = 0; row_id < count; row_id += STANDARD_VECTOR_SIZE, row_batch++) {
+		if (row_batch >= vector_info.size() || !vector_info[row_batch]) {
 			// deleted_count += STANDARD_VECTOR_SIZE;
 			continue;
 		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - row_id);
 		if (max_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+		idx_t result = max_count;
+		if (vector_info[row_batch]) {
+			if (vector_info[row_batch]->type == ChunkInfoType::CONSTANT_INFO) {
+				auto &constant_vec_info = vector_info[row_batch]->Cast<ChunkConstantInfo>();
+				SelectionVector sel;
+				TransactionData txn_data(transaction_id, start_time);
+				result = max_count - vector_info[row_batch]->GetSelVector(txn_data,sel, max_count);
+				// result = constant_vec_info.TemplatedGetSelVector(start_time, transaction_id, sel, result);
+			} else {
+				result = vector_info[row_batch]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+			}
+
+		}
+		deleted_count += result;
 		// SelectionVector sel_vector;
 		// TransactionData txn(transaction_id, start_time);
 		//

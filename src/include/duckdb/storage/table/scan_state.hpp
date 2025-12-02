@@ -308,7 +308,7 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	optional_idx base_row_number;
-	bool emit_row_numbers;
+	bool emit_row_numbers = true;
 	// TransactionData transaction_data;
 	atomic<idx_t> processed_rows;
 	mutex lock;

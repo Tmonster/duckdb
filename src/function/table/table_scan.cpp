@@ -289,7 +289,7 @@ public:
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
 			if (col.IsRowNumberColumn()) {
-				continue;
+				continue; // initializte emit_row_numbers
 			}
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
