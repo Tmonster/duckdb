@@ -308,10 +308,12 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
-		auto &db = bind_data.table.catalog;
-		auto &txn = DuckTransaction::Get(context.client, db);
-		l_state->scan_state.local_state.transaction = txn;
-		l_state->scan_state.table_state.transaction = txn;
+		if (state.scan_state.emit_row_numbers) {
+			auto &db = bind_data.table.catalog;
+			auto &txn = DuckTransaction::Get(context.client, db);
+			l_state->scan_state.local_state.transaction = txn;
+			l_state->scan_state.table_state.transaction = txn;
+		}
 
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {

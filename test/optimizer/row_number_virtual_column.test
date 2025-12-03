@@ -103,8 +103,8 @@
 # ----
 # physical_plan	<!REGEX>:.*WINDOW.*
 
-statement ok
-pragma disable_optimizer;
+# statement ok
+# pragma disable_optimizer;
 
 # statement ok
 # create table tbl as select range a from range(3);
@@ -156,8 +156,8 @@ pragma disable_optimizer;
 # statement ok
 # pragma threads=1
 
-# statement ok
-# SET immediate_transaction_mode=true;
+statement ok
+SET immediate_transaction_mode=true;
 
 statement ok
 CREATE TABLE big_tbl AS FROM range(1_000_000) select range::VARCHAR i;
