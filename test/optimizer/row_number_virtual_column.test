@@ -102,10 +102,10 @@
 # JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row_num;
 # ----
 # physical_plan	<!REGEX>:.*WINDOW.*
-#
-# statement ok
-# pragma disable_optimizer;
-#
+
+statement ok
+pragma disable_optimizer;
+
 # statement ok
 # create table tbl as select range a from range(3);
 #
@@ -121,6 +121,9 @@
 
 # statement ok
 # pragma disabled_optimizers = "window_rewriter"
+
+# statement ok
+# pragma threads=1
 
 # statement ok
 # SET immediate_transaction_mode=true;
@@ -153,31 +156,53 @@
 # statement ok
 # pragma threads=1
 
-statement ok
-SET immediate_transaction_mode=true;
+# statement ok
+# SET immediate_transaction_mode=true;
 
 statement ok
-CREATE TABLE big_tbl AS FROM range(1_000_000) t(i);
+CREATE TABLE big_tbl AS FROM range(1_000_000) select range::VARCHAR i;
 
-# statement ok con1
-# BEGIN
+statement ok con1
+BEGIN
 
-statement ok
-INSERT INTO big_tbl SELECT * FROM range(1_000_000);
+statement ok con1
+pragma disable_optimizer;
 
-# statement ok con2
-# DELETE FROM big_tbl WHERE i%2=0;
+statement ok con1
+INSERT INTO big_tbl SELECT range::varchar FROM range(1_000_000);
 
-query III
+statement ok con1
+DELETE FROM big_tbl WHERE i::INT%2=0;
+
+mode output_result
+
+statement ok con1
+EXPLAIN SELECT MIN(r), MAX(r), AVG(r) FROM (
+	SELECT row_number() OVER () FROM big_tbl
+) t(r)
+
+query III con1
 SELECT MIN(r), MAX(r), AVG(r) FROM (
 	SELECT row_number() OVER () FROM big_tbl
 ) t(r)
 ----
-1	2000000	1000000.5
+1	1000000	500000.5
 
 # query III con2
 # SELECT MIN(r), MAX(r), AVG(r) FROM (
 # 	SELECT row_number() OVER () FROM big_tbl
 # ) t(r)
 # ----
-# 1	500000	250000.5
+# 1	1000000	500000.5
+
+statement ok con1
+commit;
+
+query III
+SELECT MIN(r), MAX(r), AVG(r) FROM (
+	SELECT row_number() OVER () FROM big_tbl
+) t(r)
+----
+1	1000000	500000.5
+
+

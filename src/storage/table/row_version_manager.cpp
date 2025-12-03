@@ -34,14 +34,14 @@ idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t start_time, tran
 	idx_t deleted_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
 		if (i >= vector_info.size() || !vector_info[i]) {
-			// deleted_count += STANDARD_VECTOR_SIZE;
 			continue;
 		}
 		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
 		if (max_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+		auto res = vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+		deleted_count += res;
 		// SelectionVector sel_vector;
 		// TransactionData txn(transaction_id, start_time);
 		//
