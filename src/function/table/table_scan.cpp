@@ -357,6 +357,8 @@ public:
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
+			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
+			l_state.row_number_count = 0;
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
 				if (!next) {
@@ -369,8 +371,6 @@ public:
 			if (!next) {
 				return;
 			}
-			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
-			l_state.row_number_count = 0;
 
 			// Before looping back, check if we are interrupted
 			if (context.interrupted) {

@@ -295,25 +295,6 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 					idx_t committed_row_count = current_row_group.GetCommittedRowCount(scan_state.transaction.start_time, scan_state.transaction.transaction_id);
 					state.base_row_number = start + committed_row_count;
 					Printer::PrintF("New base row number %d", state.base_row_number.GetIndex());
-
-					// state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetCommittedRowCount(scan_state.transaction.start_time,scan_state.transaction.transaction_id);
-					// auto new_rn = state.base_row_number.GetIndex() + current_row_group.GetCommittedRowCount();
-					// auto rn = state.base_row_number.GetIndex();
-					// auto break_here = true;
-
-					// for (idx_t r = 0, i = 0; r < state.collection->row_group_size ; r += STANDARD_VECTOR_SIZE, i++) {
-					// 	SelectionVector sel_vector;
-					// 	idx_t current_row = i * STANDARD_VECTOR_SIZE;
-					// 	auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.collection->row_group_size - current_row);
-					// 	auto row_num = state.base_row_number.GetIndex() + current_row_group.GetSelVector(scan_state.transaction, i, sel_vector, max_count);
-					// 	state.base_row_number = row_num;
-					// }
-
-
-					// SelectionVector sel_vector;
-					// idx_t current_row = state.batch_index * STANDARD_VECTOR_SIZE;
-					// auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.collection->row_group_size - current_row);
-					// state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetSelVector(scan_state.transaction, scan_state.vector_index, sel_vector, max_count);
 				}
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
