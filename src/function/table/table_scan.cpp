@@ -342,14 +342,19 @@ public:
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					idx_t base;
-					if (state.local_state.has_emitted_row_numbers) {
-						base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
-						// base = state.scan_state.base_row_number.GetIndex() + l_state.row_number_count;
-					} else {
-						base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					if (l_state.scan_state.local_state.base_row_number == 0) {
+						auto break_here = 0;
 					}
-					// idx_t base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+					idx_t base;
+					if (state.local_state.has_emitted_row_numbers && l_state.scan_state.local_state.base_row_number == 0) {
+						auto break_here = 0;
+					}
+					// if (state.local_state.has_emitted_row_numbers && l_state.scan_state.local_state.base_row_number >= l_state.scan_state.table_state.base_row_number) {
+					// 	base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+					// } else {
+						// base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					// }
+					base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);

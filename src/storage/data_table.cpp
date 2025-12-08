@@ -291,11 +291,11 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (!state.local_state.has_emitted_row_numbers) {
 		state.local_state.base_row_number = state.scan_state.base_row_number;
 		state.local_state.has_emitted_row_numbers = true;
+		scan_state.have_emitted_local_row_numbers = true;
 	}
-	// if (!state.local_state.has_emitted_row_numbers) {
-	// 	state.local_state.base_row_number = state.scan_state.base_row_number;
-	// 	state.local_state.has_emitted_row_numbers = true;
-	// }
+	if (state.local_state.has_emitted_row_numbers && !scan_state.have_emitted_local_row_numbers) {
+		auto break_here = 0;
+	}
 	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {

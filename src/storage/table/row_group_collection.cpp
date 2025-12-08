@@ -341,7 +341,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				} else {
 					auto break_here = 0;
 					state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetCommittedRowCount(scan_state.transaction.start_time, scan_state.transaction.transaction_id);
-					Printer::PrintF("New base row number in else  %d", state.base_row_number.GetIndex());
+					// Printer::PrintF("New base row number in else  %d", state.base_row_number.GetIndex());
 				}
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);

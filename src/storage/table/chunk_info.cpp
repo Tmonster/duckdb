@@ -514,31 +514,30 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(transaction_t start_time, transa
 
 	if (!AnyDeleted()) {
 		// we wil come back to this, potentially inserted rows are deleted? Unsure
-		// if (HasConstantInsertionId()) {
-		// 	if (ConstantInsertId() < start_time || ConstantInsertId() == transaction_id){
-		// 		return max_count;
-		// 	}
-		// }
+		if (HasConstantInsertionId()) {
+			if (ConstantInsertId() < start_time || ConstantInsertId() == transaction_id){
+				return max_count;
+			}
+		}
 		return 0;
 	}
 
-	//
-	// auto segment = allocator.GetHandle(GetDeletedPointer());
-	// auto deleted = segment.GetPtr<transaction_t>();
-	//
-	// idx_t delete_count = 0;
-	// for (idx_t i = 0; i < max_count; i++) {
-	// 	// A delete is visible to a snapshot if it was committed by another transaction after the snapshot started
-	// 	if (!(deleted[i] < start_time || deleted[i] == transaction_id) ) {
-	// 		delete_count++;
-	// 	}
-	// }
-	// return delete_count;
+	auto segment = allocator.GetHandle(GetDeletedPointer());
+	auto deleted = segment.GetPtr<transaction_t>();
 
-	auto sel_vec = SelectionVector();
-	auto wat = TemplatedGetSelVector<TransactionVersionOperator>(start_time, transaction_id, sel_vec, max_count);
-	auto break_here = 0;
-	return wat;
+	idx_t delete_count = 0;
+	for (idx_t i = 0; i < max_count; i++) {
+		// A delete is visible to a snapshot if it was committed by another transaction after the snapshot started
+		if (!(deleted[i] < start_time || deleted[i] == transaction_id) ) {
+			delete_count++;
+		}
+	}
+	return delete_count;
+
+	// auto sel_vec = SelectionVector();
+	// auto wat = TemplatedGetSelVector<TransactionVersionOperator>(start_time, transaction_id, sel_vec, max_count);
+	// auto break_here = 0;
+	// return wat;
 	// auto segment = allocator.GetHandle(GetDeletedPointer());
 	// auto deleted = segment.GetPtr<transaction_t>();
 	//

@@ -269,6 +269,7 @@ public:
 	CollectionScanState table_state;
 	//! Transaction-local scan state
 	CollectionScanState local_state;
+	bool have_emitted_local_row_numbers = false;
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
