@@ -268,6 +268,33 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			if (state.emit_row_numbers) {
 				scan_state.base_row_number = state.base_row_number.GetIndex();
 			}
+
+			// if (state.emit_row_numbers) {
+			// 	scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 	if (!state.initial_base_row_number.IsValid()) {
+			// 		scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 	}
+			// 	else {
+			// 		state.base_row_number = state.initial_base_row_number;
+			// 		scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 		state.initial_base_row_number.SetInvalid();
+			// 		state.has_emitted_row_numbers = true;
+			// 	}
+			// }
+
+			// if (state.emit_row_numbers) {
+			// 	// First batch of this scan
+			// 	if (!state.initial_base_row_number.IsValid()) {
+			// 		// First thread entering parallel scan sets the initial base
+			// 		state.initial_base_row_number = state.base_row_number;
+			// 	}
+			//
+			// 	// Current batch uses the base row number
+			// 	scan_state.base_row_number = state.base_row_number.GetIndex();
+			// }
+
+
+
 			if (ClientConfig::GetConfig(context).verify_parallelism) {
 				vector_index = state.vector_index;
 				max_row = row_start + MinValue<idx_t>(current_row_group.count,
@@ -313,6 +340,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 					// state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetSelVector(scan_state.transaction, scan_state.vector_index, sel_vector, max_count);
 				} else {
 					auto break_here = 0;
+					state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetCommittedRowCount(scan_state.transaction.start_time, scan_state.transaction.transaction_id);
+					Printer::PrintF("New base row number in else  %d", state.base_row_number.GetIndex());
 				}
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);

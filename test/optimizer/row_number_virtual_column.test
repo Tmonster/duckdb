@@ -116,11 +116,9 @@
 # EXPLAIN SELECT row_number + 1 FROM (SELECT row_number() OVER () AS row_number FROM tbl);
 # ----
 # physical_plan	<!REGEX>:.*WINDOW.*
-
-# Try with multiple connections
-
-# statement ok
-# pragma disabled_optimizers = "window_rewriter"
+#
+#
+# # Try with multiple connections
 
 # statement ok
 # SET immediate_transaction_mode=true;
@@ -148,36 +146,53 @@
 # ----
 # 1	500000	250000.5
 #
-# mode skip
+# statement ok con1
+# COMMIT
+
 
 # statement ok
-# pragma threads=1
+# pragma disabled_optimizers="window_rewriter";
 
 statement ok
-SET immediate_transaction_mode=true;
+pragma threads=1
 
 statement ok
-CREATE TABLE big_tbl AS FROM range(1_000_000) t(i);
+CREATE OR REPLACE TABLE big_tbl AS FROM range(1_000_000) t(i);
+
+mode output_result
+
+statement ok con1
+BEGIN
+
+statement ok con1
+INSERT INTO big_tbl SELECT range FROM range(1_000_000);
 
 # statement ok con1
-# BEGIN
-
-statement ok
-INSERT INTO big_tbl SELECT * FROM range(1_000_000);
-
-# statement ok con2
 # DELETE FROM big_tbl WHERE i%2=0;
 
-query III
+query III con1
 SELECT MIN(r), MAX(r), AVG(r) FROM (
 	SELECT row_number() OVER () FROM big_tbl
 ) t(r)
 ----
-1	2000000	1000000.5
+1	2000000	1000000
 
+# statement ok con2
+# DELETE FROM big_tbl WHERE i%2=0;
+# #
 # query III con2
 # SELECT MIN(r), MAX(r), AVG(r) FROM (
 # 	SELECT row_number() OVER () FROM big_tbl
 # ) t(r)
 # ----
 # 1	500000	250000.5
+#
+# statement ok con1
+# commit;
+#
+# query III
+# SELECT MIN(r), MAX(r), AVG(r) FROM (
+# 	SELECT row_number() OVER () FROM big_tbl
+# ) t(r)
+# ----
+# 1	1500000	750000.5

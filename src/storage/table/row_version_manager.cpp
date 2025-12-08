@@ -55,6 +55,10 @@ idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t start_time, tran
 
 		}
 		deleted_count += result;
+// =======
+// 		auto res = vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+// 		deleted_count += res;
+// >>>>>>> be30a58df64d5027e7de1cdbb40e81fe5df5ccfe
 		// SelectionVector sel_vector;
 		// TransactionData txn(transaction_id, start_time);
 		//

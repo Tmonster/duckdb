@@ -99,7 +99,7 @@ public:
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
-	//! row_number column index
+	//! The position of the row_number column
 	optional_idx row_number_col_index;
 	//! Synchronize changes to the global scan state.
 	mutex global_state_mutex;
@@ -301,10 +301,11 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
-		auto &db = bind_data.table.catalog;
-		auto &txn = DuckTransaction::Get(context.client, db);
-		l_state->scan_state.local_state.transaction = txn;
-		l_state->scan_state.table_state.transaction = txn;
+		if (state.scan_state.emit_row_numbers) {
+			auto &transaction = DuckTransaction::Get(context.client, bind_data.table.catalog);
+			l_state->scan_state.local_state.transaction = transaction;
+			l_state->scan_state.table_state.transaction = transaction;
+		}
 
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
@@ -319,6 +320,7 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
+		// bool use_local_state = state.local_state.has_emitted_row_numbers;
 		do {
 			if (context.interrupted) {
 				throw InterruptException();
@@ -340,7 +342,14 @@ public:
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					idx_t base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					idx_t base;
+					if (state.local_state.has_emitted_row_numbers) {
+						base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+						// base = state.scan_state.base_row_number.GetIndex() + l_state.row_number_count;
+					} else {
+						base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					}
+					// idx_t base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);
@@ -409,6 +418,10 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
 			g_state->row_number_col_index = i;
 			g_state->state.scan_state.emit_row_numbers = true;
+			g_state->state.local_state.emit_row_numbers = true;
+			// g_state->state.local_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+			// g_state->state.scan_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+
 			break;
 		}
 	}
