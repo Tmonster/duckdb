@@ -285,7 +285,17 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
+
 	auto &local_storage = LocalStorage::Get(context, db);
+
+	if (!state.local_state.has_emitted_row_numbers) {
+		state.local_state.base_row_number = state.scan_state.base_row_number;
+		state.local_state.has_emitted_row_numbers = true;
+	}
+	// if (!state.local_state.has_emitted_row_numbers) {
+	// 	state.local_state.base_row_number = state.scan_state.base_row_number;
+	// 	state.local_state.has_emitted_row_numbers = true;
+	// }
 	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {

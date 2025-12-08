@@ -268,6 +268,33 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			if (state.emit_row_numbers) {
 				scan_state.base_row_number = state.base_row_number.GetIndex();
 			}
+
+			// if (state.emit_row_numbers) {
+			// 	scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 	if (!state.initial_base_row_number.IsValid()) {
+			// 		scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 	}
+			// 	else {
+			// 		state.base_row_number = state.initial_base_row_number;
+			// 		scan_state.base_row_number = state.base_row_number.GetIndex();
+			// 		state.initial_base_row_number.SetInvalid();
+			// 		state.has_emitted_row_numbers = true;
+			// 	}
+			// }
+
+			// if (state.emit_row_numbers) {
+			// 	// First batch of this scan
+			// 	if (!state.initial_base_row_number.IsValid()) {
+			// 		// First thread entering parallel scan sets the initial base
+			// 		state.initial_base_row_number = state.base_row_number;
+			// 	}
+			//
+			// 	// Current batch uses the base row number
+			// 	scan_state.base_row_number = state.base_row_number.GetIndex();
+			// }
+
+
+
 			if (ClientConfig::GetConfig(context).verify_parallelism) {
 				vector_index = state.vector_index;
 				max_row = row_start + MinValue<idx_t>(current_row_group.count,
@@ -290,10 +317,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
 				// FIXME: this should not be GetCommittedRowCount but use the transaction id
 				if (state.emit_row_numbers) {
-
-					idx_t start =  state.base_row_number.GetIndex();
-					idx_t committed_row_count = current_row_group.GetCommittedRowCount(scan_state.transaction.start_time, scan_state.transaction.transaction_id);
-					state.base_row_number = start + committed_row_count;
+					state.base_row_number = state.base_row_number.GetIndex() + current_row_group.GetCommittedRowCount(scan_state.transaction.start_time, scan_state.transaction.transaction_id);
 					Printer::PrintF("New base row number %d", state.base_row_number.GetIndex());
 				}
 			}

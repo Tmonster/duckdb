@@ -24,7 +24,6 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -100,7 +99,7 @@ public:
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
-	//! row_number column index
+	//! The position of the row_number column
 	optional_idx row_number_col_index;
 	//! Synchronize changes to the global scan state.
 	mutex global_state_mutex;
@@ -225,12 +224,6 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
-					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-						// We can avoid looping, and just return as appropriate
-						data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-						return;
-					}
-
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
 				}
@@ -309,10 +302,9 @@ public:
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		if (state.scan_state.emit_row_numbers) {
-			auto &db = bind_data.table.catalog;
-			auto &txn = DuckTransaction::Get(context.client, db);
-			l_state->scan_state.local_state.transaction = txn;
-			l_state->scan_state.table_state.transaction = txn;
+			auto &transaction = DuckTransaction::Get(context.client, bind_data.table.catalog);
+			l_state->scan_state.local_state.transaction = transaction;
+			l_state->scan_state.table_state.transaction = transaction;
 		}
 
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
@@ -328,7 +320,11 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
+		// bool use_local_state = state.local_state.has_emitted_row_numbers;
 		do {
+			if (context.interrupted) {
+				throw InterruptException();
+			}
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output,
 				                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
@@ -346,7 +342,14 @@ public:
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					idx_t base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					idx_t base;
+					if (state.local_state.has_emitted_row_numbers) {
+						base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+						// base = state.scan_state.base_row_number.GetIndex() + l_state.row_number_count;
+					} else {
+						base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					}
+					// idx_t base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);
@@ -357,25 +360,11 @@ public:
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
-			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
-			l_state.row_number_count = 0;
-			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-				// We can avoid looping, and just return as appropriate
-				if (!next) {
-					data_p.async_result = AsyncResultType::FINISHED;
-				} else {
-					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-				}
-				return;
-			}
 			if (!next) {
 				return;
 			}
-
-			// Before looping back, check if we are interrupted
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
+			l_state.row_number_count = 0;
 		} while (true);
 	}
 
@@ -429,6 +418,10 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
 			g_state->row_number_col_index = i;
 			g_state->state.scan_state.emit_row_numbers = true;
+			g_state->state.local_state.emit_row_numbers = true;
+			// g_state->state.local_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+			// g_state->state.scan_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+
 			break;
 		}
 	}
@@ -507,9 +500,6 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	case TableFilterType::IN_FILTER: {
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();

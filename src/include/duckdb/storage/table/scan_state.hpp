@@ -308,8 +308,9 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	optional_idx base_row_number;
+	bool has_emitted_row_numbers = false;
+	optional_idx initial_base_row_number;
 	bool emit_row_numbers;
-	// TransactionData transaction_data;
 	atomic<idx_t> processed_rows;
 	mutex lock;
 
@@ -324,6 +325,7 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
 	shared_ptr<CheckpointLock> checkpoint_lock;
+	optional_idx global_row_number;
 };
 
 struct PrefetchState {
