@@ -320,7 +320,7 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
-		// bool use_local_state = state.local_state.has_emitted_row_numbers;
+		bool use_local = state.local_state.has_emitted_row_numbers;
 		do {
 			if (context.interrupted) {
 				throw InterruptException();
@@ -346,15 +346,17 @@ public:
 						auto break_here = 0;
 					}
 					idx_t base;
-					if (state.local_state.has_emitted_row_numbers && l_state.scan_state.local_state.base_row_number == 0) {
+					if (use_local && l_state.scan_state.local_state.base_row_number == 0) {
 						auto break_here = 0;
 					}
-					// if (state.local_state.has_emitted_row_numbers && l_state.scan_state.local_state.base_row_number >= l_state.scan_state.table_state.base_row_number) {
-					// 	base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
-					// } else {
-						// base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
-					// }
-					base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+					if (use_local && l_state.scan_state.local_state.base_row_number >= l_state.scan_state.table_state.base_row_number) {
+						base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+					} else {
+						base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					}
+					if (l_state.scan_state.table_state.base_row_number + l_state.row_number_count > 500000) {
+						auto break_here = 0;
+					}
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);
