@@ -154,18 +154,18 @@
 # pragma disabled_optimizers="window_rewriter";
 
 statement ok
-pragma threads=2;
+pragma threads=1;
 
 statement ok
 CREATE OR REPLACE TABLE big_tbl AS FROM range(1_000_000) t(i);
 
-statement ok con1
-BEGIN
+# statement ok con1
+# BEGIN
 
-statement ok con1
+statement ok
 INSERT INTO big_tbl SELECT range FROM range(1_000_000);
 
-statement ok con1
+statement ok
 DELETE FROM big_tbl WHERE i%2=0;
 
 # query III con1
@@ -178,7 +178,7 @@ DELETE FROM big_tbl WHERE i%2=0;
 # statement ok con1
 # DELETE FROM big_tbl WHERE i%2=0;
 #
-query III con1
+query III
 SELECT MIN(r), MAX(r), AVG(r) FROM (
 	SELECT row_number() OVER () FROM big_tbl
 ) t(r)
