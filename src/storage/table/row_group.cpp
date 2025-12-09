@@ -265,7 +265,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn()) {
+		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 			continue;
 		}
 		auto col_id = column_ids[i].GetPrimaryIndex();
@@ -1115,6 +1115,15 @@ idx_t RowGroup::GetCommittedRowCount() {
 		return count;
 	}
 	return count - vinfo->GetCommittedDeletedCount(count);
+}
+
+idx_t RowGroup::GetCommittedRowCount(transaction_t start_time, transaction_t transaction_id) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return count;
+	}
+	auto res = count - vinfo->GetCommittedDeletedCount(start_time, transaction_id, count);
+	return res;
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

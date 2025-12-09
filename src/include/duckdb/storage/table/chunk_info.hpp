@@ -48,6 +48,8 @@ public:
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) const = 0;
+	virtual idx_t GetCommittedDeletedCount(transaction_t min_start_time, transaction_t transaction_id,
+										   idx_t max_count) = 0;
 	virtual bool Cleanup(transaction_t lowest_transaction) const;
 	virtual string ToString(idx_t max_count) const = 0;
 
@@ -92,6 +94,7 @@ public:
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
+	idx_t GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id, idx_t max_count) override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
 	string ToString(idx_t max_count) const override;
 
@@ -104,6 +107,8 @@ private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
 	                            idx_t max_count) const;
+	template <class OP>
+	idx_t TemplatedGetCommittedDeleteCount(transaction_t start_time, transaction_t transaction_id, idx_t max_count) const;
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -126,6 +131,8 @@ public:
 	bool Cleanup(transaction_t lowest_transaction) const override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
 	string ToString(idx_t max_count) const override;
+	idx_t GetCommittedDeletedCount(transaction_t min_start_time, transaction_t transaction_id,
+								   idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
@@ -149,6 +156,8 @@ private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
 	                            idx_t max_count) const;
+	template <class OP>
+	idx_t TemplatedGetCommittedDeleteCount(transaction_t start_time, transaction_t transaction_id, idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;
 	IndexPointer GetDeletedPointer() const;

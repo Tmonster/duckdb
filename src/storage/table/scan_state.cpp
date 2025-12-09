@@ -176,7 +176,7 @@ TableScanOptions &CollectionScanState::GetOptions() {
 }
 
 ParallelCollectionScanState::ParallelCollectionScanState()
-    : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
+    : collection(nullptr), current_row_group(nullptr), base_row_number(0), emit_row_numbers(false), processed_rows(0) {
 }
 
 optional_ptr<SegmentNode<RowGroup>> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
@@ -196,7 +196,7 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+      valid_sel(STANDARD_VECTOR_SIZE), transaction(0, 0), random(-1), parent(parent_p) {
 }
 
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetNextRowGroup(SegmentNode<RowGroup> &row_group) const {

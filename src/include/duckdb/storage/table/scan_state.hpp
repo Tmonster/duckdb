@@ -20,6 +20,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "fmt/format.h"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -213,6 +214,8 @@ public:
 	idx_t batch_index;
 	//! The valid selection
 	SelectionVector valid_sel;
+	idx_t base_row_number;
+	TransactionData transaction;
 
 	RandomEngine random;
 
@@ -266,6 +269,7 @@ public:
 	CollectionScanState table_state;
 	//! Transaction-local scan state
 	CollectionScanState local_state;
+	bool have_emitted_local_row_numbers = false;
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
@@ -304,6 +308,10 @@ struct ParallelCollectionScanState {
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
+	optional_idx base_row_number;
+	bool has_emitted_row_numbers = false;
+	optional_idx initial_base_row_number;
+	bool emit_row_numbers;
 	atomic<idx_t> processed_rows;
 	mutex lock;
 
@@ -318,6 +326,7 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
 	shared_ptr<CheckpointLock> checkpoint_lock;
+	optional_idx global_row_number;
 };
 
 struct PrefetchState {

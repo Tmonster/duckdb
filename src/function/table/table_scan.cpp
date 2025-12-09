@@ -24,7 +24,6 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -41,6 +40,7 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
+	idx_t row_number_count;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -71,6 +71,10 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 		return StorageIndex();
 	}
 
+	if (column_id.IsRowNumberColumn()) {
+		return StorageIndex();
+	}
+
 	// The index of the base ColumnIndex is equal to the physical column index in the table
 	// for any child indices because the indices are already the physical indices.
 	// Only the top-level can have generated columns.
@@ -95,6 +99,10 @@ public:
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
+	//! The position of the row_number column
+	optional_idx row_number_col_index;
+	//! Synchronize changes to the global scan state.
+	mutex global_state_mutex;
 
 public:
 	virtual unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -216,12 +224,6 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
-					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-						// We can avoid looping, and just return as appropriate
-						data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-						return;
-					}
-
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
 				}
@@ -286,6 +288,9 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
+			if (col.IsRowNumberColumn()) {
+				continue; // initializte emit_row_numbers
+			}
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
@@ -295,6 +300,12 @@ public:
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
+
+		if (state.scan_state.emit_row_numbers) {
+			auto &transaction = DuckTransaction::Get(context.client, bind_data.table.catalog);
+			l_state->scan_state.local_state.transaction = transaction;
+			l_state->scan_state.table_state.transaction = transaction;
+		}
 
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
@@ -309,7 +320,11 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
+		bool use_local = state.local_state.has_emitted_row_numbers;
 		do {
+			if (context.interrupted) {
+				throw InterruptException();
+			}
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output,
 				                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
@@ -321,27 +336,42 @@ public:
 				storage.Scan(tx, output, l_state.scan_state);
 			}
 			if (output.size() > 0) {
+				if (row_number_col_index.IsValid()) {
+					auto &row_number_vec = output.data[row_number_col_index.GetIndex()];
+					row_number_vec.SetVectorType(VectorType::FLAT_VECTOR);
+					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
+					auto count = output.size();
+
+					if (l_state.scan_state.local_state.base_row_number == 0) {
+						auto break_here = 0;
+					}
+					idx_t base;
+					if (use_local && l_state.scan_state.local_state.base_row_number == 0) {
+						auto break_here = 0;
+					}
+					if (use_local && l_state.scan_state.local_state.base_row_number >= l_state.scan_state.table_state.base_row_number) {
+						base = l_state.scan_state.local_state.base_row_number + l_state.row_number_count;
+					} else {
+						base = l_state.scan_state.table_state.base_row_number + l_state.row_number_count;
+					}
+					if (l_state.scan_state.table_state.base_row_number + l_state.row_number_count > 500000) {
+						auto break_here = 0;
+					}
+
+					for (idx_t i = 0; i < count; i++) {
+						row_number_data[i] = static_cast<row_t>(base + i + 1);
+					}
+					l_state.row_number_count += count;
+				}
 				return;
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
-			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-				// We can avoid looping, and just return as appropriate
-				if (!next) {
-					data_p.async_result = AsyncResultType::FINISHED;
-				} else {
-					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-				}
-				return;
-			}
 			if (!next) {
 				return;
 			}
-
-			// Before looping back, check if we are interrupted
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
+			l_state.row_number_count = 0;
 		} while (true);
 	}
 
@@ -391,6 +421,17 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 
 	storage.InitializeParallelScan(context, g_state->state);
+	for (idx_t i = 0; i < input.column_ids.size(); i++) {
+		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			g_state->row_number_col_index = i;
+			g_state->state.scan_state.emit_row_numbers = true;
+			g_state->state.local_state.emit_row_numbers = true;
+			// g_state->state.local_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+			// g_state->state.scan_state.initial_base_row_number = g_state->state.scan_state.base_row_number;
+
+			break;
+		}
+	}
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
@@ -399,7 +440,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsRowIdColumn() || col_idx.IsRowNumberColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
@@ -466,9 +507,6 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	case TableFilterType::IN_FILTER: {
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();

@@ -168,7 +168,6 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -866,24 +865,6 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	return static_cast<CTEMaterialize>(StringUtil::StringToEnum(GetCTEMaterializeValues(), 3, "CTEMaterialize", value));
 }
 
-const StringUtil::EnumStringLiteral *GetCachingModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CachingMode::ALWAYS_CACHE), "ALWAYS_CACHE" },
-		{ static_cast<uint32_t>(CachingMode::CACHE_REMOTE_ONLY), "CACHE_REMOTE_ONLY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
-	return StringUtil::EnumToString(GetCachingModeValues(), 2, "CachingMode", static_cast<uint32_t>(value));
-}
-
-template<>
-CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
-	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 2, "CachingMode", value));
-}
-
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CatalogLookupBehavior::STANDARD), "STANDARD" },
@@ -947,22 +928,19 @@ const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
 		{ static_cast<uint32_t>(CheckpointAbort::NO_ABORT), "NONE" },
 		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE), "BEFORE_TRUNCATE" },
 		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER), "BEFORE_HEADER" },
-		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE), "AFTER_FREE_LIST_WRITE" },
-		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH), "BEFORE_WAL_FINISH" },
-		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY), "BEFORE_MOVING_RECOVERY" },
-		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL), "BEFORE_DELETING_CHECKPOINT_WAL" }
+		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE), "AFTER_FREE_LIST_WRITE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
-	return StringUtil::EnumToString(GetCheckpointAbortValues(), 7, "CheckpointAbort", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCheckpointAbortValues(), 4, "CheckpointAbort", static_cast<uint32_t>(value));
 }
 
 template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
-	return static_cast<CheckpointAbort>(StringUtil::StringToEnum(GetCheckpointAbortValues(), 7, "CheckpointAbort", value));
+	return static_cast<CheckpointAbort>(StringUtil::StringToEnum(GetCheckpointAbortValues(), 4, "CheckpointAbort", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
@@ -2968,6 +2946,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_REWRITER), "OPTIMIZER_WINDOW_REWRITER" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -2980,15 +2959,6 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 	return values;
 }
 
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 66, "MetricType", static_cast<uint32_t>(value));
-}
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 66, "MetricType", value));
-}
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
@@ -2999,8 +2969,18 @@ const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
 }
 
 template<>
+MetricType EnumUtil::FromString<MetricType>(const char *value) {
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 67, "MetricType", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value) {
 	return StringUtil::EnumToString(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+const char* EnumUtil::ToChars<MetricType>(MetricType value) {
+	return StringUtil::EnumToString(GetMetricTypeValues(), 67, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
