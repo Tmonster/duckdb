@@ -47,18 +47,17 @@ idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t start_time, tran
 				auto &constant_vec_info = vector_info[row_batch]->Cast<ChunkConstantInfo>();
 				SelectionVector sel;
 				TransactionData txn_data(transaction_id, start_time);
-				result = max_count - vector_info[row_batch]->GetSelVector(txn_data,sel, max_count);
-				// result = constant_vec_info.TemplatedGetSelVector(start_time, transaction_id, sel, result);
+				result = max_count - vector_info[row_batch]->GetSelVector(txn_data, sel, max_count);
 			} else {
-				result = vector_info[row_batch]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+				result =
+				    max_count - vector_info[row_batch]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
 			}
-
 		}
 		deleted_count += result;
-// =======
-// 		auto res = vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
-// 		deleted_count += res;
-// >>>>>>> be30a58df64d5027e7de1cdbb40e81fe5df5ccfe
+		// =======
+		// 		auto res = vector_info[i]->GetCommittedDeletedCount(start_time, transaction_id, max_count);
+		// 		deleted_count += res;
+		// >>>>>>> be30a58df64d5027e7de1cdbb40e81fe5df5ccfe
 		// SelectionVector sel_vector;
 		// TransactionData txn(transaction_id, start_time);
 		//

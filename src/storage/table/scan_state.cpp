@@ -176,7 +176,7 @@ TableScanOptions &CollectionScanState::GetOptions() {
 }
 
 ParallelCollectionScanState::ParallelCollectionScanState()
-    : collection(nullptr), current_row_group(nullptr), base_row_number(0), emit_row_numbers(true), processed_rows(0) {
+    : collection(nullptr), current_row_group(nullptr), base_row_number(0), emit_row_numbers(false), processed_rows(0) {
 }
 
 optional_ptr<SegmentNode<RowGroup>> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
