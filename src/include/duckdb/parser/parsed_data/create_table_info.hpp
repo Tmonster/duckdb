@@ -29,6 +29,14 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE as QUERY
 	unique_ptr<SelectStatement> query;
+	//! Table Partition definitions (Lakehouse only)
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	//! Table Sort definitions (Lakehouse only)
+	vector<unique_ptr<ParsedExpression>> sort_keys;
+	//! Table location if any (Lakehouse only)
+	string location;
+	//! Table Properties if any (Lakehouse only)
+	case_insensitive_map_t<Value> tbl_properties;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
