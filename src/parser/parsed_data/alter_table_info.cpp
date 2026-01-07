@@ -671,4 +671,61 @@ string SetSortedByInfo::ToString() const {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// SetLocationInfo
+//===--------------------------------------------------------------------===//
+SetLocationInfo::SetLocationInfo() : AlterTableInfo(AlterTableType::SET_LOCATION) {
+}
+
+SetLocationInfo::SetLocationInfo(AlterEntryData data, string location_p)
+    : AlterTableInfo(AlterTableType::SET_LOCATION, std::move(data)), location(std::move(location_p)) {
+}
+
+SetLocationInfo::~SetLocationInfo() {
+}
+
+unique_ptr<AlterInfo> SetLocationInfo::Copy() const {
+	return make_uniq<SetLocationInfo>(GetAlterEntryData(), location);
+}
+
+string SetLocationInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " SET LOCATION " + KeywordHelper::WriteQuoted(location, '\'');
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetTblPropertiesInfo
+//===--------------------------------------------------------------------===//
+SetTblPropertiesInfo::SetTblPropertiesInfo() : AlterTableInfo(AlterTableType::SET_TBLPROPERTIES) {
+}
+
+SetTblPropertiesInfo::SetTblPropertiesInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
+    : AlterTableInfo(AlterTableType::SET_TBLPROPERTIES, std::move(data)), tbl_properties(std::move(tbl_properties_p)) {
+}
+
+SetTblPropertiesInfo::~SetTblPropertiesInfo() {
+}
+
+unique_ptr<AlterInfo> SetTblPropertiesInfo::Copy() const {
+	return make_uniq<SetTblPropertiesInfo>(GetAlterEntryData(), tbl_properties);
+}
+
+string SetTblPropertiesInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " SET TBLPROPERTIES (";
+	idx_t i = 0;
+	for (auto &entry : tbl_properties) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + KeywordHelper::WriteQuoted(entry.second, '\'');
+		i++;
+	}
+	result += ")";
+	return result;
+}
+
 } // namespace duckdb

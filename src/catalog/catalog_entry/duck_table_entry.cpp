@@ -50,6 +50,29 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		return;
 	}
 
+	if (info.base->type == CatalogType::TABLE_ENTRY) {
+		vector<string> unsupported_keywords;
+		auto &base = info.Base();
+		if (!base.partition_keys.empty()) {
+			unsupported_keywords.push_back("PARTITIONED BY");
+		}
+		if (!base.order_keys.empty()) {
+			unsupported_keywords.push_back("SORTED BY");
+		}
+		if (!base.location.empty()) {
+			unsupported_keywords.push_back("LOCATION");
+		}
+		if (!base.tbl_properties.empty()) {
+			unsupported_keywords.push_back("TBLPROPERTIES");
+		}
+		if (!unsupported_keywords.empty()) {
+			auto error_message = StringUtil::Join(unsupported_keywords, ", ") +
+			                     (unsupported_keywords.size() > 1 ? " are" : " is") +
+			                     " not supported for DuckDB tables";
+			throw CatalogException(error_message);
+		}
+	}
+
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
@@ -242,6 +265,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		throw NotImplementedException("SET PARTITIONED BY is not supported for DuckDB tables");
 	case AlterTableType::SET_SORTED_BY:
 		throw NotImplementedException("SET SORTED BY is not supported for DuckDB tables");
+	case AlterTableType::SET_LOCATION:
+		throw NotImplementedException("SET LOCATION is not supported for DuckDB tables");
+	case AlterTableType::SET_TBLPROPERTIES:
+		throw NotImplementedException("SET TBLPROPERTIES is not supported for DuckDB tables");
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}

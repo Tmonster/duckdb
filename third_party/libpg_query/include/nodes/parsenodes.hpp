@@ -1489,7 +1489,9 @@ typedef enum PGAlterTableType {
 	PG_AT_SetIdentity,               /* SET identity column options */
 	AT_DropIdentity,                 /* DROP IDENTITY */
 	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
-	PG_AT_SetSortedBy                /* SET SORTED BY */
+	PG_AT_SetSortedBy,               /* SET SORTED BY */
+	PG_AT_SetLocation,               /* SET LOCATION */
+	PG_AT_SetTblProperties           /* SET TBLPROPERTIES */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
@@ -1500,6 +1502,8 @@ typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
 								 * or tablespace */
 	PGNode *def;              /* definition of new column, index, * constraint, or parent table */
 	PGList *def_list;         /* e.g. expression list for partitioned by */
+	char *location;           /* e.g. LOCATION 's3://bucket/path' */
+	PGList *tbl_properties;   /* e.g. TBLPROPERTIES ('foo'='bar') */
 	PGDropBehavior behavior;  /* RESTRICT or CASCADE for DROP cases */
 	bool missing_ok;          /* skip error if missing? */
 } PGAlterTableCmd;
@@ -1616,6 +1620,10 @@ typedef struct PGCreateStmt {
 	PGTypeName *ofTypename;               /* OF typename */
 	PGList *constraints;                  /* constraints (list of PGConstraint nodes) */
 	PGList *options;                      /* options from WITH clause */
+	PGList *partition_list;               /* e.g. expression list for partitioned by */
+	PGList *sort_list;                    /* e.g. expression list for sort by */
+	char *location;                       /* e.g. LOCATION 's3://bucket/path' */
+	PGList *tbl_properties;               /* e.g. options from TBLPROPERTIES clause */
 	PGOnCommitAction oncommit;            /* what do we do at COMMIT? */
 	char *tablespacename;                 /* table space to use, or NULL */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
