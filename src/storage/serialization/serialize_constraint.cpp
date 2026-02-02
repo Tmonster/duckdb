@@ -20,6 +20,9 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &deserializer) {
 	case ConstraintType::CHECK:
 		result = CheckConstraint::Deserialize(deserializer);
 		break;
+	case ConstraintType::COMPRESSION:
+		result = CompressionConstraint::Deserialize(deserializer);
+		break;
 	case ConstraintType::FOREIGN_KEY:
 		result = ForeignKeyConstraint::Deserialize(deserializer);
 		break;
@@ -43,6 +46,19 @@ void CheckConstraint::Serialize(Serializer &serializer) const {
 unique_ptr<Constraint> CheckConstraint::Deserialize(Deserializer &deserializer) {
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression");
 	auto result = duckdb::unique_ptr<CheckConstraint>(new CheckConstraint(std::move(expression)));
+	return std::move(result);
+}
+
+void CompressionConstraint::Serialize(Serializer &serializer) const {
+	Constraint::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "column_name", column_name);
+	serializer.WriteProperty<CompressionType>(201, "compression_type", compression_type);
+}
+
+unique_ptr<Constraint> CompressionConstraint::Deserialize(Deserializer &deserializer) {
+	auto column_name = deserializer.ReadPropertyWithDefault<string>(200, "column_name");
+	auto compression_type = deserializer.ReadProperty<CompressionType>(201, "compression_type");
+	auto result = duckdb::unique_ptr<CompressionConstraint>(new CompressionConstraint(std::move(column_name), compression_type));
 	return std::move(result);
 }
 
@@ -72,11 +88,13 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deseriali
 void NotNullConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
 	serializer.WriteProperty<LogicalIndex>(200, "index", index);
+	serializer.WritePropertyWithDefault<string>(201, "column_name", column_name);
 }
 
 unique_ptr<Constraint> NotNullConstraint::Deserialize(Deserializer &deserializer) {
 	auto index = deserializer.ReadProperty<LogicalIndex>(200, "index");
-	auto result = duckdb::unique_ptr<NotNullConstraint>(new NotNullConstraint(index));
+	auto column_name = deserializer.ReadPropertyWithDefault<string>(201, "column_name");
+	auto result = duckdb::unique_ptr<NotNullConstraint>(new NotNullConstraint(index, std::move(column_name)));
 	return std::move(result);
 }
 

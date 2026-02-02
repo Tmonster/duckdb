@@ -233,6 +233,22 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 	}
 	case ConstraintType::NOT_NULL: {
 		auto &not_null = constraint.Cast<NotNullConstraint>();
+		if (!not_null.index.IsValid()) {
+			// this came from a create table as statement
+			auto logical_columns = columns.Logical();
+			bool column_found = false;
+			for (auto &column_def : logical_columns) {
+				auto name = column_def.GetName();
+				if (name == not_null.column_name) {
+					not_null.index = LogicalIndex(column_def.Logical());
+					column_found = true;
+					break;
+				}
+			}
+			if (!column_found) {
+				throw BinderException("Column %s does not exist", not_null.column_name);
+			}
+		}
 		auto &col = columns.GetColumn(not_null.index);
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
@@ -590,6 +606,31 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
 		D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());
 	}
+
+	// Handle compression constraints: apply compression type to columns and remove from constraint list
+	auto &columns = create_info.columns;
+	for (auto &constraint : create_info.constraints) {
+		if (constraint->type != ConstraintType::COMPRESSION) {
+			continue;
+		}
+		auto &compression = constraint->Cast<CompressionConstraint>();
+		bool column_found = false;
+		for (idx_t col_idx = 0; col_idx < columns.LogicalColumnCount(); col_idx++) {
+			auto &column_def = columns.GetColumnMutable(LogicalIndex(col_idx));
+			if (column_def.GetName() == compression.column_name) {
+				column_def.SetCompressionType(compression.compression_type);
+				column_found = true;
+				break;
+			}
+		}
+		if (!column_found) {
+			throw BinderException("Column %s does not exist", compression.column_name);
+		}
+	}
+	auto &constraints = create_info.constraints;
+	auto it = std::remove_if(constraints.begin(), constraints.end(),
+	                         [](const unique_ptr<Constraint> &c) { return c->type == ConstraintType::COMPRESSION; });
+	constraints.erase(it, constraints.end());
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
