@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -236,6 +237,35 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto scan_function = table.GetScanFunction(context, bind_data, table_lookup);
 		if (bind_data && !bind_data->SupportStatementCache()) {
 			SetAlwaysRequireRebind();
+		}
+		// Allow the table function returned by GetScanFunction to rewrite itself into an arbitrary
+		// TableRef (mirrors the bind_replace path in bind_table_function.cpp). Inputs/named-params are
+		// empty here — extensions are expected to retrieve any needed metadata from `function_info`,
+		// which the catalog's GetScanFunction already populated. The bind_data computed above is
+		// discarded since the rewritten TableRef will be re-bound from scratch.
+		if (scan_function.bind_replace) {
+			vector<Value> rewrite_inputs;
+			named_parameter_map_t rewrite_named;
+			vector<LogicalType> rewrite_input_types;
+			vector<string> rewrite_input_names;
+			TableFunctionRef synthetic_ref;
+			TableFunctionBindInput rewrite_bind_input(rewrite_inputs, rewrite_named, rewrite_input_types,
+			                                          rewrite_input_names, scan_function.function_info.get(), this,
+			                                          scan_function, synthetic_ref);
+			auto new_plan = scan_function.bind_replace(context, rewrite_bind_input);
+			if (new_plan) {
+				// Mirror the TABLE_ENTRY default that lets users write `my_table.col` even without an
+				// `AS` clause: fall back to the catalog table name when no alias was supplied.
+				if (!ref.alias.empty()) {
+					new_plan->alias = ref.alias;
+				} else if (!ref.table_name.empty()) {
+					new_plan->alias = ref.table_name;
+				}
+				if (!ref.column_name_alias.empty()) {
+					new_plan->column_name_alias = ref.column_name_alias;
+				}
+				return Bind(*new_plan);
+			}
 		}
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
