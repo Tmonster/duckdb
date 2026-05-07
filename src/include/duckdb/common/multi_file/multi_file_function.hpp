@@ -552,7 +552,7 @@ public:
 		}
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
-		if (input.CanRemoveFilterColumns() || require_extra_columns) {
+		if (input.CanRemoveFilterColumns() || require_extra_columns || input.ColumnsOutOfOrder()) {
 			if (!input.projection_ids.empty()) {
 				result->projection_ids = input.projection_ids;
 			} else {

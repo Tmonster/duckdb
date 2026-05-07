@@ -156,6 +156,17 @@ struct TableFunctionInitInput {
 		// Fewer columns need to be projected out than that we scan.
 		return true;
 	}
+
+	bool ColumnsOutOfOrder() const {
+		if (projection_ids.size() == column_indexes.size()) {
+			for (idx_t i = 0; i < projection_ids.size(); i++) {
+				if (projection_ids[i] != i) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 };
 
 struct TableFunctionInput {
