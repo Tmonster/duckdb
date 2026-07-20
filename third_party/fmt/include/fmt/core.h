@@ -394,12 +394,24 @@ inline basic_string_view<Char> to_string_view(basic_string_view<Char> s) {
   return s;
 }
 
-template <typename Char,
-          FMT_ENABLE_IF(!std::is_empty<internal::std_string_view<Char>>::value)>
+// Traits is deduced rather than defaulted so that forming the parameter type
+// never names std::char_traits<Char>. Deducing it lets substitution fail on the
+// shape of the argument instead, before char_traits<Char> is instantiated --
+// libc++ deprecates char_traits<T> for T other than the standard character
+// types, and that deprecation warning is not suppressed by SFINAE.
+#if defined(FMT_USE_STRING_VIEW)
+template <typename Char, typename Traits>
 inline basic_string_view<Char> to_string_view(
-    internal::std_string_view<Char> s) {
+    std::basic_string_view<Char, Traits> s) {
   return s;
 }
+#elif defined(FMT_USE_EXPERIMENTAL_STRING_VIEW)
+template <typename Char, typename Traits>
+inline basic_string_view<Char> to_string_view(
+    std::experimental::basic_string_view<Char, Traits> s) {
+  return s;
+}
+#endif
 
 // A base class for compile-time strings. It is defined in the fmt namespace to
 // make formatting functions visible via ADL, e.g. format(fmt("{}"), 42).
