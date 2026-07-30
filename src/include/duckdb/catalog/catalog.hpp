@@ -401,6 +401,9 @@ public:
 	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
 	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
 	DUCKDB_API virtual string GetConnectDisplay();
+	//! GetConnectDisplay, unless the storage extension that attached this database supplied its own display
+	//! string. Frontends rendering a catalog should call this rather than GetConnectDisplay directly.
+	DUCKDB_API string GetConnectLabel();
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {

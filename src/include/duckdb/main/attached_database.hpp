@@ -92,6 +92,11 @@ struct AttachOptions {
 	optional_idx vacuum_rebuild_indexes_threshold;
 	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
+	//! Display string for this database in CONNECT-style prompts, set by the storage extension's attach
+	//! function. Storage extensions that rewrite info.path into something not meant for human eyes (e.g. a
+	//! generated connection string holding credentials) set this to a readable stand-in. Unset by default.
+	//! Keep last: extensions read the fields above by offset, so inserting above this shifts them.
+	optional<string> connect_display;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -165,6 +170,10 @@ public:
 	const optional<string> &GetOriginalPath() const {
 		return original_path;
 	}
+	//! The display string set by the storage extension's attach function. Unset if it set none.
+	const optional<string> &GetConnectDisplayOverride() const {
+		return connect_display;
+	}
 	static bool NameIsReserved(const Identifier &name);
 	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
@@ -193,6 +202,7 @@ private:
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 	optional<string> original_path;
+	optional<string> connect_display;
 
 private:
 	//! Clean any (shared) resources held by the database.

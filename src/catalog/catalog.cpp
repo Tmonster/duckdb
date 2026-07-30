@@ -387,6 +387,14 @@ string Catalog::GetConnectDisplay() {
 	return attached.GetName().GetIdentifierName();
 }
 
+string Catalog::GetConnectLabel() {
+	auto &display_override = GetAttached().GetConnectDisplayOverride();
+	if (display_override.has_value()) {
+		return *display_override;
+	}
+	return GetConnectDisplay();
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//

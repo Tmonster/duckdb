@@ -276,7 +276,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		if (component.literal == "connect_display_prefix") {
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
-				return connected->GetCatalog().GetConnectDisplay() + " ";
+				return connected->GetCatalog().GetConnectLabel() + " ";
 			}
 			return string();
 		}
@@ -286,7 +286,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 				auto &catalog = connected->GetCatalog();
 				// Ephemeral connections (CONNECT '<uri>') have no user-facing name; show the display (URI).
 				if (catalog.GetAttached().IsEphemeral()) {
-					return catalog.GetConnectDisplay() + " ";
+					return catalog.GetConnectLabel() + " ";
 				}
 				return catalog.GetAttached().GetName() + " ";
 			}
