@@ -32,6 +32,7 @@ std::string SlotBytes(const duckdb_v2_bytes &s) {
 }
 
 } // namespace
+
 TEST_CASE("Stable C++API: Vector AssignString", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -252,6 +253,7 @@ TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 }
 #endif
 
+#if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -297,6 +299,7 @@ TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", 
 	// The view did not flatten the parent.
 	REQUIRE(vec.GetVectorType() == VectorType::DICTIONARY);
 }
+#endif
 
 #if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]") {
@@ -627,5 +630,63 @@ TEST_CASE("Stable C++API: ValidityMask SetAllValid born-valid and reset", "[cpp_
 	auto reset_view = vec.GetView();
 	for (idx_t i = 0; i < 70; i++) {
 		REQUIRE(reset_view.RowIsValid(i));
+	}
+}
+
+TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	std::vector<LogicalType> types;
+	types.push_back(conn.ParseType("VARCHAR"));
+	DataChunk chunk(types);
+	auto vec = chunk.GetVector(0);
+	vec.SetSize(3);
+	auto heap = vec.GetHeap();
+	auto slots = vec.GetDataMutable<varchar_t>();
+
+	const std::string valid[] = {"", "ASCII", "é🦆", std::string("a\0b", 3), "🦆🦆🦆🦆"};
+	for (const auto &text : valid) {
+		REQUIRE_NOTHROW(ValidateUTF8(text));
+		vec.AssignString(0, text);
+		vec.SetString(1, heap.AddString(text));
+		vec.SetString(2, heap.AddStringUnsafe(text));
+		for (idx_t i = 0; i < 3; i++) {
+			REQUIRE(slots[i].view() == text);
+		}
+	}
+
+	const std::string malformed[] = {"\xFF", std::string("a\0\xFF", 3), std::string(40, '\xFF')};
+	for (const auto &text : malformed) {
+		REQUIRE_THROWS_MATCHES(ValidateUTF8(text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(heap.AddString(text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+		vec.AssignString(0, "🦆");
+		REQUIRE_THROWS_MATCHES(vec.AssignString(0, text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE(slots[0].view() == "🦆");
+		vec.AssignStringUnsafe(1, text);
+		vec.SetString(2, heap.AddStringUnsafe(text));
+		REQUIRE(slots[1].view() == text);
+		REQUIRE(slots[2].view() == text);
+	}
+}
+
+TEST_CASE("Stable C++API: AssignString preserves binary bytes", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto bignum = bignum_t::Encode({{0xFF}, false});
+	const std::pair<const char *, std::string> values[] = {
+	    {"BLOB", "\xFF"}, {"BIT", std::string("\0\xFF", 2)}, {"BIGNUM", std::string(bignum.begin(), bignum.end())}};
+	for (const auto &value : values) {
+		std::vector<LogicalType> types;
+		types.push_back(conn.ParseType(value.first));
+		DataChunk chunk(types);
+		auto vec = chunk.GetVector(0);
+		vec.SetSize(1);
+		vec.AssignString(0, value.second);
+		REQUIRE(vec.GetDataMutable<blob_t>()[0].view() == value.second);
 	}
 }
