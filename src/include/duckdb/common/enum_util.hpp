@@ -66,6 +66,8 @@ enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
 
+enum class AlterSchemaType : uint8_t;
+
 enum class AlterTableFunctionType : uint8_t;
 
 enum class AlterTableType : uint8_t;
@@ -265,6 +267,8 @@ enum class FunctionCollationHandling : uint8_t;
 enum class FunctionErrors : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
+
+enum class FunctionParameterKind : uint8_t;
 
 enum class FunctionStability : uint8_t;
 
@@ -705,6 +709,9 @@ template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
 
 template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value);
+
+template<>
 const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType value);
 
 template<>
@@ -1003,6 +1010,9 @@ const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
@@ -1636,6 +1646,9 @@ template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
 
 template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value);
+
+template<>
 AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *value);
 
 template<>
@@ -1934,6 +1947,9 @@ FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
+
+template<>
+FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value);
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);

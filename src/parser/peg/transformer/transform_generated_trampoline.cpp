@@ -50,6 +50,9 @@ static const TransformFrameOps ALTER_TABLE_STMT_OPS = {"AlterTableStmt",
 static const TransformFrameOps ALTER_SCHEMA_STMT_OPS = {"AlterSchemaStmt",
                                                         &PEGTransformerFactory::InitializeAlterSchemaStmtTrampoline,
                                                         &PEGTransformerFactory::FinalizeAlterSchemaStmtTrampoline};
+static const TransformFrameOps ALTER_SCHEMA_OPTIONS_OPS = {
+    "AlterSchemaOptions", &PEGTransformerFactory::InitializeAlterSchemaOptionsTrampoline,
+    &PEGTransformerFactory::FinalizeAlterSchemaOptionsTrampoline};
 static const TransformFrameOps ALTER_TABLE_OPTIONS_OPS = {"AlterTableOptions",
                                                           &PEGTransformerFactory::InitializeAlterTableOptionsTrampoline,
                                                           &PEGTransformerFactory::FinalizeAlterTableOptionsTrampoline};
@@ -726,6 +729,9 @@ static const TransformFrameOps TABLE_MACRO_DEFINITION_OPS = {
 static const TransformFrameOps CREATE_SCHEMA_STMT_OPS = {"CreateSchemaStmt",
                                                          &PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline};
+static const TransformFrameOps WITH_OPTION_LIST_OPS = {"WithOptionList",
+                                                       &PEGTransformerFactory::InitializeWithOptionListTrampoline,
+                                                       &PEGTransformerFactory::FinalizeWithOptionListTrampoline};
 static const TransformFrameOps CREATE_SECRET_STMT_OPS = {"CreateSecretStmt",
                                                          &PEGTransformerFactory::InitializeCreateSecretStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSecretStmtTrampoline};
@@ -1786,6 +1792,12 @@ static const TransformFrameOps BETWEEN_CLAUSE_OPS = {"BetweenClause",
 static const TransformFrameOps OTHER_OPERATOR_EXPRESSION_OPS = {
     "OtherOperatorExpression", &PEGTransformerFactory::InitializeOtherOperatorExpressionTrampoline,
     &PEGTransformerFactory::FinalizeOtherOperatorExpressionTrampoline};
+static const TransformFrameOps INFIX_OTHER_OPERATOR_EXPRESSION_OPS = {
+    "InfixOtherOperatorExpression", &PEGTransformerFactory::InitializeInfixOtherOperatorExpressionTrampoline,
+    &PEGTransformerFactory::FinalizeInfixOtherOperatorExpressionTrampoline};
+static const TransformFrameOps CUSTOM_PREFIX_EXPRESSION_OPS = {
+    "CustomPrefixExpression", &PEGTransformerFactory::InitializeCustomPrefixExpressionTrampoline,
+    &PEGTransformerFactory::FinalizeCustomPrefixExpressionTrampoline};
 static const TransformFrameOps OTHER_OPERATOR_TAIL_OPS = {"OtherOperatorTail",
                                                           &PEGTransformerFactory::InitializeOtherOperatorTailTrampoline,
                                                           &PEGTransformerFactory::FinalizeOtherOperatorTailTrampoline};
@@ -1830,6 +1842,9 @@ static const TransformFrameOps BITWISE_EXPRESSION_TAIL_OPS = {
 static const TransformFrameOps BIT_OPERATOR_OPS = {"BitOperator",
                                                    &PEGTransformerFactory::InitializeBitOperatorTrampoline,
                                                    &PEGTransformerFactory::FinalizeBitOperatorTrampoline};
+static const TransformFrameOps TILDE_EXPRESSION_OPS = {"TildeExpression",
+                                                       &PEGTransformerFactory::InitializeTildeExpressionTrampoline,
+                                                       &PEGTransformerFactory::FinalizeTildeExpressionTrampoline};
 static const TransformFrameOps ADDITIVE_EXPRESSION_OPS = {
     "AdditiveExpression", &PEGTransformerFactory::InitializeAdditiveExpressionTrampoline,
     &PEGTransformerFactory::FinalizeAdditiveExpressionTrampoline};
@@ -2389,6 +2404,9 @@ static const TransformFrameOps OFFSET_LIMIT_CLAUSE_OPS = {"OffsetLimitClause",
 static const TransformFrameOps OFFSET_FETCH_CLAUSE_OPS = {"OffsetFetchClause",
                                                           &PEGTransformerFactory::InitializeOffsetFetchClauseTrampoline,
                                                           &PEGTransformerFactory::FinalizeOffsetFetchClauseTrampoline};
+static const TransformFrameOps FETCH_OFFSET_CLAUSE_OPS = {"FetchOffsetClause",
+                                                          &PEGTransformerFactory::InitializeFetchOffsetClauseTrampoline,
+                                                          &PEGTransformerFactory::FinalizeFetchOffsetClauseTrampoline};
 static const TransformFrameOps FETCH_ONLY_CLAUSE_OPS = {"FetchOnlyClause",
                                                         &PEGTransformerFactory::InitializeFetchOnlyClauseTrampoline,
                                                         &PEGTransformerFactory::FinalizeFetchOnlyClauseTrampoline};
@@ -2813,6 +2831,12 @@ static const TransformFrameOps LIMIT_EXPRESSION_OPS = {"LimitExpression",
 static const TransformFrameOps FETCH_CLAUSE_OPS = {"FetchClause",
                                                    &PEGTransformerFactory::InitializeFetchClauseTrampoline,
                                                    &PEGTransformerFactory::FinalizeFetchClauseTrampoline};
+static const TransformFrameOps FETCH_CLAUSE_WITHOUT_VALUE_OPS = {
+    "FetchClauseWithoutValue", &PEGTransformerFactory::InitializeFetchClauseWithoutValueTrampoline,
+    &PEGTransformerFactory::FinalizeFetchClauseWithoutValueTrampoline};
+static const TransformFrameOps FETCH_CLAUSE_WITH_VALUE_OPS = {
+    "FetchClauseWithValue", &PEGTransformerFactory::InitializeFetchClauseWithValueTrampoline,
+    &PEGTransformerFactory::FinalizeFetchClauseWithValueTrampoline};
 static const TransformFrameOps FETCH_VALUE_OPS = {"FetchValue", &PEGTransformerFactory::InitializeFetchValueTrampoline,
                                                   &PEGTransformerFactory::FinalizeFetchValueTrampoline};
 static const TransformFrameOps ALIASED_EXPRESSION_OPS = {"AliasedExpression",
@@ -3009,6 +3033,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"AlterOptions", &ALTER_OPTIONS_OPS},
 	    {"AlterTableStmt", &ALTER_TABLE_STMT_OPS},
 	    {"AlterSchemaStmt", &ALTER_SCHEMA_STMT_OPS},
+	    {"AlterSchemaOptions", &ALTER_SCHEMA_OPTIONS_OPS},
 	    {"AlterTableOptions", &ALTER_TABLE_OPTIONS_OPS},
 	    {"AddConstraint", &ADD_CONSTRAINT_OPS},
 	    {"DropConstraint", &DROP_CONSTRAINT_OPS},
@@ -3249,6 +3274,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ScalarMacroDefinition", &SCALAR_MACRO_DEFINITION_OPS},
 	    {"TableMacroDefinition", &TABLE_MACRO_DEFINITION_OPS},
 	    {"CreateSchemaStmt", &CREATE_SCHEMA_STMT_OPS},
+	    {"WithOptionList", &WITH_OPTION_LIST_OPS},
 	    {"CreateSecretStmt", &CREATE_SECRET_STMT_OPS},
 	    {"SecretStorageSpecifier", &SECRET_STORAGE_SPECIFIER_OPS},
 	    {"SecretName", &SECRET_NAME_OPS},
@@ -3619,6 +3645,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"InSelectStatement", &IN_SELECT_STATEMENT_OPS},
 	    {"BetweenClause", &BETWEEN_CLAUSE_OPS},
 	    {"OtherOperatorExpression", &OTHER_OPERATOR_EXPRESSION_OPS},
+	    {"InfixOtherOperatorExpression", &INFIX_OTHER_OPERATOR_EXPRESSION_OPS},
+	    {"CustomPrefixExpression", &CUSTOM_PREFIX_EXPRESSION_OPS},
 	    {"OtherOperatorTail", &OTHER_OPERATOR_TAIL_OPS},
 	    {"OtherOperator", &OTHER_OPERATOR_OPS},
 	    {"AnyAllParsedOperator", &ANY_ALL_PARSED_OPERATOR_OPS},
@@ -3634,6 +3662,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"BitwiseExpression", &BITWISE_EXPRESSION_OPS},
 	    {"BitwiseExpressionTail", &BITWISE_EXPRESSION_TAIL_OPS},
 	    {"BitOperator", &BIT_OPERATOR_OPS},
+	    {"TildeExpression", &TILDE_EXPRESSION_OPS},
 	    {"AdditiveExpression", &ADDITIVE_EXPRESSION_OPS},
 	    {"AdditiveExpressionTail", &ADDITIVE_EXPRESSION_TAIL_OPS},
 	    {"Term", &TERM_OPS},
@@ -3826,6 +3855,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"LimitOffsetClause", &LIMIT_OFFSET_CLAUSE_OPS},
 	    {"OffsetLimitClause", &OFFSET_LIMIT_CLAUSE_OPS},
 	    {"OffsetFetchClause", &OFFSET_FETCH_CLAUSE_OPS},
+	    {"FetchOffsetClause", &FETCH_OFFSET_CLAUSE_OPS},
 	    {"FetchOnlyClause", &FETCH_ONLY_CLAUSE_OPS},
 	    {"TableStatement", &TABLE_STATEMENT_OPS},
 	    {"OptionalParensSimpleSelect", &OPTIONAL_PARENS_SIMPLE_SELECT_OPS},
@@ -3979,6 +4009,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"LimitLiteralPercent", &LIMIT_LITERAL_PERCENT_OPS},
 	    {"LimitExpression", &LIMIT_EXPRESSION_OPS},
 	    {"FetchClause", &FETCH_CLAUSE_OPS},
+	    {"FetchClauseWithoutValue", &FETCH_CLAUSE_WITHOUT_VALUE_OPS},
+	    {"FetchClauseWithValue", &FETCH_CLAUSE_WITH_VALUE_OPS},
 	    {"FetchValue", &FETCH_VALUE_OPS},
 	    {"AliasedExpression", &ALIASED_EXPRESSION_OPS},
 	    {"ColIdExpression", &COL_ID_EXPRESSION_OPS},
@@ -4158,7 +4190,7 @@ void PEGTransformerFactory::InitializeAlterSchemaStmtTrampoline(PEGTransformer &
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(3);
-	process.PushChild({transformer.GetRule("RenameAlter"), list_pr.GetChild(3)}, 2);
+	process.PushChild({transformer.GetRule("AlterSchemaOptions"), list_pr.GetChild(3)}, 2);
 	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
 	auto &if_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_exists_opt.HasResult()) {
@@ -4174,9 +4206,30 @@ PEGTransformerFactory::FinalizeAlterSchemaStmtTrampoline(PEGTransformer &transfo
 		if_exists = process.TakeResult<bool>(0);
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto rename_alter = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
-	auto result = TransformAlterSchemaStmt(transformer, if_exists, qualified_name, std::move(rename_alter));
+	auto alter_schema_options = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
+	auto result = TransformAlterSchemaStmt(transformer, if_exists, qualified_name, std::move(alter_schema_options));
 	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<AlterTableInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterTableOptionsTrampoline(PEGTransformer &transformer,
@@ -8717,7 +8770,11 @@ PEGTransformerFactory::FinalizeTableMacroDefinitionTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	process.ReserveChildSlots(3);
+	auto &with_option_list_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_option_list_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("WithOptionList"), with_option_list_opt.GetResult()}, 2);
+	}
 	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
@@ -8733,8 +8790,27 @@ PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transf
 		if_not_exists = process.TakeResult<bool>(0);
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name);
+	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_option_list {};
+	if (process.child_results[2]) {
+		with_option_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
+	}
+	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name, std::move(with_option_list));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithOptionListTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("RelOptionList"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithOptionListTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto rel_option_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(0);
+	auto result = TransformWithOptionList(transformer, std::move(rel_option_list));
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer,
@@ -16258,6 +16334,27 @@ PEGTransformerFactory::FinalizeBetweenClauseTrampoline(PEGTransformer &transform
 void PEGTransformerFactory::InitializeOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
                                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
+                                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {
@@ -16277,8 +16374,8 @@ void PEGTransformerFactory::InitializeOtherOperatorExpressionTrampoline(PEGTrans
 }
 
 unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
-                                                                 GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
+                                                                      GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	idx_t dynamic_child_count = 0;
 	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
@@ -16296,8 +16393,25 @@ PEGTransformerFactory::FinalizeOtherOperatorExpressionTrampoline(PEGTransformer 
 		}
 		other_operator_tail = std::move(other_operator_tail_value);
 	}
-	auto result =
-	    TransformOtherOperatorExpression(transformer, std::move(bitwise_expression), std::move(other_operator_tail));
+	auto result = TransformInfixOtherOperatorExpression(transformer, std::move(bitwise_expression),
+	                                                    std::move(other_operator_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCustomPrefixExpressionTrampoline(PEGTransformer &transformer,
+                                                                       GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("OtherOperatorExpression"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCustomPrefixExpressionTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto operator_literal = list_pr.GetChild(0).Cast<OperatorParseResult>().operator_token;
+	auto other_operator_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformCustomPrefixExpression(transformer, operator_literal, std::move(other_operator_expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -16559,7 +16673,7 @@ void PEGTransformerFactory::InitializeBitwiseExpressionTrampoline(PEGTransformer
 	} else {
 		process.ReserveChildSlots(2 - 1);
 	}
-	process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(0)}, 0);
+	process.PushChild({transformer.GetRule("TildeExpression"), list_pr.GetChild(0)}, 0);
 }
 
 unique_ptr<TransformResultValue>
@@ -16573,7 +16687,7 @@ PEGTransformerFactory::FinalizeBitwiseExpressionTrampoline(PEGTransformer &trans
 		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 		dynamic_child_count = dynamic_repeat_children.size();
 	}
-	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto tilde_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	optional<vector<BinaryExpressionTail>> bitwise_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> bitwise_expression_tail_value;
@@ -16583,7 +16697,7 @@ PEGTransformerFactory::FinalizeBitwiseExpressionTrampoline(PEGTransformer &trans
 		bitwise_expression_tail = std::move(bitwise_expression_tail_value);
 	}
 	auto result =
-	    TransformBitwiseExpression(transformer, std::move(additive_expression), std::move(bitwise_expression_tail));
+	    TransformBitwiseExpression(transformer, std::move(tilde_expression), std::move(bitwise_expression_tail));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -16591,7 +16705,7 @@ void PEGTransformerFactory::InitializeBitwiseExpressionTailTrampoline(PEGTransfo
                                                                       GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)}, 1);
+	process.PushChild({transformer.GetRule("TildeExpression"), list_pr.GetChild(1)}, 1);
 	process.PushChild({transformer.GetRule("BitOperator"), list_pr.GetChild(0)}, 0);
 }
 
@@ -16599,8 +16713,8 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeBitwiseExpressionTailTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
 	auto bit_operator = process.TakeResult<string>(0);
-	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
-	auto result = TransformBitwiseExpressionTail(transformer, bit_operator, std::move(additive_expression));
+	auto tilde_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformBitwiseExpressionTail(transformer, bit_operator, std::move(tilde_expression));
 	return make_uniq<TypedTransformResult<BinaryExpressionTail>>(std::move(result));
 }
 
@@ -16615,6 +16729,54 @@ PEGTransformerFactory::FinalizeBitOperatorTrampoline(PEGTransformer &transformer
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
 	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeTildeExpressionTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &repeat_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(2 + dynamic_child_count - 1);
+		process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)},
+		                  1 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("TildePrefixOperator"), repeat_children[child_idx].get()},
+			                  0 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(2 - 1);
+		process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)},
+		                  1 + dynamic_child_count - 1);
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTildeExpressionTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
+	optional<vector<string>> tilde_prefix_operator {};
+	if (dynamic_child_count > 0) {
+		vector<string> tilde_prefix_operator_value;
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+			tilde_prefix_operator_value.push_back(process.TakeResult<string>(i));
+		}
+		tilde_prefix_operator = std::move(tilde_prefix_operator_value);
+	}
+	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1 + dynamic_child_count - 1);
+	auto result = TransformTildeExpression(transformer, tilde_prefix_operator, std::move(additive_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAdditiveExpressionTrampoline(PEGTransformer &transformer,
@@ -20555,6 +20717,23 @@ PEGTransformerFactory::FinalizeOffsetFetchClauseTrampoline(PEGTransformer &trans
 	return make_uniq<TypedTransformResult<unique_ptr<ResultModifier>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeFetchOffsetClauseTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule("OffsetClause"), list_pr.GetChild(1)}, 1);
+	process.PushChild({transformer.GetRule("FetchClause"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeFetchOffsetClauseTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto fetch_clause = process.TakeResult<LimitPercentResult>(0);
+	auto offset_clause = process.TakeResult<LimitPercentResult>(1);
+	auto result = TransformFetchOffsetClause(transformer, std::move(fetch_clause), std::move(offset_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<ResultModifier>>>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeFetchOnlyClauseTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -23636,12 +23815,45 @@ PEGTransformerFactory::FinalizeLimitExpressionTrampoline(PEGTransformer &transfo
 void PEGTransformerFactory::InitializeFetchClauseTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeFetchClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<LimitPercentResult>(0);
+	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeFetchClauseWithoutValueTrampoline(PEGTransformer &transformer,
+                                                                        GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeFetchClauseWithoutValueTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto result = TransformFetchClauseWithoutValue(transformer);
+	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeFetchClauseWithValueTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
 	process.PushChild({transformer.GetRule("FetchValue"), list_pr.GetChild(2)}, 0);
 }
 
 unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeFetchClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeFetchClauseWithValueTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<LimitPercentResult>(0);
 	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
 }
