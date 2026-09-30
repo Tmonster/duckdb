@@ -1,0 +1,137 @@
+# name: test/sql/create/create_table_type.test
+# description: Test CREATE [EXTERNAL] [<type>] TABLE
+# group: [create]
+
+statement error
+CREATE ICEBERG TABLE t (a INTEGER);
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE BLAH TABLE t (a INTEGER);
+----
+<REGEX>:.*Table type BLAH is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE "quoted type" TABLE t (a INTEGER);
+----
+<REGEX>:.*Table type quoted type is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE OR REPLACE ICEBERG TABLE IF NOT EXISTS t (a INTEGER);
+----
+<REGEX>:.*Cannot specify both OR REPLACE and IF NOT EXISTS.*
+
+statement error
+CREATE ICEBERG TABLE IF NOT EXISTS t (a INTEGER) PARTITIONED BY (a) WITH (location = 's3://bucket/t');
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TEMP ICEBERG TABLE t (a INTEGER);
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE ICEBERG TABLE t AS SELECT 42 AS a;
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+# an EXTERNAL table without a type is a DuckDB table
+statement error
+CREATE EXTERNAL TABLE t (a INTEGER);
+----
+<REGEX>:.*DuckDB tables cannot be EXTERNAL.*
+
+statement error
+CREATE EXTERNAL TABLE t AS SELECT 42 AS a;
+----
+<REGEX>:.*DuckDB tables cannot be EXTERNAL.*
+
+statement error
+CREATE EXTERNAL TABLE t WITH (location = 's3://bucket/t');
+----
+<REGEX>:.*DuckDB tables cannot be EXTERNAL.*
+
+statement error
+CREATE EXTERNAL ICEBERG TABLE t (a INTEGER);
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+# external and typed tables can leave the columns to the table definition
+statement error
+CREATE EXTERNAL ICEBERG TABLE t WITH (location = 's3://bucket/t');
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE ICEBERG TABLE t;
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE t;
+----
+<REGEX>:.*Table must have at least one column.*
+
+statement error
+CREATE TABLE t WITH (location = 's3://bucket/t');
+----
+<REGEX>:.*Table must have at least one column.*
+
+statement error
+CREATE TABLE t ();
+----
+<REGEX>:.*Table must have at least one column.*
+
+statement error
+CREATE EXTERNAL ICEBERG TABLE t ();
+----
+<REGEX>:.*Table must have at least one column.*
+
+statement error
+CREATE ICEBERG EXTERNAL TABLE t (a INTEGER);
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+CREATE EXTERNAL ICEBERG DELTA TABLE t (a INTEGER);
+----
+<REGEX>:.*Parser Error.*
+
+statement ok
+ATTACH ':memory:' AS other;
+
+statement error
+CREATE ICEBERG TABLE other.t (a INTEGER);
+----
+<REGEX>:.*Table type ICEBERG is not supported for tables in a duckdb catalog.*
+
+# other CREATE statements are unaffected
+statement ok
+CREATE TABLE t (a INTEGER);
+
+statement ok
+CREATE TEMP TABLE temp_t (a INTEGER);
+
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT 42 AS a;
+
+statement ok
+CREATE VIEW v AS SELECT * FROM t2;
+
+statement ok
+CREATE MACRO m(x) AS x + 1;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II
+SELECT m(a), nextval('seq') FROM v;
+----
+43	1
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 't';
+----
+CREATE TABLE t(a INTEGER);

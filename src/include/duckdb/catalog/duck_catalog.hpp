@@ -47,6 +47,7 @@ public:
 	                                                         const EntryLookupInfo &schema_lookup,
 	                                                         OnEntryNotFound if_not_found) override;
 
+	DUCKDB_API ErrorData SupportsCreateTable(BoundCreateTableInfo &info) override;
 	DUCKDB_API PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
 	                                               LogicalCreateTable &op, PhysicalOperator &plan) override;
 	DUCKDB_API PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,

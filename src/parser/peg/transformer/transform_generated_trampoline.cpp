@@ -795,6 +795,11 @@ static const TransformFrameOps TEMPORARY_PERSISTENT_OPS = {
 static const TransformFrameOps CREATE_TABLE_STMT_OPS = {"CreateTableStmt",
                                                         &PEGTransformerFactory::InitializeCreateTableStmtTrampoline,
                                                         &PEGTransformerFactory::FinalizeCreateTableStmtTrampoline};
+static const TransformFrameOps EXTERNAL_TABLE_OPS = {"ExternalTable",
+                                                     &PEGTransformerFactory::InitializeExternalTableTrampoline,
+                                                     &PEGTransformerFactory::FinalizeExternalTableTrampoline};
+static const TransformFrameOps TABLE_TYPE_OPS = {"TableType", &PEGTransformerFactory::InitializeTableTypeTrampoline,
+                                                 &PEGTransformerFactory::FinalizeTableTypeTrampoline};
 static const TransformFrameOps CREATE_TABLE_DEFINITION_OPS = {
     "CreateTableDefinition", &PEGTransformerFactory::InitializeCreateTableDefinitionTrampoline,
     &PEGTransformerFactory::FinalizeCreateTableDefinitionTrampoline};
@@ -829,6 +834,9 @@ static const TransformFrameOps IDENTIFIER_LIST_OPS = {"IdentifierList",
 static const TransformFrameOps CREATE_COLUMN_LIST_OPS = {"CreateColumnList",
                                                          &PEGTransformerFactory::InitializeCreateColumnListTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateColumnListTrampoline};
+static const TransformFrameOps CREATE_TABLE_COLUMNS_OPS = {
+    "CreateTableColumns", &PEGTransformerFactory::InitializeCreateTableColumnsTrampoline,
+    &PEGTransformerFactory::FinalizeCreateTableColumnsTrampoline};
 static const TransformFrameOps IF_NOT_EXISTS_OPS = {"IfNotExists",
                                                     &PEGTransformerFactory::InitializeIfNotExistsTrampoline,
                                                     &PEGTransformerFactory::FinalizeIfNotExistsTrampoline};
@@ -3302,6 +3310,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"TempPersistent", &TEMP_PERSISTENT_OPS},
 	    {"TemporaryPersistent", &TEMPORARY_PERSISTENT_OPS},
 	    {"CreateTableStmt", &CREATE_TABLE_STMT_OPS},
+	    {"ExternalTable", &EXTERNAL_TABLE_OPS},
+	    {"TableType", &TABLE_TYPE_OPS},
 	    {"CreateTableDefinition", &CREATE_TABLE_DEFINITION_OPS},
 	    {"CreateTableAs", &CREATE_TABLE_AS_OPS},
 	    {"PartitionSortedOptions", &PARTITION_SORTED_OPTIONS_OPS},
@@ -3314,6 +3324,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"WithNoData", &WITH_NO_DATA_OPS},
 	    {"IdentifierList", &IDENTIFIER_LIST_OPS},
 	    {"CreateColumnList", &CREATE_COLUMN_LIST_OPS},
+	    {"CreateTableColumns", &CREATE_TABLE_COLUMNS_OPS},
 	    {"IfNotExists", &IF_NOT_EXISTS_OPS},
 	    {"QualifiedName", &QUALIFIED_NAME_OPS},
 	    {"SchemaReservedIdentifierOrStringLiteral", &SCHEMA_RESERVED_IDENTIFIER_OR_STRING_LITERAL_OPS},
@@ -9265,35 +9276,76 @@ PEGTransformerFactory::FinalizeTemporaryPersistentTrampoline(PEGTransformer &tra
 void PEGTransformerFactory::InitializeCreateTableStmtTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(4);
-	auto &commit_action_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	process.ReserveChildSlots(6);
+	auto &commit_action_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (commit_action_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("CommitAction"), commit_action_opt.GetResult()}, 3);
+		process.PushChild({transformer.GetRule("CommitAction"), commit_action_opt.GetResult()}, 5);
 	}
-	process.PushChild({transformer.GetRule("CreateTableDefinition"), list_pr.GetChild(3)}, 2);
-	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
-	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	process.PushChild({transformer.GetRule("CreateTableDefinition"), list_pr.GetChild(5)}, 4);
+	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(4)}, 3);
+	auto &if_not_exists_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("IfNotExists"), if_not_exists_opt.GetResult()}, 0);
+		process.PushChild({transformer.GetRule("IfNotExists"), if_not_exists_opt.GetResult()}, 2);
+	}
+	auto &table_type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (table_type_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("TableType"), table_type_opt.GetResult()}, 1);
+	}
+	auto &external_table_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (external_table_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ExternalTable"), external_table_opt.GetResult()}, 0);
 	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCreateTableStmtTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
-	optional<bool> if_not_exists {};
+	optional<bool> external_table {};
 	if (process.child_results[0]) {
-		if_not_exists = process.TakeResult<bool>(0);
+		external_table = process.TakeResult<bool>(0);
 	}
-	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto create_table_definition = process.TakeResult<CreateTableDefinition>(2);
+	optional<Identifier> table_type {};
+	if (process.child_results[1]) {
+		table_type = process.TakeResult<Identifier>(1);
+	}
+	optional<bool> if_not_exists {};
+	if (process.child_results[2]) {
+		if_not_exists = process.TakeResult<bool>(2);
+	}
+	auto qualified_name = process.TakeResult<QualifiedName>(3);
+	auto create_table_definition = process.TakeResult<CreateTableDefinition>(4);
 	optional<bool> commit_action {};
-	if (process.child_results[3]) {
-		commit_action = process.TakeResult<bool>(3);
+	if (process.child_results[5]) {
+		commit_action = process.TakeResult<bool>(5);
 	}
-	auto result = TransformCreateTableStmt(transformer, if_not_exists, qualified_name,
+	auto result = TransformCreateTableStmt(transformer, external_table, table_type, if_not_exists, qualified_name,
 	                                       std::move(create_table_definition), commit_action);
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExternalTableTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExternalTableTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	auto result = TransformExternalTable(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeTableTypeTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTableTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformTableType(transformer, identifier);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeCreateTableDefinitionTrampoline(PEGTransformer &transformer,
@@ -9558,18 +9610,18 @@ void PEGTransformerFactory::InitializeCreateColumnListTrampoline(PEGTransformer 
 	if (partition_sorted_options_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("PartitionSortedOptions"), partition_sorted_options_opt.GetResult()}, 1);
 	}
-	auto &create_table_column_list_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
-	if (create_table_column_list_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("CreateTableColumnList"), create_table_column_list_opt.GetResult()}, 0);
+	auto &create_table_columns_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (create_table_columns_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("CreateTableColumns"), create_table_columns_opt.GetResult()}, 0);
 	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCreateColumnListTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
-	optional<ColumnElements> create_table_column_list {};
+	optional<ColumnElements> create_table_columns {};
 	if (process.child_results[0]) {
-		create_table_column_list = process.TakeResult<ColumnElements>(0);
+		create_table_columns = process.TakeResult<ColumnElements>(0);
 	}
 	optional<PartitionSortedOptions> partition_sorted_options {};
 	if (process.child_results[1]) {
@@ -9579,9 +9631,30 @@ PEGTransformerFactory::FinalizeCreateColumnListTrampoline(PEGTransformer &transf
 	if (process.child_results[2]) {
 		with_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
 	}
-	auto result = TransformCreateColumnList(transformer, std::move(create_table_column_list),
+	auto result = TransformCreateColumnList(transformer, std::move(create_table_columns),
 	                                        std::move(partition_sorted_options), std::move(with_list));
 	return make_uniq<TypedTransformResult<CreateTableDefinition>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateTableColumnsTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &create_table_column_list_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	if (create_table_column_list_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("CreateTableColumnList"), create_table_column_list_opt.GetResult()}, 0);
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateTableColumnsTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	optional<ColumnElements> create_table_column_list {};
+	if (process.child_results[0]) {
+		create_table_column_list = process.TakeResult<ColumnElements>(0);
+	}
+	auto result = TransformCreateTableColumns(transformer, std::move(create_table_column_list));
+	return make_uniq<TypedTransformResult<ColumnElements>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeIfNotExistsTrampoline(PEGTransformer &transformer,

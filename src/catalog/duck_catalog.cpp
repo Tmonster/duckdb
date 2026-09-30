@@ -5,6 +5,8 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -137,6 +139,14 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 		return nullptr;
 	}
 	return result;
+}
+
+ErrorData DuckCatalog::SupportsCreateTable(BoundCreateTableInfo &info) {
+	auto &base = info.Base().Cast<CreateTableInfo>();
+	if (base.external && base.table_type.empty()) {
+		return ErrorData(ExceptionType::CATALOG, "DuckDB tables cannot be EXTERNAL");
+	}
+	return Catalog::SupportsCreateTable(info);
 }
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {

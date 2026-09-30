@@ -711,7 +711,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 	}
 
-	if (base.columns.PhysicalColumnCount() == 0) {
+	// external and typed tables can take their columns from the table definition, the catalog decides
+	if (base.columns.PhysicalColumnCount() == 0 && !base.external && base.table_type.empty()) {
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 

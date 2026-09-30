@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &option : options) {
 		result->options.emplace(option.first, option.second->Copy());
 	}
+	result->table_type = table_type;
+	result->external = external;
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
@@ -68,7 +71,14 @@ string CreateTableInfo::ExtraOptionsToString() const {
 }
 
 string CreateTableInfo::ToString() const {
-	string ret = GetCreatePrefix("TABLE");
+	string entry = "TABLE";
+	if (!table_type.empty()) {
+		entry = SQLIdentifier::ToString(table_type) + " " + entry;
+	}
+	if (external) {
+		entry = "EXTERNAL " + entry;
+	}
+	string ret = GetCreatePrefix(entry);
 	ret += QualifiedNameToString();
 
 	if (query != nullptr) {
@@ -76,7 +86,9 @@ string CreateTableInfo::ToString() const {
 		ret += ExtraOptionsToString();
 		ret += " AS " + query->ToString();
 	} else {
-		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);
+		if (!columns.empty()) {
+			ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);
+		}
 		ret += ExtraOptionsToString();
 		ret += ";";
 	}
