@@ -1565,6 +1565,12 @@ public:
 	static void InitializeCreateTableStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateTableStmtTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeExternalTableTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeExternalTableTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeTableTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTableTypeTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static void InitializeCreateTableDefinitionTrampoline(PEGTransformer &transformer,
 	                                                      GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateTableDefinitionTrampoline(PEGTransformer &transformer,
@@ -1605,6 +1611,9 @@ public:
 	static void InitializeCreateColumnListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateColumnListTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeCreateTableColumnsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeCreateTableColumnsTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeIfNotExistsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIfNotExistsTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
@@ -4494,11 +4503,13 @@ public:
 	static SecretPersistType TransformPersistent(PEGTransformer &transformer);
 	static SecretPersistType TransformTempPersistent(PEGTransformer &transformer);
 	static SecretPersistType TransformTemporaryPersistent(PEGTransformer &transformer);
-	static unique_ptr<CreateStatement> TransformCreateTableStmt(PEGTransformer &transformer,
-	                                                            const optional<bool> &if_not_exists,
-	                                                            const QualifiedName &qualified_name,
-	                                                            CreateTableDefinition create_table_definition,
-	                                                            const optional<bool> &commit_action);
+	static unique_ptr<CreateStatement>
+	TransformCreateTableStmt(PEGTransformer &transformer, const optional<bool> &external_table,
+	                         const optional<Identifier> &table_type, const optional<bool> &if_not_exists,
+	                         const QualifiedName &qualified_name, CreateTableDefinition create_table_definition,
+	                         const optional<bool> &commit_action);
+	static bool TransformExternalTable(PEGTransformer &transformer);
+	static Identifier TransformTableType(PEGTransformer &transformer, const Identifier &identifier);
 	static CreateTableDefinition
 	TransformCreateTableAs(PEGTransformer &transformer, optional<ColumnList> identifier_list,
 	                       optional<PartitionSortedOptions> partition_sorted_options,
@@ -4519,9 +4530,11 @@ public:
 	static bool TransformWithNoData(PEGTransformer &transformer);
 	static ColumnList TransformIdentifierList(PEGTransformer &transformer, const vector<Identifier> &identifier);
 	static CreateTableDefinition
-	TransformCreateColumnList(PEGTransformer &transformer, optional<ColumnElements> create_table_column_list,
+	TransformCreateColumnList(PEGTransformer &transformer, optional<ColumnElements> create_table_columns,
 	                          optional<PartitionSortedOptions> partition_sorted_options,
 	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list);
+	static ColumnElements TransformCreateTableColumns(PEGTransformer &transformer,
+	                                                  optional<ColumnElements> create_table_column_list);
 	static bool TransformIfNotExists(PEGTransformer &transformer);
 	static QualifiedName
 	TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,

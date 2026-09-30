@@ -5,12 +5,12 @@
 statement error
 CREATE DATABASE mydb;
 ----
-syntax error at or near "DATABASE"
+syntax error at or near "mydb"
 
 statement error
 CREATE DATABASE mydb FROM './path';
 ----
-syntax error at or near "DATABASE"
+syntax error at or near "mydb"
 
 statement error
 DROP DATABASE mydb

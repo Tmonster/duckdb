@@ -41,6 +41,10 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<ParsedExpression>> sort_keys;
 	//! Extra Table options if any
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
+	//! Table type (e.g. ICEBERG), empty for a table of the catalog's default type
+	string table_type;
+	//! Whether the table is EXTERNAL, i.e. the catalog references the table but does not manage it
+	bool external = false;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

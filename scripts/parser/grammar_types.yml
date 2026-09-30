@@ -1017,6 +1017,7 @@ ColumnElements:
   by_value: true
   rules:
     - CreateTableColumnList
+    - CreateTableColumns
 
 CreateTableDefinition:
   type: "CreateTableDefinition"
@@ -1183,6 +1184,7 @@ Bool:
     - AnalyzeVerbose
     - CheckpointForce
     - IfNotExists
+    - ExternalTable
     - OrReplace
     - InstallAndLoad
     - ShowAllModifier
@@ -1713,6 +1715,7 @@ IdentifierType:
     - AttachAlias
     - CollationName
     - IndexType
+    - TableType
     - RelOptionName
     - TableQualification
     - ReservedTableQualification

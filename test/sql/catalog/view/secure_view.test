@@ -130,7 +130,7 @@ SELECT secure FROM secure;
 statement error
 CREATE SECURE TABLE t2(i INTEGER)
 ----
-<REGEX>:Parser Error.*
+<REGEX>:.*Table type SECURE is not supported for tables in a duckdb catalog.*
 
 statement error
 CREATE SECURE SCHEMA s2

@@ -68,13 +68,23 @@ SecretPersistType PEGTransformerFactory::TransformTemporaryPersistent(PEGTransfo
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(
-    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+    PEGTransformer &transformer, const optional<bool> &external_table, const optional<Identifier> &table_type,
+    const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
     CreateTableDefinition create_table_definition, const optional<bool> &commit_action) {
 	auto result = make_uniq<CreateStatement>();
 	if (qualified_name.Name().empty()) {
 		throw ParserException("Empty table name not supported");
 	}
 	auto info = make_uniq<CreateTableInfo>(qualified_name);
+	info->external = external_table.has_value();
+	if (table_type) {
+		info->table_type = table_type->GetIdentifierName();
+	}
+	// only external and typed tables can take their columns from the table definition
+	if (!create_table_definition.select_statement && create_table_definition.columns.empty() && !info->external &&
+	    info->table_type.empty()) {
+		throw ParserException("Table must have at least one column!");
+	}
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->query = std::move(create_table_definition.select_statement);
@@ -126,15 +136,14 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 }
 
 CreateTableDefinition PEGTransformerFactory::TransformCreateColumnList(
-    PEGTransformer &transformer, optional<ColumnElements> create_table_column_list,
+    PEGTransformer &transformer, optional<ColumnElements> create_table_columns,
     optional<PartitionSortedOptions> partition_sorted_options,
     optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list) {
-	if (!create_table_column_list || create_table_column_list->columns.empty()) {
-		throw ParserException("Table must have at least one column!");
-	}
 	CreateTableDefinition result;
-	result.columns = std::move(create_table_column_list->columns);
-	result.constraints = std::move(create_table_column_list->constraints);
+	if (create_table_columns) {
+		result.columns = std::move(create_table_columns->columns);
+		result.constraints = std::move(create_table_columns->constraints);
+	}
 	if (partition_sorted_options) {
 		result.partition_keys = std::move(partition_sorted_options->partition_keys);
 		result.sort_keys = std::move(partition_sorted_options->sort_keys);
@@ -143,6 +152,22 @@ CreateTableDefinition PEGTransformerFactory::TransformCreateColumnList(
 		result.options = std::move(*with_list);
 	}
 	return result;
+}
+
+ColumnElements PEGTransformerFactory::TransformCreateTableColumns(PEGTransformer &transformer,
+                                                                  optional<ColumnElements> create_table_column_list) {
+	if (!create_table_column_list || create_table_column_list->columns.empty()) {
+		throw ParserException("Table must have at least one column!");
+	}
+	return std::move(*create_table_column_list);
+}
+
+bool PEGTransformerFactory::TransformExternalTable(PEGTransformer &transformer) {
+	return true;
+}
+
+Identifier PEGTransformerFactory::TransformTableType(PEGTransformer &transformer, const Identifier &identifier) {
+	return identifier;
 }
 
 bool PEGTransformerFactory::TransformOrReplace(PEGTransformer &transformer) {

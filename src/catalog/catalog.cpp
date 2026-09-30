@@ -1512,6 +1512,15 @@ optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 
 ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	auto &base = info.Base().Cast<CreateTableInfo>();
+	if (!base.table_type.empty()) {
+		return ErrorData(ExceptionType::CATALOG,
+		                 StringUtil::Format("Table type %s is not supported for tables in a %s catalog",
+		                                    base.table_type, GetCatalogType()));
+	}
+	if (base.external) {
+		return ErrorData(ExceptionType::CATALOG,
+		                 StringUtil::Format("EXTERNAL is not supported for tables in a %s catalog", GetCatalogType()));
+	}
 	if (!base.partition_keys.empty()) {
 		return ErrorData(
 		    ExceptionType::CATALOG,

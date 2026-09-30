@@ -972,7 +972,9 @@ Persistent <- 'PERSISTENT'
 TempPersistent <- 'TEMP'
 TemporaryPersistent <- 'TEMPORARY'
 
-CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName CreateTableDefinition CommitAction?
+CreateTableStmt <- ExternalTable? TableType? 'TABLE' IfNotExists? QualifiedName CreateTableDefinition CommitAction?
+ExternalTable <- 'EXTERNAL'
+TableType <- Identifier
 CreateTableDefinition <- CreateTableAs / CreateColumnList
 
 CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?
@@ -986,7 +988,8 @@ WithData <- WithDataOnly / WithNoData
 WithDataOnly <- 'WITH' 'DATA'
 WithNoData <- 'WITH' 'NO' 'DATA'
 IdentifierList <- Parens(List(Identifier))
-CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
+CreateColumnList <- CreateTableColumns? PartitionSortedOptions? WithList?
+CreateTableColumns <- Parens(CreateTableColumnList?)
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
